@@ -13,9 +13,10 @@ import garminconnect
 import requests
 
 from hevy_garmin_sync import app, config, errors, garmin, hevy
+from hevy_garmin_sync.hevy_private import SESSION, HevyPrivate
 from hevy_garmin_sync.store import Store
 from tests import fixtures
-from tests.fixtures import hevy_exercise, hevy_folder, hevy_routine, hevy_set
+from tests.fixtures import hevy_exercise, hevy_folder, hevy_routine, hevy_set, logged_set, logged_workout
 
 Step = Callable[[], None] | None
 LOGGER = "hevy_garmin_sync"
@@ -39,9 +40,11 @@ class AppCase(unittest.TestCase):
         self.garmin_api = fixtures.FakeGarminApi()
         self.stopping = False
         pacing = fixtures.FakeClock()
+        self.store = Store(Path(folder.name))
+        self.hevy_private: HevyPrivate | None = None
         self.garmin = garmin.Garmin(
             self.garmin_api,  # type: ignore[arg-type]
-            Store(Path(folder.name)),
+            self.store,
             sleep=pacing.sleep,
             clock=pacing,
             stopping=lambda: self.stopping,
@@ -69,6 +72,7 @@ class AppCase(unittest.TestCase):
             hevy.Hevy("made-up-key", self.hevy_api),  # type: ignore[arg-type]
             self.garmin,
             fixtures.exercise_map(),
+            hevy_private=self.hevy_private,
             wait=self.wait,
             clock=lambda: self.clock,
             utcnow=lambda: self.utc,
@@ -79,6 +83,10 @@ class AppCase(unittest.TestCase):
 
     def days(self) -> set[str]:
         return {e["calendarDate"] for e in self.garmin_api.entries.values()}
+
+    def on_the_calendar(self) -> list[str]:
+        ids = [e["workout"]["workoutId"] for e in self.garmin_api.entries.values()]
+        return sorted(self.garmin_api.workouts[i]["workoutName"] for i in ids)
 
 
 class StartupTest(AppCase):
@@ -314,6 +322,125 @@ class FailureTest(AppCase):
         self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push"])
 
 
+class TrainerTest(AppCase):
+    """With HEVY_SESSION set, Hevy Trainer's workouts sync beside the routines (spec section 6)."""
+
+    LOWER, UPPER = "Hevy/Trainer: Lower (C2-W2)", "Hevy/Trainer: Upper (C2-W2)"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.utc = fixtures.PROGRAM_WEEK_8.astimezone(UTC)
+        self.hevy_api.templates += fixtures.trainer_exercise_templates()
+        self.private_api = fixtures.FakeHevyPrivateApi()
+        upper = fixtures.trainer_template("t-upper", "upper_2x_a", [fixtures.trainer_exercise("T-SIDE-BEND")])
+        self.private_api.program = fixtures.trainer_program([fixtures.lower_template(), upper])
+        # Lower was logged on the Tuesday of this week; Upper has not been done yet.
+        self.private_api.workouts = [fixtures.logged_lower(fixtures.PROGRAM_WEEK_8 - timedelta(days=3))]
+        self.hevy_private = HevyPrivate(
+            fixtures.HEVY_SESSION_TOKENS,
+            self.store,
+            self.private_api,  # type: ignore[arg-type]
+            utcnow=lambda: self.utc,
+        )
+
+    def end_the_session(self) -> None:
+        """Hevy no longer knows the access token or the refresh token."""
+        self.private_api.access = self.private_api.refresh = "made-up-and-gone"
+
+    def test_trainers_workouts_sync_beside_the_routines(self) -> None:
+        with self.assertLogs(LOGGER, "INFO") as logs:
+            self.assertEqual(self.run_app(), 0)
+        self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push", self.LOWER, self.UPPER])
+        self.assertIn("Sync: created 4, updated 0, deleted 0, scheduled 3", "\n".join(logs.output))
+
+    def test_a_trainer_workout_done_this_week_is_in_garmin_but_not_on_the_calendar(self) -> None:
+        self.run_app()
+        self.assertEqual(self.on_the_calendar(), ["Hevy/PPL: Pull", "Hevy/PPL: Push", self.UPPER])
+
+    def test_on_the_first_weekday_the_names_move_to_the_new_week_and_every_workout_is_on_the_calendar(self) -> None:
+        self.utc = datetime(2026, 11, 9, 7, 59, 30, tzinfo=UTC)  # 23:59:30 on Sunday in Los Angeles
+        self.run_app(None)
+        lower, upper = "Hevy/Trainer: Lower (C2-W3)", "Hevy/Trainer: Upper (C2-W3)"
+        self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push", lower, upper])
+        self.assertEqual(self.on_the_calendar(), self.names())
+        self.assertEqual(self.days(), {"2026-11-09"})
+
+    def test_a_logged_workout_changes_the_weights_in_garmin_on_the_next_poll(self) -> None:
+        def log_upper() -> None:
+            self.private_api.workouts.append(
+                logged_workout("t-upper", fixtures.PROGRAM_WEEK_8, {"T-SIDE-BEND": [logged_set(35, 12)] * 3})
+            )
+            self.hevy_api.events = [{"type": "updated", "workout": {"id": "made-up"}}]
+            self.garmin_api.calls.clear()
+
+        with self.assertLogs(LOGGER, "INFO") as logs:
+            self.run_app(log_upper)
+        self.assertEqual(self.garmin_api.calls, ["update_workout", "push_workout_to_device"])
+        self.assertIn("Hevy Trainer: Side Bend (Dumbbell): 40 lbs (up)", "\n".join(logs.output))
+
+    def test_a_rejected_session_at_startup_exits_with_the_fix(self) -> None:
+        self.end_the_session()
+        with self.assertLogs(LOGGER, "ERROR") as logs:
+            self.assertEqual(self.run_app(), 1)
+        self.assertIn("Hevy Trainer rejected the app's credentials; copy the auth2.0-token cookie", logs.output[0])
+        self.assertIn("set HEVY_SESSION to it", logs.output[0])
+        self.assertEqual(self.garmin_api.calls, [])
+
+    def test_an_outage_of_hevys_private_api_at_startup_is_waited_out(self) -> None:
+        self.private_api.fail(503)
+        with self.assertLogs(LOGGER, "ERROR") as logs:
+            self.assertEqual(self.run_app(None), 0)
+        self.assertIn("Hevy Trainer can't be reached or is failing (HTTP 503", logs.output[0])
+        self.assertEqual(self.waits[0], 60)
+        self.assertIn(self.UPPER, self.names())
+
+    def test_while_trainer_fails_routines_keep_syncing_and_trainers_workouts_stay(self) -> None:
+        def down() -> None:
+            self.private_api.fail(503)
+            self.hevy_api.routines.append(hevy_routine("r-legs", "Legs", 42))
+            self.private_api.requests.clear()
+
+        with self.assertLogs(LOGGER, "ERROR") as logs:
+            self.run_app(down, *[None] * 4, HEVY_POLL_INTERVAL_SECONDS="15")
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("Hevy Trainer can't be reached or is failing", logs.output[0])
+        self.assertIn("Trying again in 1 min", logs.output[0])
+        self.assertEqual(self.names(), ["Hevy/PPL: Legs", "Hevy/PPL: Pull", "Hevy/PPL: Push", self.LOWER, self.UPPER])
+        # Asked at the poll that failed and a minute later, not on the three polls in between.
+        self.assertEqual(self.private_api.paths().count("hevy_trainer/v3/program"), 2)
+
+    def test_a_session_hevy_ends_while_running_keeps_the_app_up_and_names_the_fix(self) -> None:
+        with self.assertLogs(LOGGER, "ERROR") as logs:
+            self.assertEqual(self.run_app(self.end_the_session, None), 0)
+        self.assertIn("Hevy Trainer rejected the app's credentials; copy the auth2.0-token cookie", logs.output[0])
+        self.assertIn(self.LOWER, self.names())
+
+    def test_a_program_in_an_unexpected_shape_does_not_end_the_process(self) -> None:
+        def odd() -> None:
+            assert self.private_api.program is not None
+            self.private_api.program["templates"] = "not a list of workouts"
+
+        with self.assertLogs(LOGGER, "ERROR") as logs:
+            self.assertEqual(self.run_app(odd, None), 0)
+        self.assertIn("Unexpected error while reading Hevy Trainer", logs.output[0])
+        self.assertIn("AttributeError", logs.output[0])
+        self.assertIn(self.LOWER, self.names())
+
+    def test_a_program_that_is_deleted_takes_its_workouts_out_of_garmin(self) -> None:
+        def delete_program() -> None:
+            self.private_api.program = None
+
+        self.run_app(delete_program, None)
+        self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push"])
+
+    def test_each_poll_logs_trainers_hevy_call_count_at_debug(self) -> None:
+        with self.assertLogs(LOGGER, "DEBUG") as logs:
+            self.run_app()
+        # The workout events and one exercise's history from the public API; the program, three sets of
+        # preferences and one page of logged workouts from the private one.
+        self.assertIn("Hevy Trainer poll: 7 calls, 2 workouts", "\n".join(logs.output))
+
+
 class BackoffTest(unittest.TestCase):
     def setUp(self) -> None:
         self.now = 0.0
@@ -379,6 +506,39 @@ class MainTest(unittest.TestCase):
         self.assertIn("hevy-garmin-sync ", logs.output[0])
         self.assertIn("HEVY_API_KEY: set", logs.output[1])
         self.assertNotIn("made-up-key", "\n".join(logs.output))
+
+    def test_with_hevy_session_set_the_session_is_stored_for_hevy_trainer(self) -> None:
+        env = self.env | {
+            "GARMIN_TOKEN": garmin.encode_token(fixtures.GARMIN_TOKENS),
+            "HEVY_SESSION": fixtures.HEVY_SESSION_COOKIE,
+        }
+        with (
+            mock.patch.object(app.App, "run", return_value=0),
+            mock.patch("hevy_garmin_sync.exercises.ExerciseMap.load", return_value=fixtures.exercise_map()),
+            mock.patch.object(app, "Trainer") as trainer,
+        ):
+            self.assertEqual(app.main(env, self.err), 0)
+        trainer.assert_called_once()
+        self.assertIn("hevy-access-1", Store(Path(self.env["DATA_DIR"])).read(SESSION) or "")
+
+    def test_a_hevy_session_that_is_not_the_cookie_exits_one(self) -> None:
+        env = self.env | {"GARMIN_TOKEN": garmin.encode_token(fixtures.GARMIN_TOKENS), "HEVY_SESSION": "not-it"}
+        with self.assertLogs(LOGGER, "ERROR") as logs:
+            self.assertEqual(app.main(env, self.err), 1)
+        self.assertIn("HEVY_SESSION is not the auth2.0-token cookie", logs.output[0])
+
+    def test_with_hevy_session_unset_a_stored_session_is_removed(self) -> None:
+        store = Store(Path(self.env["DATA_DIR"]))
+        HevyPrivate.open(fixtures.HEVY_SESSION_COOKIE, store)
+        env = self.env | {"GARMIN_TOKEN": garmin.encode_token(fixtures.GARMIN_TOKENS)}
+        with (
+            mock.patch.object(app.App, "run", return_value=0),
+            mock.patch("hevy_garmin_sync.exercises.ExerciseMap.load", return_value=fixtures.exercise_map()),
+            mock.patch.object(app, "Trainer") as trainer,
+        ):
+            self.assertEqual(app.main(env, self.err), 0)
+        trainer.assert_not_called()
+        self.assertEqual(sorted(p.name for p in store.root.iterdir() if "hevy" in p.name), [])
 
     def test_sigterm_and_sigint_ask_the_app_to_stop(self) -> None:
         env = self.env | {"GARMIN_TOKEN": garmin.encode_token(fixtures.GARMIN_TOKENS)}

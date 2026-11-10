@@ -24,9 +24,11 @@ from .errors import ConfigError, RateLimited, Refused, Rejected, ServiceError, S
 from .exercises import ExerciseMap
 from .garmin import LOGIN_FIX, Garmin
 from .hevy import API_KEY_FIX, Hevy
+from .hevy_private import SESSION, SESSION_FIX, HevyPrivate
 from .routines import Routines
 from .store import Store
 from .sync import Plans, Sync
+from .trainer import Trainer
 from .workout import TRAINER
 
 log = logging.getLogger(__name__)
@@ -86,6 +88,7 @@ class App:
         garmin: Garmin,
         exercises: ExerciseMap,
         *,
+        hevy_private: HevyPrivate | None = None,  # None: HEVY_SESSION is unset, so Hevy Trainer is off
         wait: Callable[[float], bool],
         clock: Callable[[], float] = time.monotonic,
         utcnow: Callable[[], datetime] = lambda: datetime.now(UTC),
@@ -98,10 +101,14 @@ class App:
         self._utcnow = utcnow
         self._zone: ZoneInfo = config.zone or ZoneInfo("UTC")
         self._routines = Routines(hevy, config.include_folders, exercises)
+        self._trainer = Trainer(hevy_private, hevy, exercises, self._now) if hevy_private else None
         self._sync = Sync(garmin, config.scheduled, self._now)
         self._hevy_backoff = Backoff(clock)
+        self._trainer_backoff = Backoff(clock)
         self._garmin_backoff = Backoff(clock, rate_limited=900.0)
         self._plans: list[Plans] | None = None
+        # Until Hevy Trainer has answered once, its workouts in Garmin are left as they are.
+        self._trainer_plans = Plans(TRAINER, (), hold=True)
 
     def _now(self) -> datetime:
         return self._utcnow().astimezone(self._zone)
@@ -121,6 +128,8 @@ class App:
     def _start(self) -> None:
         """One call to each service: a rejected credential exits here, with the fix (section 11)."""
         self._until_ok("Hevy", API_KEY_FIX, self._hevy_backoff, self._routines.check)
+        if self._trainer:
+            self._until_ok("Hevy Trainer", SESSION_FIX, self._trainer_backoff, self._trainer.check)
         self._until_ok("Garmin", LOGIN_FIX, self._garmin_backoff, self._garmin.measurement_system)
         self._choose_zone()
 
@@ -201,8 +210,7 @@ class App:
             return None
         calls = self._hevy.calls
         try:
-            # With no Hevy Trainer source, the Trainer workouts the app owns are not wanted (section 6).
-            plans = [self._routines.plans(), Plans(TRAINER, ())]
+            routines = self._routines.plans()
         except ServiceError as e:
             delay = self._hevy_backoff.failed(e)
             log.error("%s. Trying again in %d min.", _problem("Hevy", API_KEY_FIX, e), delay / 60)
@@ -212,9 +220,38 @@ class App:
             log.exception("Unexpected error while reading Hevy. Trying again in %d min.", delay / 60)
             return None
         self._hevy_backoff.succeeded()
-        log.debug("Hevy poll: %d calls, %d routines", self._hevy.calls - calls, len(plans[0].workouts))
-        self._plans = plans
-        return plans
+        log.debug("Hevy poll: %d calls, %d routines", self._hevy.calls - calls, len(routines.workouts))
+        self._plans = [routines, self._read_trainer()]
+        return self._plans
+
+    def _read_trainer(self) -> Plans:
+        """What Hevy Trainer wants in Garmin now; what it wanted last while it is failing.
+
+        Trainer has its own wait after a failure, so routines keep syncing
+        when only Hevy's private API is down or the session was rejected.
+        """
+        if self._trainer is None:
+            # HEVY_SESSION is unset: the Trainer workouts the app owns are not wanted (section 6).
+            return Plans(TRAINER, ())
+        if not self._trainer_backoff.ready():
+            return self._trainer_plans
+        calls = self._hevy.calls + self._trainer.private_calls
+        try:
+            self._trainer_plans = self._trainer.plans()
+        except ServiceError as e:
+            delay = self._trainer_backoff.failed(e)
+            log.error("%s. Trying again in %d min.", _problem("Hevy Trainer", SESSION_FIX, e), delay / 60)
+        except Exception as e:  # noqa: BLE001 a reply in a shape the app didn't expect must not end the process
+            delay = self._trainer_backoff.failed(e)
+            log.exception("Unexpected error while reading Hevy Trainer. Trying again in %d min.", delay / 60)
+        else:
+            self._trainer_backoff.succeeded()
+            log.debug(
+                "Hevy Trainer poll: %d calls, %d workouts",
+                self._hevy.calls + self._trainer.private_calls - calls,
+                len(self._trainer_plans.workouts),
+            )
+        return self._trainer_plans
 
     def _seconds_to_midnight(self) -> float:
         now = self._now()
@@ -239,9 +276,16 @@ def main(env: Mapping[str, str] = os.environ, err: TextIO = sys.stderr) -> int:
     for signum in (signal.SIGTERM, signal.SIGINT):
         signal.signal(signum, lambda *_: stop.set())
 
+    store = Store(config.data_dir)
     try:
-        garmin = Garmin.open(config.garmin_token, Store(config.data_dir), stopping=stop.is_set)
+        garmin = Garmin.open(config.garmin_token, store, stopping=stop.is_set)
+        hevy_private = HevyPrivate.open(config.hevy_session, store) if config.hevy_session else None
     except ConfigError as e:
         log.error("%s", e)
         return 1
-    return App(config, Hevy(config.hevy_api_key), garmin, ExerciseMap.load(), wait=stop.wait).run()
+    if hevy_private is None:
+        # Only the variable turns Hevy Trainer on; a session left in the data folder goes (section 6).
+        store.remove(SESSION)
+        store.remove(f"{SESSION}.seed")
+    hevy = Hevy(config.hevy_api_key)
+    return App(config, hevy, garmin, ExerciseMap.load(), hevy_private=hevy_private, wait=stop.wait).run()
