@@ -16,7 +16,7 @@ secret: {}
 # Every other setting, as environment variables (docs/CONFIGURATION.md).
 env: {}
 #  TZ: America/Los_Angeles
-#  INCLUDE_HEVY_FOLDERS: "PPL,Hevy Trainer"
+#  INCLUDE_HEVY_FOLDERS: "Push Pull Legs,Home"
 
 # The data folder: the app keeps its rotated sign-in tokens here (spec A-4).
 persistence:
