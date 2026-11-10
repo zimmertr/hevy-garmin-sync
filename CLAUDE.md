@@ -10,7 +10,7 @@ Prose lives in `docs/`. A change that makes any page untrue updates it in the sa
 |---|---|
 | [`docs/SPEC.md`](docs/SPEC.md) | The signed-off spec: every requirement by ID, the open items, the backlog |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The repo's layout, the image, the chart, and the modules the spec plans |
-| [`docs/CICD.md`](docs/CICD.md) | From PR to release, with the diagram, the required checks, the secrets and the settings applied by API |
+| [`docs/CICD.md`](docs/CICD.md) | From PR to release, with the diagram, the required checks, the secrets and where the repo's settings live |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every variable and chart value, and where each is set |
 | [`docs/USAGE.md`](docs/USAGE.md) | What TJ sees, and what to do when it breaks |
 | [`docs/DATA.md`](docs/DATA.md) | Each upstream service, its terms, and every quirk found, dated |

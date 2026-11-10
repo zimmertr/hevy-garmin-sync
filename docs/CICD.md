@@ -24,7 +24,7 @@ flowchart LR
 | `pr-title.yml` | `PR Title / PR Title` | yggdrasil's pr-title module: the title must be `type(scope): summary` |
 | `dependabot-auto-merge.yml` | `Dependabot auto-merge / Auto-merge patch and minor updates` | Arms auto-merge on Dependabot's patch and minor updates; skipped on every other PR |
 
-The default-branch ruleset requires every check above except the auto-merge one. The required checks are added after the first PR merges, once their names exist.
+The default-branch ruleset requires every check above except the auto-merge one. Renaming or adding a check needs a PR in zimmertr/yggdrasil that changes this repo's `required_checks`, merged together with the rename; otherwise PRs wait forever on the old name.
 
 ## The release
 
@@ -47,12 +47,15 @@ After a failure, re-run the failed jobs only: once Docker Hub's immutable tags a
 | `GH_PAT` | Actions | The Kubernetes-Manifests bump (contents and pull-requests write there) |
 | `AUTO_MERGE_PAT` | Dependabot | The auto-merge module's `merge-token`; a merge made with `GITHUB_TOKEN` would not start the release |
 
-## Settings applied by API
+## Repo settings
 
-Until zimmertr/yggdrasil#8 imports this repo into Terraform, settings are API calls TJ okays first, logged here.
+Since 2026-11-10 the repo's settings, rulesets and required checks are applied by Terraform from zimmertr/yggdrasil (`repos/zimmertr/hevy-garmin-sync.yml` there, plus its repo module). A setting changed by hand is put back by the next apply, so a settings change is a yggdrasil PR that TJ okays first.
 
-| Date | Setting | Okayed by TJ |
-|---|---|---|
-| 2026-11-07 | Squash merge only, title and body from the PR; auto-merge on; head branches deleted; "Update branch" on; wiki off | Yes, with `/initialize-project` |
-| 2026-11-07 | Secret scanning and push protection; Dependabot alerts and security updates; private vulnerability reporting; immutable releases | Yes, with `/initialize-project` |
-| 2026-11-07 | Actions must be pinned by full commit SHA; CodeQL default setup; rulesets "default branch" (PR required, 0 approvals, stale reviews dismissed, threads resolved, squash only, no force push or deletion) and "release tags" (`refs/tags/v*`: no update or deletion) | Yes |
+Before the import, these were set by API with TJ's okay, and Terraform took them over unchanged:
+
+| Date | Setting |
+|---|---|
+| 2026-11-07 | Squash merge only, title and body from the PR; auto-merge on; head branches deleted; "Update branch" on; wiki off |
+| 2026-11-07 | Secret scanning and push protection; Dependabot alerts and security updates; private vulnerability reporting; immutable releases |
+| 2026-11-07 | Actions must be pinned by full commit SHA; CodeQL default setup; rulesets "default branch" (PR required, 0 approvals, stale reviews dismissed, threads resolved, squash only, no force push or deletion) and "release tags" (`refs/tags/v*`: no update or deletion) |
+| 2026-11-10 | The eight required checks on the "default branch" ruleset; Projects off |

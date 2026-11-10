@@ -26,4 +26,4 @@ The yggdrasil session (yggdrasil-98) confirmed the pins, inputs and secrets on 2
 
 ## Consequences
 
-Required check names follow the caller jobs; renaming a job means updating the ruleset in the same change.
+Required check names follow the caller jobs; renaming a job means a zimmertr/yggdrasil PR that changes this repo's `required_checks`, merged together with the rename.
