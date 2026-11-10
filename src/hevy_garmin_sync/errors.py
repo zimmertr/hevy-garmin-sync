@@ -5,6 +5,10 @@ class ConfigError(Exception):
     """Bad or missing configuration: the app exits at startup, naming the variable and the fix."""
 
 
+class Stopped(Exception):
+    """The app was told to stop, so no new write to Garmin starts (spec O-3a)."""
+
+
 class ServiceError(Exception):
     """A call to Hevy or Garmin failed."""
 

@@ -34,11 +34,10 @@ class CliTest(unittest.TestCase):
         self.assertEqual(exit_.exception.code, 0)
         self.assertEqual(out.getvalue().strip(), f"hevy-garmin-sync {hevy_garmin_sync.__version__}")
 
-    def test_no_arguments_says_nothing_runs_yet(self) -> None:
-        err = io.StringIO()
-        with contextlib.redirect_stderr(err):
-            self.assertEqual(cli.main([]), 0)
-        self.assertIn("nothing to run yet", err.getvalue())
+    def test_no_arguments_runs_the_app_and_returns_its_exit_code(self) -> None:
+        with mock.patch("hevy_garmin_sync.app.main", return_value=1) as run:
+            self.assertEqual(cli.main([]), 1)
+        run.assert_called_once_with()
 
     def test_login_runs_the_sign_in_and_returns_its_exit_code(self) -> None:
         with mock.patch("hevy_garmin_sync.login.main", return_value=1) as sign_in:

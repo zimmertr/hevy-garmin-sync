@@ -14,6 +14,8 @@ from zoneinfo import ZoneInfo
 
 import garminconnect
 
+from hevy_garmin_sync.exercises import ExerciseMap, GarminExercise
+
 ZONE = ZoneInfo("America/Los_Angeles")
 # A winter afternoon, so the zone's abbreviation is PST.
 NOW = datetime(2026, 1, 15, 17, 40, tzinfo=ZONE)
@@ -66,6 +68,7 @@ class FakeGarminApi:
         self.pushed: list[int] = []
         self.calls: list[str] = []
         self.signed_in = False
+        self.bare_schedule_reply = False
         self._failures: dict[str, list[BaseException]] = {}
         self._rotate_on: set[str] = set()
         self._next_id = 1000
@@ -154,7 +157,7 @@ class FakeGarminApi:
             "associatedActivityId": None,
             "associatedActivityDateTime": None,
         }
-        return self.entries[entry_id]
+        return {} if self.bare_schedule_reply else self.entries[entry_id]
 
     def unschedule_workout(self, entry_id: int) -> dict[str, Any]:
         self._enter("unschedule_workout")
@@ -177,3 +180,154 @@ class FakeClock:
     def sleep(self, seconds: float) -> None:
         self.sleeps.append(seconds)
         self.now += seconds
+
+
+class FakeResponse:
+    def __init__(self, status: int, body: Any) -> None:
+        self.status_code = status
+        self._body = body
+        self.text = body if isinstance(body, str) else json.dumps(body)
+
+    def json(self) -> Any:
+        if isinstance(self._body, str):
+            raise ValueError("not JSON")
+        return self._body
+
+
+def hevy_folder(folder_id: int, title: str) -> dict[str, Any]:
+    return {"id": folder_id, "index": 0, "title": title, "updated_at": "", "created_at": ""}
+
+
+def hevy_set(index: int = 0, **fields: Any) -> dict[str, Any]:
+    return {
+        "index": index,
+        "type": "normal",
+        "weight_kg": None,
+        "reps": None,
+        "rep_range": None,
+        "distance_meters": None,
+        "duration_seconds": None,
+        "custom_metric": None,
+    } | fields
+
+
+def hevy_exercise(template_id: str, title: str, sets: list[dict[str, Any]], **fields: Any) -> dict[str, Any]:
+    return {
+        "index": 0,
+        "title": title,
+        "rest_seconds": 60,
+        "notes": None,
+        "exercise_template_id": template_id,
+        "superset_id": None,
+        "sets": [s | {"index": i} for i, s in enumerate(sets)],
+    } | fields
+
+
+def hevy_routine(
+    routine_id: str, title: str, folder_id: int | None = None, exercises: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    if exercises is None:
+        exercises = [hevy_exercise("T-BENCH", "Bench Press (Barbell)", [hevy_set(reps=8, weight_kg=60)] * 3)]
+    return {
+        "id": routine_id,
+        "title": title,
+        "folder_id": folder_id,
+        "updated_at": "",
+        "created_at": "",
+        "exercises": [e | {"index": i} for i, e in enumerate(exercises)],
+    }
+
+
+def hevy_template(template_id: str, title: str, **fields: Any) -> dict[str, Any]:
+    return {
+        "id": template_id,
+        "title": title,
+        "type": "weight_reps",
+        "primary_muscle_group": "chest",
+        "secondary_muscle_groups": [],
+        "equipment": "barbell",
+        "is_custom": False,
+    } | fields
+
+
+class FakeHevyApi:
+    """api.hevyapp.com as a `requests.Session`: the public API's lists, paged as Hevy pages them."""
+
+    def __init__(self) -> None:
+        self.folders: list[dict[str, Any]] = []
+        self.routines: list[dict[str, Any]] = []
+        self.templates: list[dict[str, Any]] = [
+            hevy_template("T-BENCH", "Bench Press (Barbell)"),
+            hevy_template("T-PLANK", "Plank", type="duration", primary_muscle_group="abdominals", equipment="none"),
+        ]
+        self.events: list[dict[str, Any]] = []
+        self.history: dict[str, list[dict[str, Any]]] = {}
+        self.requests: list[tuple[str, dict[str, Any]]] = []
+        self.headers: list[dict[str, str]] = []
+        self.timeouts: list[float | None] = []
+        self._failures: list[BaseException | int | str | None] = []
+
+    def fail(self, *failures: BaseException | int | str | None) -> None:
+        """Script the next requests, one each: an exception to raise, a status to answer, a body that is
+        not JSON, or None to answer normally."""
+        self._failures.extend(failures)
+
+    def get(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        params: dict[str, Any] | None = None,
+        timeout: float | None = None,
+    ) -> FakeResponse:
+        path = url.removeprefix("https://api.hevyapp.com/v1")
+        params = params or {}
+        self.requests.append((path, params))
+        self.headers.append(headers or {})
+        self.timeouts.append(timeout)
+        if self._failures:
+            failure = self._failures.pop(0)
+            if isinstance(failure, BaseException):
+                raise failure
+            if isinstance(failure, str):
+                return FakeResponse(200, failure)
+            if failure is not None:
+                return FakeResponse(failure, {"error": "made up"})
+        lists = {
+            "/routine_folders": ("routine_folders", self.folders),
+            "/routines": ("routines", self.routines),
+            "/exercise_templates": ("exercise_templates", self.templates),
+            "/workouts/events": ("events", self.events),
+        }
+        if path in lists:
+            key, items = lists[path]
+            page, size = int(params["page"]), int(params["pageSize"])
+            return FakeResponse(
+                200,
+                {
+                    "page": page,
+                    "page_count": max(1, -(-len(items) // size)),
+                    key: items[(page - 1) * size : page * size],
+                },
+            )
+        if path.startswith("/exercise_templates/"):
+            found = [t for t in self.templates if t["id"] == path.rsplit("/", 1)[1]]
+            return FakeResponse(200, found[0]) if found else FakeResponse(404, {"error": "not found"})
+        if path.startswith("/exercise_history/"):
+            return FakeResponse(200, {"exercise_history": self.history.get(path.rsplit("/", 1)[1], [])})
+        return FakeResponse(404, {"error": "no such path"})
+
+
+def exercise_map() -> ExerciseMap:
+    """A small map: two built-ins by id, and the fallback rows for everything else."""
+    return ExerciseMap(
+        {
+            "T-BENCH": GarminExercise("BENCH_PRESS", "BARBELL_BENCH_PRESS"),
+            "T-PLANK": GarminExercise("PLANK", "PLANK"),
+            "T-ASSIST": GarminExercise("PULL_UP", "BANDED_PULL_UPS"),
+        },
+        {
+            ("biceps", "dumbbell"): GarminExercise("CURL", "DUMBBELL_BICEPS_CURL"),
+            ("biceps", "*"): GarminExercise("CURL", "CURL"),
+            ("*", "*"): GarminExercise("TOTAL_BODY", "TOTAL_BODY"),
+        },
+    )

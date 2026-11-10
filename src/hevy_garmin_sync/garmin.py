@@ -19,7 +19,7 @@ from typing import Any
 import garminconnect
 import requests
 
-from .errors import ConfigError, NotFound, RateLimited, Refused, Rejected, ServiceError, Unavailable
+from .errors import ConfigError, NotFound, RateLimited, Refused, Rejected, ServiceError, Stopped, Unavailable
 from .store import Store
 
 log = logging.getLogger(__name__)
@@ -54,16 +54,18 @@ class Garmin:
         *,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        stopping: Callable[[], bool] = lambda: False,
     ) -> None:
         self._api = api
         self._store = store
+        self._stopping = stopping
         self._sleep = sleep
         self._clock = clock
         self._saved = api.client.dumps()
         self._last_write = float("-inf")
 
     @classmethod
-    def open(cls, env_token: str | None, store: Store) -> Garmin:
+    def open(cls, env_token: str | None, store: Store, stopping: Callable[[], bool] = lambda: False) -> Garmin:
         """Load the token: the stored copy, unless GARMIN_TOKEN is new (A-4). No network."""
         if env_token and (store.read(TOKENS) is None or not store.seeded_by(TOKENS, env_token)):
             store.write(TOKENS, decode_token(env_token))
@@ -77,7 +79,7 @@ class Garmin:
             api.client.load(str(store.path(TOKENS)))
         except garminconnect.GarminConnectConnectionError as e:
             raise ConfigError(f"the Garmin token in DATA_DIR can't be read; {LOGIN_FIX}") from e
-        return cls(api, store)
+        return cls(api, store, stopping=stopping)
 
     def measurement_system(self) -> str | None:
         """`statute_us`, `metric` or `statute_uk`. Also the cheapest call that proves the token works."""
@@ -128,8 +130,11 @@ class Garmin:
         """The calendar's workout entries between two days, everyone's, not only the app's."""
         return self._call(lambda: self._api.get_scheduled_workouts_by_period(start.isoformat(), end.isoformat()))
 
-    def schedule(self, workout_id: int, day: date) -> None:
-        self._call(lambda: self._api.schedule_workout(workout_id, day.isoformat()), write=True)
+    def schedule(self, workout_id: int, day: date) -> int | None:
+        """Put the workout on a day's calendar. Returns the entry's id, which removing it needs."""
+        entry = self._call(lambda: self._api.schedule_workout(workout_id, day.isoformat()), write=True)
+        entry_id = entry.get("workoutScheduleId") if isinstance(entry, dict) else None
+        return int(entry_id) if entry_id is not None else None
 
     def unschedule(self, entry_id: int) -> None:
         try:
@@ -139,6 +144,8 @@ class Garmin:
 
     def _call[T](self, request: Callable[[], T], *, write: bool = False) -> T:
         if write:
+            if self._stopping():
+                raise Stopped
             wait = self._last_write + _WRITE_GAP_SECONDS - self._clock()
             if wait > 0:
                 self._sleep(wait)

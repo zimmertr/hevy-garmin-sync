@@ -202,9 +202,7 @@ class RepeatGroupTest(unittest.TestCase):
                 Set(reps=8, weight_kg=20.4117),
             )
         )
-        self.assertEqual(
-            kinds(found), ["SIDE_BEND", "rest30", "repeat3(SIDE_BEND rest30)", "SIDE_BEND", "rest30"]
-        )
+        self.assertEqual(kinds(found), ["SIDE_BEND", "rest30", "repeat3(SIDE_BEND rest30)", "SIDE_BEND", "rest30"])
         self.assertEqual([s["stepOrder"] for s in found], [1, 2, 3, 6, 7])
         self.assertEqual([c["stepOrder"] for c in found[2]["workoutSteps"]], [4, 5])
         self.assertNotIn("childStepId", found[0])
