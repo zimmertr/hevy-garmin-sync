@@ -6,5 +6,5 @@
 # Line and branch coverage, reported in CI.
 coverage==7.17.2
 # The Python Lint job and the Makefile's lint and typecheck targets.
-ruff==0.16.0
+ruff==0.17.3
 mypy==1.18.2
