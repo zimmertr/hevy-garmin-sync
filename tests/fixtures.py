@@ -21,6 +21,11 @@ ZONE = ZoneInfo("America/Los_Angeles")
 NOW = datetime(2026, 1, 15, 17, 40, tzinfo=ZONE)
 TODAY = NOW.date()
 
+# The Hevy Trainer cases checked against the Hevy app (spec D-10): a program made
+# on a Monday, and a Friday the app showed as cycle 2, week 2 of 6.
+PROGRAM_START = datetime(2026, 9, 14, 13, 0, tzinfo=ZONE)
+PROGRAM_WEEK_8 = datetime(2026, 11, 6, 18, 0, tzinfo=ZONE)
+
 GARMIN_TOKENS = json.dumps({"di_token": "access-1", "di_refresh_token": "refresh-1", "di_client_id": "client"})
 
 
