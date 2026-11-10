@@ -56,6 +56,7 @@ Garmin's unofficial web API, through [python-garminconnect](https://github.com/c
 - **Weights go in the user's own unit.** A weight sent in kilograms to a pounds account showed as 0.0 lbs on a Fenix 8 (2026-11-07, spec F-21a). With Garmin Connect set to metric the app sent 20 and 22.5 kilograms. The watch, still set to pounds, showed 44.1 and 49.6 lbs, and 20 and 22.5 kg once the watch itself was set to kilograms (2026-11-10, [#5](https://github.com/zimmertr/hevy-garmin-sync/issues/5)). So the unit to send is Garmin Connect's, and the watch's weight unit is a separate setting on the watch.
 - **Garmin takes every exercise category the tables use** in a strength workout: one workout holding all 42 was accepted (2026-11-10). For `BATTLE_ROPE` and `HYPEREXTENSION` the exercise Garmin stored differed from the one sent. What it stored is not known yet.
 - **The settings reply has a `timeZone` field** (`America/Los_Angeles` style), and the workout list carries each workout's `description` (2026-11-10).
+- **A workout updated in place and sent again** is one copy on the watch, with the new name and weights (2026-11-10, spec U-24).
 - **A workout deleted in Garmin Connect stays in the watch's saved list** until it is removed on the watch (2026-11-10, spec F-14).
 - **Garmin's exercise list** is published at https://connect.garmin.com/web-data/exercises/Exercises.json: 47 categories and 1,536 exercises on 2026-11-10. `tests/data/garmin_exercises.json` holds its keys.
 
