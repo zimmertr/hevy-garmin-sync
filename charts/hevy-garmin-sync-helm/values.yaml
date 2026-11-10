@@ -1,0 +1,43 @@
+image:
+  repository: zimmertr/hevy-garmin-sync
+  # Empty uses the chart's appVersion, the release it was packaged with.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# A Secret you made yourself holding HEVY_API_KEY and GARMIN_TOKEN (and
+# HEVY_SESSION for Hevy Trainer). When empty, the chart makes one from
+# `secret` below.
+existingSecret: ""
+secret: {}
+#  HEVY_API_KEY: ""
+#  GARMIN_TOKEN: ""
+#  HEVY_SESSION: ""
+
+# Every other setting, as environment variables (docs/CONFIGURATION.md).
+env: {}
+#  TZ: America/Los_Angeles
+#  INCLUDE_HEVY_FOLDERS: "PPL,Hevy Trainer"
+
+# The data folder: the app keeps its rotated sign-in tokens here (spec A-4).
+persistence:
+  size: 64Mi
+  storageClassName: ""
+  # Use a PersistentVolumeClaim you made yourself instead of a new one.
+  existingClaim: ""
+
+resources: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  # Makes the volume writable by the user the image runs as.
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+nodeSelector: {}
+tolerations: []

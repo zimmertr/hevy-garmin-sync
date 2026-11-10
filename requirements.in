@@ -1,0 +1,4 @@
+# The image's direct pins. `make lock` compiles requirements.txt from this
+# file, with a hash for every package.
+# python:slim ships no zoneinfo database; TZ needs one.
+tzdata==2026.6

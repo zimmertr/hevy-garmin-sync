@@ -1,0 +1,24 @@
+name: Scheduled Image Scan
+
+# The release scan gates what ships, but CVEs are published after an image
+# ships. This re-scans the latest released image every week, sends the findings
+# to the Security tab, and fails (and GitHub emails) only on a fixable Critical
+# or High. yggdrasil's image-scan module. It fails until the first release
+# exists.
+on:
+  schedule:
+    - cron: '23 14 * * 1' # Mondays 14:23 UTC, off the top of the hour, when GitHub sheds cron load
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  scan:
+    name: Scheduled Image Scan
+    uses: zimmertr/yggdrasil/.github/workflows/image-scan.yml@4e5afc95d7f3ba6c99d18e245fd3cf726c72fb63 # v0.8.1
+    permissions:
+      contents: read
+      security-events: write # the SARIF upload
+    with:
+      # The category keeps the Security tab's alert history.
+      images: '[{"image": "zimmertr/hevy-garmin-sync", "category": "trivy-released-image"}]'

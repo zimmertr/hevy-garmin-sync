@@ -1,0 +1,10 @@
+# The image's lock, plus the test and lint tools; `make lock` compiles
+# requirements-dev.txt from this file. Constrained to the image's lock, so the
+# suite runs against what ships.
+-c requirements.txt
+-r requirements.in
+# Line and branch coverage, reported in CI.
+coverage==7.17.2
+# The Python Lint job and the Makefile's lint and typecheck targets.
+ruff==0.16.0
+mypy==1.18.2

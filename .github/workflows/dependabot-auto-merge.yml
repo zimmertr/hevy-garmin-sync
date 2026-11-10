@@ -1,0 +1,21 @@
+name: Dependabot auto-merge
+
+# Patch and minor Dependabot version updates merge themselves once main's
+# required checks pass, then release like any other merge. Majors, and
+# digest-only base image updates, wait for TJ. yggdrasil's auto-merge module.
+#
+# The merge is armed with AUTO_MERGE_PAT (a Dependabot secret, since a run
+# Dependabot starts cannot read Actions secrets), because a merge made with
+# GITHUB_TOKEN would not start release.yml's `on: push`.
+on: pull_request
+
+permissions: {}
+
+jobs:
+  auto-merge:
+    name: Dependabot auto-merge
+    uses: zimmertr/yggdrasil/.github/workflows/auto-merge.yml@4e5afc95d7f3ba6c99d18e245fd3cf726c72fb63 # v0.8.1
+    permissions:
+      pull-requests: write # the comment
+    secrets:
+      merge-token: ${{ secrets.AUTO_MERGE_PAT }}

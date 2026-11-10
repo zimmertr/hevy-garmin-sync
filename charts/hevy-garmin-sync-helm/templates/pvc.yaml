@@ -1,0 +1,16 @@
+{{- if not .Values.persistence.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "hgs.claim" . }}
+  labels:
+    {{- include "hgs.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.persistence.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+{{- end }}

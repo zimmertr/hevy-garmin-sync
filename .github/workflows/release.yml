@@ -1,0 +1,151 @@
+name: release
+
+# Every merge to main is a release. In order: the squash commit is tested as
+# merged; yggdrasil's release module reads the version from its title
+# (GitVersion), builds and pushes the image for amd64 and arm64, scans each
+# platform, then tags and releases; the chart is pushed under the same version;
+# and only then is Kubernetes-Manifests pointed at it. The module's own deploy
+# bump runs before a chart could exist, so the bump lives here, as in
+# bluebird-helm. Decision records 0002, 0003 and 0004.
+on:
+  push:
+    branches: [main]
+
+# One release at a time, so two quick merges cannot race for a version or on
+# the bump branch. cancel-in-progress stays false so every merge still
+# releases, in order.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  test:
+    # actionlint (required too) rejects the `$/` form zizmor prefers.
+    uses: ./.github/workflows/test.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+
+  release:
+    name: Release
+    needs: test
+    uses: zimmertr/yggdrasil/.github/workflows/release.yml@4e5afc95d7f3ba6c99d18e245fd3cf726c72fb63 # v0.8.1
+    permissions:
+      contents: write # the tag and release
+    with:
+      # Both platforms: users run it on amd64 and arm64 machines (spec D-3).
+      images: '[{"image": "zimmertr/hevy-garmin-sync", "platforms": "linux/amd64,linux/arm64"}]'
+    secrets:
+      dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+      dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  # The chart for the tag on this commit, from bluebird-helm's chart job. The
+  # chart's name is not the image's: both live under zimmertr on Docker Hub, and
+  # the chart name is its OCI path (bluebird#111). A re-run finds the chart on
+  # Docker Hub and skips the push, so re-running a failed release finishes it.
+  chart:
+    name: Publish OCI chart
+    needs: release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0  # the tags
+          persist-credentials: false
+      - id: version
+        run: |
+          TAG=$(git tag --points-at HEAD --list 'v*' --sort=-v:refname | head -n 1)
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          if [ -z "$TAG" ]; then
+            echo "No release tag on this commit; no chart to push." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      - if: steps.version.outputs.version != ''
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          # Exact: with no version the action installs whatever Helm is
+          # newest on the day. Dependabot does not read this input.
+          version: v4.3.0
+      - id: exists
+        if: steps.version.outputs.version != ''
+        env:
+          VER: ${{ steps.version.outputs.version }}
+        run: |
+          if helm show chart oci://registry-1.docker.io/zimmertr/hevy-garmin-sync-helm --version "$VER" >/dev/null 2>&1; then
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+            echo "Chart ${VER} is already on Docker Hub."
+          else
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+          fi
+      # The chart and the image share this repo and its version, so the
+      # chart's appVersion, its default image tag, is the release just made.
+      - if: steps.exists.outputs.pushed == 'false'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          VER: ${{ steps.version.outputs.version }}
+        run: |
+          echo "$DOCKERHUB_TOKEN" | helm registry login registry-1.docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
+          helm package charts/hevy-garmin-sync-helm --version "$VER" --app-version "$VER"
+          helm push "hevy-garmin-sync-helm-${VER}.tgz" oci://registry-1.docker.io/zimmertr
+          echo "Pushed chart ${VER}." >> "$GITHUB_STEP_SUMMARY"
+
+  # Points Kubernetes-Manifests at the chart through a self-merging PR, because
+  # Kubernetes-Manifests forbids direct commits to main. Until TJ's cutover the
+  # file is in a disabled folder, so nothing deploys (decision record 0004).
+  #
+  # The release module's deploy job, run here after the chart push: yq sets the
+  # one value, create-pull-request opens the PR on a fixed branch or advances
+  # the one already open, then auto-merge is armed (yggdrasil record 0033).
+  #
+  # GH_PAT has contents and pull-requests write on Kubernetes-Manifests.
+  bump-manifests:
+    name: Bump Kubernetes-Manifests
+    needs: chart
+    if: needs.chart.outputs.version != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}  # everything here uses GH_PAT
+    env:
+      TITLE: 'chore(hevy-garmin-sync): bump chart'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: zimmertr/Kubernetes-Manifests
+          token: ${{ secrets.GH_PAT }}
+          persist-credentials: false
+      # -e fails the step when the path matches nothing, which would otherwise
+      # pass for a file already at this version.
+      - uses: mikefarah/yq@504fc38780cc46be8444ea1b72fb55919fc0bfb0 # v4.54.1
+        env:
+          VERSION: ${{ needs.chart.outputs.version }}
+          FILE: misc/hevy-garmin-sync.disabled/kustomization.yml
+          SET: (.helmCharts[] | select(.name == "hevy-garmin-sync-helm")).version
+        with:
+          cmd: yq -i "$SET = strenv(VERSION)" "$FILE" && yq -e "($SET) == strenv(VERSION)" "$FILE"
+      # zizmor would have `gh pr create` instead, which does only the last of
+      # the branch, commit, push and PR (yggdrasil record 0033).
+      - id: pr  # zizmor: ignore[superfluous-actions]
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ secrets.GH_PAT }}
+          branch: chore/hevy-garmin-sync-chart
+          commit-message: ${{ env.TITLE }} to ${{ needs.chart.outputs.version }}
+          title: ${{ env.TITLE }} to ${{ needs.chart.outputs.version }}
+          body: |
+            Automated by the hevy-garmin-sync ${{ needs.chart.outputs.version }} release.
+
+            - Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ needs.chart.outputs.version }}
+      # Every push to the branch disarms auto-merge, so arm it each time. The
+      # plain merge covers checks already green, where --auto is refused.
+      - if: steps.pr.outputs.pull-request-operation == 'created' || steps.pr.outputs.pull-request-operation == 'updated'
+        env:
+          PR: ${{ steps.pr.outputs.pull-request-number }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: gh pr merge "$PR" --repo zimmertr/Kubernetes-Manifests --auto --squash || gh pr merge "$PR" --repo zimmertr/Kubernetes-Manifests --squash

@@ -1,0 +1,79 @@
+name: PR Checks
+
+# What a PR must pass besides `test` (test.yml) and `PR Title` (pr-title.yml):
+# ruff and mypy, the chart linted and rendered, and the image it would ship,
+# built, linted, scanned and run. Decision record 0002.
+#
+# Required checks are these jobs' names (`Docker Build / Docker Build` is this
+# job's name, then the module's); renaming one strands PRs on a check that
+# never reports.
+on:
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Python Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      # Pinned in requirements-dev.in with hashes, the same versions the
+      # Makefile's `lint` and `typecheck` targets run.
+      - run: pip install --require-hashes -r requirements-dev.txt
+      - run: ruff check .
+      - run: mypy
+
+  # bluebird-helm's chart check, trimmed to what this chart has: lint, then a
+  # render with the defaults and one with an existing Secret.
+  chart:
+    name: Chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          # Exact: with no version the action installs whatever Helm is
+          # newest on the day. Dependabot does not read this input.
+          version: v4.3.0
+      - run: helm lint charts/hevy-garmin-sync-helm
+      - run: helm template hevy-garmin-sync charts/hevy-garmin-sync-helm >/dev/null
+      - run: helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --set existingSecret=hevy-garmin-sync >/dev/null
+
+  # yggdrasil's docker-build module: hadolint, the linux/amd64 image built but
+  # not pushed, a Trivy table in a sticky comment, the smoke test, then a
+  # failure on any fixable Critical or High, as the release would refuse.
+  docker-build:
+    name: Docker Build
+    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@4e5afc95d7f3ba6c99d18e245fd3cf726c72fb63 # v0.8.1
+    permissions:
+      contents: read
+      pull-requests: write # the sticky scan comment
+    with:
+      # As the release passes it: the apt upgrade layer reruns per push.
+      build-args: APP_COMMIT=${{ github.event.pull_request.head.sha }}
+      # What only a built image shows: the entry point starts on the image's
+      # own Python, the zoneinfo data is there for TZ, it runs as the
+      # unprivileged user the chart expects, and it ships its license.
+      smoke-test: |
+        docker run --rm "$IMAGE" --help
+        docker run --rm "$IMAGE" --version
+        docker run --rm --entrypoint python3 "$IMAGE" -c 'import zoneinfo; zoneinfo.ZoneInfo("America/Los_Angeles")'
+        test "$(docker run --rm --entrypoint id "$IMAGE" -u)" = 1000
+        docker run --rm --entrypoint test "$IMAGE" -s /app/LICENSE
