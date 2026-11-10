@@ -1,0 +1,26 @@
+name: PR Title
+
+# The PR title becomes the squash commit's title, and that line alone decides
+# the release bump. yggdrasil's pr-title module refuses a title the release
+# cannot read, before the merge rather than after it.
+#
+# A workflow of its own, because it has to run when only the title changes
+# (`edited`), and an edit must not rerun the tests. `synchronize` stays in the
+# list because a check reports against the head commit.
+#
+# The required check is `PR Title / PR Title` (this job's name, then the
+# module's); renaming either strands PRs on a check that never reports.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  title:
+    name: PR Title
+    uses: zimmertr/yggdrasil/.github/workflows/pr-title.yml@4e5afc95d7f3ba6c99d18e245fd3cf726c72fb63 # v0.8.1
+    permissions:
+      pull-requests: read # the action reads the PR's current title from the API

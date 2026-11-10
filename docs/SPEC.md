@@ -1,0 +1,434 @@
+# hevy-garmin-sync: specification
+
+Audience: the AI agent implementing this project. Status: signed off by TJ on 2026-11-07; tracked in #1. Source of truth for scope and requirements; record every change here with a date. Last updated 2026-11-10 (changes from the final review are marked 2026-11-10).
+
+## 0. How to use this document
+
+- Requirement IDs (`G-` goal, `S-` scope, `F-` functional, `C-` configuration, `A-` auth, `O-` operations, `D-` delivery) are stable. Cite them in code comments, commits, tests and PRs.
+- MUST and MUST NOT are hard requirements. SHOULD is the default unless an `U-` item proves it impossible; then stop and ask TJ.
+- Section 9 lists unverified assumptions (`U-`). Resolve each before building anything that depends on it, and record the result here.
+- Live tests run against TJ's own Garmin and Hevy accounts. Ask TJ before each live test.
+- Do not start any work until TJ explicitly says to. When something is ambiguous, ask TJ with simple questions. Do not invent names for mechanisms; use real identifiers.
+- Any proposal outside this document's scope must be raised with TJ, not built.
+- Before the build starts, one watch session with TJ settles U-22, U-23, U-24, U-25 and U-26, and the results are recorded here (TJ, 2026-11-10).
+
+## 1. Goal and scope
+
+<div class="wrap">
+
+| ID | Statement |
+|----|----|
+| G-1 | Get Hevy workouts to Garmin. Each selected Hevy routine (and, if enabled, each Hevy Trainer workout) exists as a Garmin Connect workout with correct exercises, sets, rep targets and weights, selectable on the watch. |
+| G-2 | Strava correctness is achieved indirectly: Strava keeps the watch's first upload (forwarded by Garmin's own Strava connection within seconds), so the planned workout decides what Strava shows. The app has no Strava integration. |
+| S-1 | One direction only: Hevy (read) to Garmin (write). MUST NOT write to Hevy. MUST NOT modify Garmin activities (recordings). MUST NOT call Strava. |
+| S-2 | Reading logged Hevy workouts is allowed only to compute Hevy Trainer prescriptions (F-40..F-46). |
+| S-3 | Out of scope: merging Hevy sets into Garmin activities (what hevy2garmin does), Strava titles or descriptions, web UI, notifications, health checks or probes, any feature that depends on Docker-specific runtime configuration, cleanup or uninstall commands, dry-run mode, per-user exercise-map overrides, multiple users per process. |
+| S-4 | Target users: TJ first; then anyone with Hevy Pro, a Garmin watch that supports strength workouts, and basic Docker or Kubernetes skills. Docker is the primary way to run it. Kubernetes is secondary (TJ's own setup). |
+
+</div>
+
+**Rationale (do not re-litigate without TJ):** hevy2garmin is designed to correct Garmin activities after the session, which never reaches Strava. Strava's public API cannot edit exercise sets or delete activities (checked 2026-11-07). Reverse-engineering Strava's app was rejected because Strava's terms forbid it. Garmin's personal API key (opened 2026-10-21) is read-only, so it cannot create workouts. Garmin's Training API requires business-tier access.
+
+## 2. Runtime model
+
+<div class="wrap">
+
+| ID | Requirement |
+|----|----|
+| F-1 | Single long-running process. On start: validate config (C-\*), load tokens (A-\*), run a full sync. Then loop: poll Hevy every `HEVY_POLL_INTERVAL_SECONDS`, and run the day rollover (F-31) at local midnight in `TZ`. All timers live inside the process. MUST NOT rely on external cron, Kubernetes CronJobs or sidecars. |
+| F-2 | No webhooks and no listening ports. Hevy's public API has no webhooks and no routine change feed (only `GET /v1/workouts/events`, which covers workouts), so polling is the only option (verified 2026-11-07 from the API spec). |
+| F-3 | A sync is idempotent: compute the desired Garmin state from Hevy, compare with the Garmin workouts and calendar entries the app owns (F-12), apply only the differences. |
+| F-3a | Principle (TJ, 2026-11-07): any change in Hevy must reach Garmin as fast as possible. Polling exists only because Hevy has no webhooks; never trade speed for fewer calls without asking TJ. Every poll checks everything: routines, folders, and with Trainer, saved, edited or deleted workouts (`GET /v1/workouts/events?since=`, public) and the Trainer program (private). |
+| F-3b | Expected Hevy load at 60 s: 2 requests per poll without Trainer (routines, folders, more if over 10 of either), 4 with Trainer; about 2,900 and 5,800 a day. After a saved Trainer workout, about 7 more (history at 3 per page, both preferences). Hevy access-token refresh about every 30 minutes. Exercise templates are fetched once per template id and cached in memory. |
+| F-3c | Expected Garmin load for TJ (2 Trainer workouts): about 10 to 40 calls a day. A changed workout costs about 4 calls (1 update, then 3 for the push: last-used device, workout name, the message). The midnight reconcile reads the workout list and the calendar, then makes 2 calls per workout (remove yesterday's entry, add today's). Plus token refreshes. Scales with workout count at midnight (recounted 2026-11-10). |
+| F-4 | Each poll lists routines (`GET /v1/routines`, `pageSize` max 10, so ceil(routines/10) calls) and folders, and rebuilds only routines whose `updated_at` changed since the last sync. A missing Garmin workout is found only by the full reconcile at startup and midnight, which read Garmin's workout list. A poll also compares folder titles (a renamed folder changes workout names, F-15) and, with Trainer, the program and its templates; any difference counts as a Hevy change. The `/v1/workouts/events` cursor lives in memory and starts at the startup time (the startup full sync covers anything earlier). Trainer preferences (`availableWeights`, unit overrides) are read at startup, at midnight and after a saved, edited or deleted workout. A Trainer template that disappears is handled like a deleted routine (F-14, F-14a). |
+| F-4a | Garmin is contacted only: (1) at startup, full reconcile; (2) when a poll finds a Hevy change (routine created, changed, deleted or deselected; or, with Trainer, a saved, edited or deleted Hevy workout, which can change Trainer's next weights); (3) at local midnight, full reconcile plus calendar rollover, and on the first weekday Trainer's week switch; (4) token refresh and retries of the above. A poll with no Hevy change makes no Garmin call. Garmin is known to block accounts that call too often. |
+| F-4b | No special handling for hand edits in Garmin Connect. A workout's contents are rewritten only when its Version hash (F-12) changes, so a hand edit stays until that routine changes in Hevy (TJ, 2026-11-07). Calendar entries are still reconciled at startup and midnight. Do not compare Garmin's actual workout contents. |
+| F-5 | Changes reach the watch on its next phone sync. Accepted. The app queues each created or changed workout for the watch (F-31a), but the watch only receives it when it syncs. |
+
+</div>
+
+## 3. Garmin workouts
+
+<div class="wrap">
+
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="id">F-10</td>
+<td>Selection: every Hevy routine syncs by default. If <code>INCLUDE_HEVY_FOLDERS</code> is set, only routines in those folders. Folders are matched by id or by exact title. Routines with no folder sync only when <code>INCLUDE_HEVY_FOLDERS</code> is unset.</td>
+</tr>
+<tr>
+<td class="id">F-11</td>
+<td>On start, log every Hevy routine folder as <code>id</code> and <code>title</code> at INFO, so users can copy ids.</td>
+</tr>
+<tr>
+<td class="id">F-12</td>
+<td>Ownership: the app MUST only create, update, delete or schedule Garmin workouts it created. Ownership is stored inside each Garmin workout's description, in this exact format (TJ, 2026-11-07):<br />
+<code>Synced from Hevy: https://github.com/zimmertr/hevy-garmin-sync</code><br />
+<code>Last updated: 2026-11-07 17:40 PST</code><br />
+<code>Hevy routine: &lt;hevy_routine_id&gt;</code> (Trainer workouts: <code>Hevy Trainer template: &lt;template_id&gt;</code>)<br />
+<code>Version: 3f9c1a</code><br />
+"Version" is a short hash of the workout exactly as the app built it (name, steps, notes; not the "Last updated" line), so Garmin's re-encoding (weights stored in grams, extra fields) never looks like a change. Every reconcile compares the hash of the newly built workout with this line and writes only when they differ (TJ chose the description over a file in <code>DATA_DIR</code>, 2026-11-07). A new app version that builds workouts differently changes the hash, so its first sync rewrites each workout once.<br />
+A workout is the app's only when the first line matches and the id line parses. To find them the app reads Garmin's whole workout list (<code>get_workouts</code> returns at most 100 per call; page until a short page; 2026-11-10) and relies on the list carrying each workout's description (U-26). "Last updated" is when the app last wrote that workout, in <code>TZ</code>; it changes only when the workout's contents change, never on a poll with no change (F-4a). The data folder MUST NOT be the source of ownership, so losing it never causes duplicates. The marker goes in the workout's <code>description</code> (present on python-garminconnect's <code>BaseWorkout</code>); the app writes it on every create and update, so the app itself never drops it. A user who deletes the id line by hand orphans that workout: the app no longer recognizes it and creates a new one. Accepted; the README tells users not to edit these descriptions (TJ, 2026-11-07). For Trainer workouts the template line replaces the routine line. <code>Version</code> is the first 6 hex characters of a SHA-256 of the built workout; "Last updated" uses the zone's own abbreviation (PST or PDT).</td>
+</tr>
+<tr>
+<td class="id">F-13</td>
+<td>A changed routine updates its existing Garmin workout in place with python-garminconnect <code>update_workout(workout_id, json)</code> (PUT, full body, keeps the id, calendar entries stay valid; verified from its source 2026-11-07). hevy2garmin deletes and recreates instead, which broke calendar entries; do not copy that.</td>
+</tr>
+<tr>
+<td class="id">F-14</td>
+<td>A routine that is deleted, or no longer selected, has its Garmin workout deleted (and its calendar entries, F-32).</td>
+</tr>
+<tr>
+<td class="id">F-14a</td>
+<td>Never delete on a bad read (TJ, 2026-11-07). Deletions happen only after Hevy returned the complete routine and folder lists (every page) without an error. If a folder named in <code>INCLUDE_HEVY_FOLDERS</code> disappears while running (deleted or renamed), keep its routines' Garmin workouts, log ERROR naming the folder and saying to fix the setting, and keep syncing the rest. At startup an unknown folder still exits (C-3).</td>
+</tr>
+<tr>
+<td class="id">F-15</td>
+<td>Names: <code>Hevy: {routine title}</code> when the routine has no folder; <code>Hevy/{folder title}: {routine title}</code> when it does; Trainer workouts <code>Hevy/Trainer: {template name} (C{cycle}-W{week of cycle})</code>, e.g. <code>Hevy/Trainer: Upper (C2-W2)</code>. No "Deload" suffix. Watch truncation is accepted (U-3).</td>
+</tr>
+<tr>
+<td class="id">F-15a</td>
+<td>Duplicate names are allowed (two routines with the same title in one folder get the same Garmin name). No suffixes.</td>
+</tr>
+<tr>
+<td class="id">F-15b</td>
+<td>A routine with no exercises gets no Garmin workout; log at INFO why. A workout Garmin rejects is F-16.</td>
+</tr>
+<tr>
+<td class="id">F-16</td>
+<td>If Garmin rejects one workout (a 4xx about its contents, not a network or server error), log ERROR with the routine title and Garmin's reason, skip it, and continue with the others. Retry it only when that routine changes in Hevy, at startup, and at local midnight (TJ, 2026-11-07, for the first version; a better design is backlog B-4). Network errors, 5xx and 429 follow O-1. Garmin may cap the number of steps in one workout (unconfirmed). Nothing is built around that: a routine too long for Garmin is rejected like any other, and the ERROR line also gives its step count so the cause is plain (TJ, 2026-11-10).</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+## 4. Workout contents (Hevy routine to Garmin steps)
+
+<div class="wrap">
+
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Hevy input</th>
+<th>Garmin output (MUST)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="id">F-20</td>
+<td>Exercise</td>
+<td>Strength step(s) named by the exercise map (F-50). Exercise order preserved.</td>
+</tr>
+<tr>
+<td class="id">F-20a</td>
+<td>Back-to-back sets of one exercise with the same type, rep target (or time or distance) and weight</td>
+<td>One Garmin repeat group (<code>RepeatGroupDTO</code>, <code>numberOfIterations</code> = number of sets) holding the set step and its rest step, so the watch counts SET 1/3, 2/3, 3/3. A set that differs (a warm-up, a heavier top set) gets its own step. Decided by TJ, 2026-11-07, after the watch showed SET 1/1 for a set sent as its own step. VERIFIED on TJ's Fenix 8, 2026-11-07 (<code>gc-test/test_repeat.py</code>): warm-up 20 lb, a repeat of 3 x 40 lb, then 8 x 45 lb counted SET 1/1, 1/3, 2/3, 3/3, 1/1; every set showed its weight; the watch asked for reps and weight after all 5, including the repeat's last round. The step list shows the group as "Repeat 3x" with the set and rest inside. Build the group with <code>create_repeat_group(n, [set, rest], order, skip_last_rest_step=False)</code>, <code>childStepId</code> 1 on the group and its children, and the pound weight fields patched in (F-21a).</td>
+</tr>
+<tr>
+<td class="id">F-21</td>
+<td>Set weight (<code>weight_kg</code>)</td>
+<td>The routine's weight. Null in the routine means no weight target. With Trainer, the prescription (F-43). Weights are kilograms in both APIs; never convert through display units.</td>
+</tr>
+<tr>
+<td class="id">F-21a</td>
+<td>Weight precision</td>
+<td>VERIFIED on TJ's Fenix 8, 2026-11-07: a step with <code>weightValue: 40.0</code> and <code>weightUnit {unitId: 7, unitKey: "pound"}</code> shows 40.0 lbs everywhere the watch shows a set: the workout's step list ("12 Reps - 40.0 lbs"), the set's start screen, and prefilled on the set confirm screen (Garmin stores it as 18143 grams and labels unit 7 "centimetersPerMillisecond", but displays it correctly). A step sent the python-garminconnect way (<code>weight_kg</code>, stored 18143.7 with the kilogram unit) shows 0.0 lbs: DO NOT use the library's <code>weight_kg</code> helper. Kilogram users are untested (U-17). Send each weight in the user's unit, as hevy2garmin does (<code>web/lib/garmin-workout.ts</code> <code>weightFields</code>): for pounds, <code>weightValue</code> = round(kg x 2.2046226218, 2 decimals) with <code>weightUnit {unitId: 7, unitKey: "pound"}</code>; for kilograms, <code>weightValue</code> = kg with <code>{unitId: 8, unitKey: "kilogram"}</code>. 18.1437 kg becomes 40.00 lb; 17.5 lb stays 17.5 (not whole pounds: half-pound dumbbells and plates exist). The unit comes from Garmin's profile setting <code>userData.measurementSystem</code>, which python-garminconnect reads at sign-in (<code>unit_system</code>): <code>statute_us</code> means pounds, <code>metric</code> kilograms; <code>statute_uk</code> is unconfirmed (U-14). This matches what the watch displays and works without Trainer. With Trainer, Hevy's per-exercise unit overrides decide the rounding to equipment (F-43); the value sent to Garmin is still in Garmin's unit. Build the weight fields ourselves; never through the library's helper.</td>
+</tr>
+<tr>
+<td class="id">F-22</td>
+<td>Reps or <code>rep_range {start,end}</code></td>
+<td>Rep target. For a range, the top (<code>end</code>), and the full range goes in the set's note (F-30). A set with no rep target (e.g. Trainer warm-ups, which carry only a weight) ends on a button press (end condition <code>lap.button</code>, <code>conditionTypeId</code> 1, verified on TJ's Fenix 8), still with its weight (TJ, 2026-11-07; U-19).</td>
+</tr>
+<tr>
+<td class="id">F-23</td>
+<td><code>rest_seconds</code></td>
+<td>Timed rest step of that length after each set. When the exercise has no rest timer (null or 0), an open rest step that ends on a button press (TJ, 2026-11-07; U-20).</td>
+</tr>
+<tr>
+<td class="id">F-24</td>
+<td>Set type <code>warmup</code></td>
+<td>Separate step marked as warm-up (<code>stepType {stepTypeId: 1, stepTypeKey: "warmup"}</code>), with its own weight. Garmin stores the mark (<code>stepTypeKey: "warmup"</code> read back, 2026-11-07), but the Fenix 8 never shows it: not in the exercise name, the set's start screen, or the confirm screen ("Set 1 - Side Bend"). So the step also carries the note "Warm-up" (F-30). A warm-up never joins a repeat group with working sets (F-20a).</td>
+</tr>
+<tr>
+<td class="id">F-25</td>
+<td>Set types <code>dropset</code>, <code>failure</code></td>
+<td>Normal sets, with the note "Drop set" or "To failure" (F-30).</td>
+</tr>
+<tr>
+<td class="id">F-26</td>
+<td><code>superset_id</code> shared by exercises</td>
+<td>Alternate per round: A set, open rest (ends on a button press, so the watch asks for A's reps and weight, F-29), B set, then rest. Repeat for each round. Back-to-back rounds that match exactly (same reps, weight and note for every exercise in the round) become one repeat group, as in F-20a; a round that differs gets its own steps (TJ, 2026-11-07). The rest after each round uses the last exercise in the round's <code>rest_seconds</code> (open rest if it has none), as Hevy starts the timer after the last exercise (TJ, 2026-11-07; Hevy's own behavior not checked in its code). The open rest between exercises inside a round is TJ's choice (2026-11-07); it is proven to bring up the prompt (U-20) but not yet seen mid-superset (U-23). Details (2026-11-10): round <em>i</em> is set <em>i</em> of each exercise in the superset, in exercise order. With three or more exercises, an open rest follows each set but the round's last, which gets the timed rest. When the exercises have different set counts, a later round holds only the exercises that still have a set, and its rest comes from the last exercise in that round. When the superset's exercises are not next to each other in the routine, the whole superset sits where its first exercise is.</td>
+</tr>
+<tr>
+<td class="id">F-27</td>
+<td>Duration or distance targets</td>
+<td>Time (e.g. plank): a step with a time target (end condition <code>time</code>), plus weight if set. VERIFIED on TJ's Fenix 8, 2026-11-07: it shows the time, counts down and ends on its own, but the countdown starts the instant the previous step ends. So before every timed set, insert a wait step: a rest step ending on a button press with the note <code>Press Lap button to start 30s Plank countdown</code> (the set's duration as <code>30s</code> or <code>1m 30s</code>, and the Hevy exercise title) (TJ, 2026-11-07; how a rest step shows its note is U-22). In a repeat group the wait step is inside the group, before the set.<br />
+Distance (e.g. farmer's walk, sled push): the set ends on a button press, with the distance in the set's note in Garmin's unit (the profile's measurement system, as for weights: metric <code>20 m</code>, imperial <code>22 yd</code>; TJ, 2026-11-07; Hevy's own unit setting is private-API only), plus weight if set (TJ, 2026-11-07). A set with both a time and a distance (e.g. a timed carry) uses the time target and puts the distance in the note. Do NOT send a distance end condition: on the Fenix 8 it showed 20 m as "0.01mi" and, indoors, never ended on its own.<br />
+When a timed exercise has no rest timer, its open rest and the wait step come back to back, so the user presses twice. Accepted (TJ, 2026-11-10).</td>
+</tr>
+<tr>
+<td class="id">F-28</td>
+<td>Bodyweight exercise with added weight</td>
+<td>Only the added weight; none if zero or null.</td>
+</tr>
+<tr>
+<td class="id">F-28a</td>
+<td>Assisted exercise (exercise template <code>type</code> believed <code>bodyweight_assisted_reps</code>; confirm in the API spec)</td>
+<td>The assistance is sent as the set's weight, and the set's note says it is assisted (F-30), so the number is not read as a load (TJ, 2026-11-07).</td>
+</tr>
+<tr>
+<td class="id">F-29</td>
+<td>Every set, including the last of the workout</td>
+<td>The watch MUST prompt for reps and weight after the set. hevy2garmin omits the rest step after the workout's last set (<code>endsWorkout</code>, <code>skipLastRestStep</code> in its <code>web/lib/garmin-workout.ts</code>) and the prompt was skipped on 2026-11-06. Verified fix (U-4): always put a rest step after every set, including the last; never set <code>skipLastRestStep</code>. Use the routine's rest time, or an open rest ending on a button press if it has none (F-23).</td>
+</tr>
+<tr>
+<td class="id">F-30</td>
+<td>Set notes</td>
+<td>Each set step gets at most one note, written by the app in the step's <code>description</code>. VERIFIED on TJ's Fenix 8, 2026-11-07 (<code>gc-test/test_note.py</code>): a step note shows as a note icon on the step in the step list and as an extra data screen (second position) during that set; it does not show on the set's start screen, the confirm screen, or the in-workout sets list. Formats, approved by TJ 2026-11-07: set type first, then a rep range when the set has one.<br />
+Warm-up, no reps or fixed reps: <code>Warm-up</code><br />
+Warm-up with a range: <code>Warm-up: 8-10 reps</code><br />
+Drop set: <code>Drop set: 4-6 reps</code>, or <code>Drop set</code> without a range<br />
+Failure: <code>To failure: 4-6 reps</code>, or <code>To failure</code> without a range<br />
+Normal set with a range: <code>4-6 reps</code><br />
+Normal set with fixed reps: no note (the watch already shows the target)<br />
+Assisted exercise (F-28a): <code>Assisted</code> joins the set type, e.g. <code>Assisted: 4-6 reps</code>, <code>Warm-up, assisted: 8-10 reps</code>, <code>Drop set, assisted</code>; a normal assisted set with fixed reps gets <code>Assisted</code><br />
+Distance set (F-27): the distance takes the place of the rep range, e.g. <code>20 m</code>, <code>Warm-up: 20 m</code>, <code>Drop set: 20 m</code><br />
+Sets only share a repeat group (F-20a) when their notes match too. Hevy's own notes (routine exercise notes, pinned exercise notes) are NOT sent: TJ chose to keep his form reminders in Hevy (2026-11-07). How the watch shows a long note is untested and not needed while notes stay this short.</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+## 5. Calendar
+
+<div class="wrap">
+
+| ID | Requirement |
+|----|----|
+| F-30a | Calendar entries are on by default and can be turned off with `ENABLE_SCHEDULED_WORKOUTS=false`; workouts then exist only in the watch's workout list. When turned off, the app removes the calendar entries it owns. |
+| F-31 | Every synced workout has one calendar entry on today's date in `TZ`, except as F-33 says. Today only, not later days as well (TJ, 2026-11-10: the app's job ends at Garmin Connect; when the watch picks the calendar up is Garmin's side). At local midnight the app removes its entries from past days (`unschedule_workout`) and adds one on the new day for each workout (`schedule_workout`); it does not move entries. The watch's strength start screen then lists them all ("Today: 2 Workouts / Dismiss / ..."); verified on a Fenix 8 on 2026-11-07 with two entries. The app does not choose which workout is next. |
+| F-31a | Every created or changed workout is also sent to the user's devices (Garmin's "Send to Device"), so it is always in the watch's workout picker even when the Today prompt doesn't show. This holds when `ENABLE_SCHEDULED_WORKOUTS=false` too. Evidence (TJ's Fenix 8, 2026-11-07): four workouts copied in Garmin Connect and scheduled on today did not reach the watch after repeated syncs; after Send to Device they appeared in the watch's workout picker. The calendar delivers the "Today: N Workouts" prompt and the watch's training calendar; Send to Device delivers the picker. VERIFIED 2026-11-07 on TJ's Fenix 8: `send_scheduled_workouts_to_devices()` (`PUT /workout-service/schedule/sendtodevices`) returns null and delivers nothing. `push_workout_to_device(workout_id)` (`POST` to the device-message service, payload `messageUrl: workout-service/workout/FIT/{id}`, `messageType: workouts`) delivers the workout to the watch's picker after a sync. With no `device_id` it targets the device that synced last (`get_device_last_used`). Use that, with no device setting; push after every create and update. Multi-device users get only their last-synced device; revisit if anyone asks (backlog B-2). |
+| F-32 | At startup and at midnight the app reconciles its own entries from 31 days back through today: exactly one entry on today for each workout it owns (none for a Trainer workout F-33 holds back), and every other entry of its own in that window removed, finished or not (TJ, 2026-11-10). The app never reads whether an entry was completed; the recorded activity stays on Garmin's calendar by itself. A workout done today keeps its entry until midnight. Entries on future days are left alone. Never touch calendar entries for workouts the app doesn't own (e.g. Runna runs). |
+| F-32a | REMOVED 2026-11-10: the app no longer needs Garmin's completion mark (F-32, F-33). |
+| F-33 | Trainer: this week's Trainer workouts (all program templates) sit on today. At midnight on the user's first weekday (Hevy `first_weekday`), names and contents switch to the new week. Once a Trainer workout is done this week, it gets no calendar entry from the next reconcile (startup or midnight) until the next week starts, but stays a selectable workout on the watch (TJ, 2026-11-07). "Done this week" comes from Hevy, not Garmin: a logged workout whose `trainer_workout_template_id` matches and whose `start_time` falls in the current program week, from the history F-42 already reads (TJ, 2026-11-10). |
+
+</div>
+
+## 6. Hevy Trainer (runs whenever `HEVY_SESSION` is set)
+
+Trainer's program is not in Hevy's public API; only the private API the Hevy app uses has it. TJ decided (2026-11-07) to use it and not to disable it by default. There is no on/off setting: Trainer syncs whenever `HEVY_SESSION` is provided. Only the environment variable counts: when it is unset, Trainer is off even if `DATA_DIR` still holds a Hevy session, and the app deletes the Trainer workouts it owns and that stored session (TJ, 2026-11-10). If the account has no Trainer program, log that at INFO and sync routines as usual. The README states that Trainer uses Hevy's private API, which Hevy may change or object to (Hevy's terms allow suspending accounts for "unauthorized, or suspected unauthorized use").
+
+Hevy's servers do not send Trainer's prescribed weights, warm-up weights or cycle/week; the Hevy app computes them on the phone. The app MUST compute them with the same rules. Reference implementation: `zimmertr/hevy-trainer-sync` `src/hevy_trainer_sync/trainer_rules.py`, `build.py` (`plan`, `plan_exercise`), `library.py`, `docs/DATA.md`, decision record 0042. Reference only: write fresh code (D-5), but match its behavior exactly, including everything the rows below don't state (0 or 3+ warm-ups, barbell plate combinations, dumbbell pairs, ties when rounding to the nearest weight, where the current rep-ladder rung comes from, the week of a past workout when excluding deload weeks, how far back to read history). It was validated against the app on 2026-11-06 and 2026-11-07 (Side Bend 35 to 40 lb, Lying Leg Raise to 15-20 reps, Goblet Squat warm-ups 30 and 50 lb).
+
+<div class="wrap">
+
+| ID | Requirement |
+|----|----|
+| F-40 | Trainer and plain routines sync together. Exercise type and equipment for the rules come from Hevy's public `GET /v1/exercise_templates` (`type`, `equipment`), not from a copy of the app's library. |
+| F-41 | Week: `calendar_week` = whole weeks from the start of the week containing the program's `created_at` to the start of the current week, plus 1, with weeks starting on `first_weekday` in local time. Cycle length 6, or 7 when `deloads_enabled`. cycle = floor((week-1)/n)+1, week of cycle = (week-1)%n+1, deload week = week of cycle \> 6. |
+| F-42 | History: the user's workouts whose `trainer_workout_template_id` matches the template and that contain the exercise, excluding deload weeks, sorted by time; the last one is the previous log. |
+| F-43 | Weight: base = lightest normal set of the previous log. Fewer sets than the target: no change. Every set at or above the range end: x1.05. Every set below the range start: x0.95. Otherwise no change. Round to equipment the user owns (Trainer preferences `availableWeights`): machines in 2.5 kg or 5 lb steps (up = ceil, down = floor), dumbbells from the user's list counted as pairs, barbell from bars plus plate combinations. Deload week: 0.6x, nearest. |
+| F-44 | Warm-ups: 1 warm-up = 60%; 2 warm-ups = 40% and 60%; rounded to the nearest available weight. |
+| F-45 | Reps-only exercises move up or down the ladder 4-6, 6-8, 8-12, 12-15, 15-20, 20-25, 25-30 by the same all-sets rule. |
+| F-46 | New exercise (no previous log in that template, e.g. after a rotation): match the app's starting weight (TJ approved 2026-11-07). Take the exercise's best estimated one-rep max (`best_1rm`) across all the user's workouts over the last 3 months, else the last 12 months. Per set, the estimate is weight / factor\[reps\] from a constant table for 1 to 30 reps (factor 0.5 above 30; 0 reps gives nothing). The starting weight is that one-rep max times a constant percentage for the target rep range, rounded to the user's equipment (F-43); warm-ups follow F-44. No one-rep max in 12 months: no weight (blank), as in the app. The factor table, the rep-range percentages and the exact window definitions go into `docs/HEVY_TRAINER_RULES.md` during the build (D-7b). Needs the exercise's sets for the last 12 months: one call to the public `GET /v1/exercise_history/{exerciseTemplateId}` with `start_date` and `end_date`, made only when such an exercise exists and cached in memory (TJ, 2026-11-10; replaces reading every workout through the private API, about 50 calls). |
+| F-46a | No prescription for other reasons (exercise type or equipment the app gives no suggestion for, e.g. distance or time types): no weight, logged at INFO. A kettlebell or other equipment outside machine, dumbbell and barbell follows whatever the app does; confirm in the app's code. |
+| F-47 | Weights change only after a logged session, not at week rollover (matches the app). Exception: the deload multiplier (F-43) follows the week, so entering and leaving a deload week changes weights at the week switch. |
+| F-48 | Nothing checks for Hevy app updates that change these rules. A difference between the watch and the app is how a change shows (decision record 0043 in hevy-trainer-sync). |
+
+</div>
+
+## 7. Exercise map
+
+<div class="wrap">
+
+| ID | Requirement |
+|----|----|
+| F-49 | The order workouts appear on the watch is whatever Garmin does. Do not build ordering logic. |
+| F-50 | A static CSV file (confirmed by TJ 2026-11-07), read with Python's `csv` module, one row per exercise mapping every Hevy built-in exercise template id (451 in Hevy app 3.2.5; the ids and titles come from the public `GET /v1/exercise_templates`, read once with TJ's API key after asking TJ, keeping rows where `is_custom` is false) to one Garmin exercise (Garmin Connect's category key plus exercise key, e.g. `BENCH_PRESS` and `BARBELL_BENCH_PRESS`). Columns: Hevy id, Hevy title, Garmin category, Garmin name, observed Strava name (empty until seen), observed date. |
+| F-51 | Seed from hevy2garmin's `HEVY_TO_GARMIN` in `typescript/src/exercise-map.ts` (MIT; credit in the README and file header). Garmin's exercise list is Garmin Connect's own, published without sign-in at `https://connect.garmin.com/web-data/exercises/Exercises.json` (categories, each with its exercises; checked 2026-11-10), not the FIT SDK profile. The repo keeps a list of that file's category and exercise keys, and a test fails when a row of either map (F-50, F-53) names a pair that is not in it (TJ, 2026-11-10). Choose the closest movement and equipment for every row up front; known wrong rows: Upright Row (Dumbbell) showed as "Barbell Upright Row" on Strava; Pullover (Dumbbell) as "Straight Arm Pulldown". |
+| F-51a | Review before the first version (TJ, 2026-11-07): the building agent fills every row; a second agent checks every row independently against Garmin's list (F-51) and flags doubtful matches; TJ reviews only the exercises he uses (those in his routines and Trainer program). Record unresolved doubts in the PR body. |
+| F-52 | The Strava column is filled only from real sessions (Strava publishes no list). |
+| F-53 | Custom Hevy exercises (`is_custom`, not in the map) are mapped by `primary_muscle_group` and `equipment` from `GET /v1/exercise_templates` to a Garmin exercise, via a second small table keyed by those two values. |
+| F-54 | No per-user overrides. Fixes go into the repo. |
+| F-55 | A built-in Hevy exercise missing from the map (e.g. added by Hevy later) uses the F-53 fallback and logs a WARNING naming the exercise and asking the user to report it, so the map gets a proper row. |
+
+</div>
+
+## 8. Authentication
+
+<div class="wrap">
+
+| ID | Requirement |
+|----|----|
+| A-1 | Plain routines use the Hevy public API key (`HEVY_API_KEY`, static, from Hevy settings, requires Hevy Pro). Free Hevy accounts are not supported: plain routines never come from the private API (TJ, 2026-11-07). |
+| A-2 | Garmin: a one-off command `docker run --rm -it <image> login`, run on the user's own machine. It prompts for email, password and a 2FA code if requested, signs in through python-garminconnect, and prints one opaque value for `GARMIN_TOKEN` (the library's token data, encoded as one string; U-12). The password is used once and never written anywhere. |
+| A-2a | Garmin client: depend on python-garminconnect (MIT, `cyberjunky/python-garminconnect`), pinned to an exact version (0.3.20 or later as of 2026-11-07). It implements Garmin's current DI OAuth sign-in (after Garmin's March 2026 change broke `garth`, which is deprecated), MFA, token refresh, workouts (`upload_workout`, `update_workout`, `delete_workout`, `get_workouts`), strength step models (`category`, `exerciseName`; its own `weight_kg` helper writes grams with the kilogram unit, which the watch shows as 0.0, so patch the weight fields per F-21a) and scheduling (`schedule_workout`, `unschedule_workout`, `get_scheduled_workouts_by_period`). Do not write our own Garmin sign-in. |
+| A-3 | Hevy (Trainer only): no command. Hevy's password sign-in is behind reCAPTCHA (the hevy-unofficial client says the same of the web), so programmatic sign-in is not possible without a hack. The README shows how to copy the hevy.com `auth2.0-token` cookie into `HEVY_SESSION`. This works for every sign-in method, Apple and Google included (U-5). The README tells users to copy the cookie from a private browser window and then close that window without logging out: the app rotates the refresh token, so a browser left signed in on the same session and the app would each end the other's session (2026-11-10). The Hevy phone app has its own session and is not affected. |
+| A-4 | The env var seeds the first start. The app then stores the current tokens in `DATA_DIR`, together with a hash of the env value it started from, and prefers the stored copy. When `GARMIN_TOKEN` or `HEVY_SESSION` changes (its hash differs from the stored one), the new env value replaces the stored copy: that is how a user recovers by running `login` again (TJ, 2026-11-07). Required because both services rotate refresh tokens: Garmin per the garmin-auth README ("Garmin rotates the refresh token each time, so an unsaved one stops working", checked 2026-11-07); Hevy per hevy-trainer-sync `docs/DATA.md` (2026-11-04). |
+| A-5 | Token writes MUST be atomic (write then rename) and file mode 0600, so a crash never leaves a half-written token. |
+| A-6 | MUST NOT log tokens, cookies, passwords or the user's email. |
+| A-7 | Garmin may block sign-ins from cloud IPs (garmin-auth README); home connections usually work. The README must tell cloud users to run `login` from home, and tell every user to run exactly one copy of the app per Garmin account: two copies refresh the same rotating token and one of them gets locked out. |
+
+</div>
+
+## 9. Unverified assumptions (resolve before depending on them)
+
+<div class="wrap">
+
+| ID | Assumption | How to verify | If false |
+|----|----|----|----|
+| U-1 | RESOLVED 2026-11-07: python-garminconnect `update_workout` replaces a workout in place and keeps its id. | Confirm with the first live sync. |  |
+| U-2 | RESOLVED 2026-11-07: workouts have a `description` field; the app rewrites the marker on every update. | Confirm a strength workout's description round-trips on the first live sync. | Ask TJ; fall back to a list in `DATA_DIR`. |
+| U-3 | RESOLVED 2026-11-07: Garmin Connect keeps a 49-character name in full; the Fenix 8 shows about the first 30 characters ("Hevy/Push Pull Legs: Full Body"). Trainer names ("Hevy/Trainer: Upper (C2-W2)", 27) fit; long folder names push the routine title past the cut. Accepted unless TJ says otherwise. |  |  |
+| U-4 | RESOLVED 2026-11-07: with a rest step after the final set, the Fenix 8 shows the reps and weight confirm after that set, then "Workout Complete". Always end every set, including the last, with a rest step. |  |  |
+| U-18 | RESOLVED 2026-11-07: a mix of single set steps and repeat groups counts, weighs and prompts correctly on the Fenix 8 (F-20a). |  |  |
+| U-19 | RESOLVED 2026-11-07 (`gc-test/test_open.py`): a set ending on a button press waits for the press, shows its weight, and is followed by the reps and weight screen with that weight. |  |  |
+| U-20 | RESOLVED 2026-11-07: an open rest waits for a button press, and the reps and weight screen still appears after the set before it. |  |  |
+| U-21 | RESOLVED 2026-11-07: Garmin accepts time and distance end conditions on strength steps. Timed sets work but start counting at once; distance targets are useless indoors. Handled in F-27. |  |  |
+| U-22 | How the Fenix 8 shows a note on a rest step (the wait step before a timed set, F-27). Set notes appear only as an extra data screen, so a rest note may not be visible without scrolling. | The watch session before the build (TJ, 2026-11-10). | Ask TJ; the rest screen already shows "Next: Plank 0:30". |
+| U-23 | An open rest between the exercises of a superset round (F-26) brings up the reps and weight prompt for the first exercise, and the round still reads clearly on the watch. | The watch session before the build (TJ, 2026-11-10). | Ask TJ. |
+| U-24 | A workout already on the watch, changed in place with `update_workout` and sent again with `push_workout_to_device`, shows its new contents and name on the watch as one copy, not a second one beside the old. This is the app's most common action (every Trainer session and every week switch) and has only been checked in the library's source (U-1). | The watch session before the build (TJ, 2026-11-10). | Stop and ask TJ. |
+| U-25 | A workout deleted in Garmin Connect leaves the watch at its next sync. | The watch session before the build (TJ, 2026-11-10). | Document that deleted routines stay on the watch until removed there. |
+| U-26 | Garmin's workout list (`get_workouts`) carries each workout's description, so the app finds its own workouts (F-12) without one call per workout. | The watch session before the build (TJ, 2026-11-10). | Read each workout with `get_workout_by_id` at startup and midnight; recount F-3c. |
+| U-17 | Kilogram users: hevy2garmin sends `weightValue` = the kilogram number with `{unitId: 8, unitKey: "kilogram"}`. Not yet seen on a watch set to kilograms. File as an issue once the repo exists (TJ, 2026-11-07). | Ask a kilogram user, or temporarily switch a watch to metric, during the build. | Investigate. |
+| U-5 | The hevy.com cookie is the same after Apple or Google sign-in. | Ask a user with such an account, or TJ if applicable. | Document the limitation. |
+| U-6 | RESOLVED 2026-11-07: no usable programmatic Hevy sign-in (reCAPTCHA). Cookie only (A-3). |  |  |
+| U-7 | RESOLVED 2026-11-07: use python-garminconnect (A-2a). |  |  |
+| U-8 | RESOLVED 2026-11-07 from the API spec: routine sets have `type` (`warmup`, `normal`, `failure`, `dropset`), `weight_kg`, `reps`, `rep_range {start,end}`, `distance_meters`, `duration_seconds`; exercises have `superset_id`, `rest_seconds`, `notes`; templates have `type`, `equipment`, `primary_muscle_group`, `is_custom`. | Confirm against a live response. |  |
+| U-9 | Polling every 60 s is acceptable to Hevy. No published limit; the spec only asks that hourly or daily jobs avoid minute :00. Cost is ceil(routines/10) + ceil(folders/10) calls per poll. | Log call counts per poll at DEBUG. | 60 s is the default (TJ, F-3a). On 429, back off per O-1. |
+| U-13 | DROPPED 2026-11-10: the app no longer reads whether a calendar entry was completed (F-32); Trainer's "done this week" comes from Hevy (F-33). |  |  |
+| U-14 | Which weight unit Garmin's `statute_uk` setting implies. | Garmin Connect's settings page or python-garminconnect docs. | Treat as kilograms. |
+| U-15 | PARTLY RESOLVED 2026-11-07: per-exercise unit overrides come from the private API `GET /exercise_template_units` (the app also writes them, which we never do). Response shape unknown. | Log the response shape (values hidden) on the first live run. | Use the account unit; ask TJ. |
+| U-12 | RESOLVED 2026-11-07: python-garminconnect's token object (`garminconnect/client/tokens.py`) has `dumps()` (JSON string with the DI tokens), `loads(str)`, and an atomic `dump(path)`/`load(path)`. `login` prints `dumps()` (base64-encode it so it is one shell-safe line); the app decodes and `loads()` it on first start, then uses the file in `DATA_DIR`. It refreshes when the access token's JWT expiry is near. |  |  |
+| U-10 | How the watch's Today prompt behaves with many workouts on one day. Inconclusive 2026-11-07: with 6 strength workouts scheduled on today, the prompt first listed only the 2 delivered earlier, then stopped appearing after several syncs (possibly because it had been dismissed once that day); the training calendar listed only those 2. F-31a makes every workout selectable regardless. File as an issue once the repo exists (TJ, 2026-11-07). | Re-test during the build with workouts the app creates and sends. | Ask TJ. |
+| U-16 | RESOLVED 2026-11-07: `push_workout_to_device` works; `send_scheduled_workouts_to_devices` does not (F-31a). |  |  |
+| U-11 | RESOLVED 2026-11-07: calendar entries can be turned off (F-30a). |  |  |
+
+</div>
+
+## 10. Known API facts (verified unless marked)
+
+### Hevy private API (Trainer only)
+
+- Base `https://api.hevyapp.com`; headers `x-api-key: shelobs_hevy_web` and `Authorization: Bearer <access_token>`. Undocumented, no published limits.
+- Cookie `auth2.0-token`: URL-encoded JSON `{access_token, refresh_token, expires_at}`. Access token lasts about 30 minutes.
+- `POST /auth/refresh_token {"refresh_token": ...}` needs the old (even expired) access token in `Authorization`, else 400. The refresh token rotates on every refresh.
+- `GET /hevy_trainer/v3/program`: `{program, status}`. Program has `created_at`, `deloads_enabled`, `weekly_frequency`, `templates[]` (each with `id`, `key`, `index`, `name`, `exercises[]` with `exercise_template_id`, `kind`, `set_count`, `warmup_set_count`, `rep_range`, `rest_seconds`). No weights. `current_week` is not the app's week; ignore it.
+- `GET /hevy_trainer/user_preferences`: `availableWeights` (`dumbbellsLbs`, `dumbbellsKg`, `barsLbs`, `barsKg`, `platesLbs`, `platesKg`; lists may be unordered).
+- `GET /v2/user_preferences`: `username`, `weight_unit`, `first_weekday`.
+- `GET /user_workouts_paged?username=&limit=&offset=`: `limit=10` returns 400 with an empty body; `limit=3` works (2026-11-07). Workouts carry `trainer_workout_template_id` and `start_time`; sets carry `indicator`, `reps`, `weight_kg`.
+
+### Hevy public API (from the API spec, U-8)
+
+- Base `https://api.hevyapp.com/v1`, header `api-key`. Routines, routine folders, exercise templates, workouts. Routines and folders: `pageSize` max 10; exercise templates max 100 (from the API spec). `GET /v1/exercise_history/{exerciseTemplateId}` takes `start_date` and `end_date` (F-46).
+
+### Garmin Connect (unofficial)
+
+- Sign-in and refresh: see garmin-auth `typescript/src/client.ts` (`refreshDiToken`: `grant_type=refresh_token`, client id as basic auth, new `refresh_token` returned and must be saved).
+- Workout JSON, strength steps, repeat groups and scheduling: see hevy2garmin `web/lib/garmin-workout.ts` and its calendar code. Treat as a reference with known faults (F-13, F-29).
+
+## 11. Configuration (environment variables only)
+
+<div class="wrap">
+
+| ID | Variable | Default | Rule |
+|----|----|----|----|
+| C-1 | `HEVY_API_KEY` | required | A-1 |
+| C-2 | `GARMIN_TOKEN` | required if `DATA_DIR` holds no Garmin token | A-2, A-4 |
+| C-3 | `INCLUDE_HEVY_FOLDERS` | unset = all routines | Comma-separated folder ids or titles; an id is tried before a title. An empty value counts as unset. Does not apply to Trainer workouts (section 6). Unknown folder: log the folder list (F-11) first, then exit at startup. |
+| C-4 | `ENABLE_SCHEDULED_WORKOUTS` | `true` | F-30a |
+| C-5 | `HEVY_SESSION` | unset = no Trainer | The hevy.com `auth2.0-token` cookie. Setting it turns Trainer on; unsetting it turns Trainer off and removes its workouts (section 6). Seeds the stored session, and replaces it when the value changes (A-4). |
+| C-6 | `HEVY_POLL_INTERVAL_SECONDS` | `60` | F-1. A whole number of seconds, 10 or more; anything else exits at startup (TJ, 2026-11-10). |
+| C-7 | `TZ` | the Garmin profile's time zone | "Today", midnight rollover, Trainer week start, "Last updated" (F-12). Unset: read the time zone from the Garmin user settings at startup (field name to confirm in python-garminconnect, e.g. `userData.timeZone`); if that fails, UTC with a WARNING. The startup log says which zone is used and where it came from (TJ, 2026-11-07). |
+| C-8 | `DATA_DIR` | `/data` in the image | Token storage only |
+| C-9 | `LOG_LEVEL` | `INFO` | O-3 |
+| C-10 | `LOG_FORMAT` | `text` | `text` or `json` |
+
+</div>
+
+At startup the app makes one call each to check `HEVY_API_KEY` (and Garmin's token, and `HEVY_SESSION` if set). A rejected Hevy API key, Garmin token or `HEVY_SESSION` at startup exits non-zero like bad configuration, with the fix (e.g. run `login` again) (TJ, 2026-11-07). Unreachable services or 5xx at startup are not rejections; they follow O-1; a rejection later while running is handled by O-1 (keep running, retry, log the fix).
+
+Invalid or missing configuration MUST exit non-zero at startup with a message naming the variable and the fix. Transient failures MUST NOT exit (O-1).
+
+## 12. Operations
+
+<div class="wrap">
+
+| ID | Requirement |
+|----|----|
+| O-1 | Hevy or Garmin unreachable, 5xx, 429, or a rejected token: keep running, retry with backoff, log at ERROR what failed and how to fix it (e.g. "run login again and set GARMIN_TOKEN"). Recover automatically when the cause is fixed. Backoff (TJ, 2026-11-10): the first retry after 1 minute, doubling, capped at 30 minutes; after a Garmin 429 the first wait is 15 minutes. Each service backs off by itself: Hevy polling continues while Garmin is down, and the first Garmin call that succeeds is followed by a full reconcile. python-garminconnect retries 3 times by itself; create its client with `retry_attempts=0` so only the app retries. |
+| O-1a | Every outbound call has a timeout of 30 seconds (TJ, 2026-11-10). Logs are the only signal (O-2), so a call that hangs would stop the app without a word. Confirm python-garminconnect sets one on its own calls; if it does not, set it on its HTTP session. |
+| O-1b | At least 1 second between Garmin writes (create, update, delete, schedule, unschedule, push), so a first sync of many routines is not a burst (TJ, 2026-11-10; F-4a). |
+| O-2 | Logs are the only signal. No health endpoint, no HEALTHCHECK, no notifications. |
+| O-3 | Python standard `logging`; every line has an ISO timestamp, level and logger name. JSON lines when `LOG_FORMAT=json`. Each sync logs one summary line (created, updated, deleted, scheduled, failed counts) at INFO; per-workout detail at DEBUG; Trainer prescriptions per exercise at INFO. When an hour passes with no change, one INFO line says how many polls ran and that nothing changed, so an idle app and a stuck one look different (TJ, 2026-11-10). |
+| O-3a | Chaos tolerance (TJ, 2026-11-07): the app must survive being killed at any instant (pod eviction, SIGKILL, power loss, a laptop shutting down). Every file write is write-temp, fsync, rename. Every sync is idempotent, so a half-finished one is completed by the next. Save a refreshed token immediately after Garmin or Hevy returns it. On SIGTERM or SIGINT, start no new write, finish the one in progress, and exit 0; the next start completes the sync. Known limit: a kill in the instant between a token refresh and its save loses the session (both services kill the old refresh token), requiring `login` again; document it. |
+| O-3b | Midnight uses `zoneinfo` with `TZ` and handles daylight-saving changes. After a sleep or a missed midnight (process stopped), the next startup's full reconcile catches up. |
+| O-3c | At startup, log the effective configuration at INFO with secrets redacted, plus the app version. |
+| O-4 | Base image `python:3.14-slim` (TJ, 2026-11-07). The image runs as uid/gid 1000 (non-root) and writes only to `DATA_DIR`; `compose.yaml` and the Helm chart (`fsGroup: 1000`) make the volume writable by that user. A read-only root filesystem must work, but is the user's choice to enable. |
+
+</div>
+
+## 13. Delivery
+
+<div class="wrap">
+
+| ID | Requirement |
+|----|----|
+| D-1 | One repo, `zimmertr/hevy-garmin-sync`, holding the app and the Helm chart (no GitHub organization; changed 2026-11-07). Created at TJ's request with the `/initialize-project` skill, which sets CI, tests and engineering rules; yggdrasil imports it into Terraform afterwards. Do not create other repos or registries. |
+| D-2 | Python 3.14. Runnable from a clone with Python. Not published to PyPI. HTTP: `requests`, the library python-garminconnect already depends on (it also uses `curl_cffi` for Garmin's sign-in); no other HTTP client. |
+| D-3 | Image: amd64 and arm64, at `docker.io/zimmertr/hevy-garmin-sync` (Docker Hub for now: yggdrasil's release module pushes only there; zimmertr/yggdrasil#9 adds GHCR later and moves every repo; TJ, 2026-11-07), exact version tags only (no `latest`). A basic `compose.yaml` with the volume ships in the repo. |
+| D-4 | Helm chart, in the same repo, named `hevy-garmin-sync-helm` (not the image's name, which would collide on the OCI path; bluebird#111), published as an OCI chart to `oci://registry-1.docker.io/zimmertr` by a `chart` job copied from bluebird-helm's `release.yml` (installed with `helm install oci://...`; no chart site, no Artifact Hub, no Argo Rollouts canary, since a canary runs two copies at once; kept by TJ over the initialize-project defaults, 2026-11-07). Contents: Deployment (1 replica, `Recreate` strategy so two pods never share tokens), PersistentVolumeClaim for `DATA_DIR`, Secret or existing Secret for `HEVY_API_KEY`, `GARMIN_TOKEN`, `HEVY_SESSION`; values for resources, pod and container security context, nodeSelector, tolerations. |
+| D-5 | MIT license. Fresh code; `zimmertr/hevy-trainer-sync` is a reference only. Credit hevy2garmin and garmin-auth (MIT) where their maps or flows are used. |
+| D-6 | Versions start at 0.1.0; 1.0.0 only when TJ says it's ready. |
+| D-7 | TJ's own deployment: every release's CI bumps the chart version in Kubernetes-Manifests (the `version` of the `hevy-garmin-sync-helm` entry in the folder's `kustomization.yml`), through a PR that merges itself, and Argo CD deploys it (TJ, 2026-11-07; wording corrected 2026-11-10). Until cutover the bumped file is `misc/hevy-garmin-sync.disabled/kustomization.yml`: the misc ApplicationSet skips folders named `*.disable*`, so nothing deploys early. At cutover the folder is renamed to `misc/hevy-garmin-sync` and the bump's path changes with it. TJ's cutover: one step, downtime fine. Remove hevy2garmin, the `hevy-trainer-sync` CronJob and the `hevy-trainer-poll` Deployment from Kubernetes-Manifests `misc/hevy2garmin`; TJ deletes hevy2garmin's Garmin workouts by hand; TJ deletes the old tool's "Hevy Trainer" routine folder in Hevy (else its routines sync as plain routines beside the real Trainer workouts); deploy the chart. Archive hevy-trainer-sync afterwards; its open issues are abandoned with it. |
+| D-7a | Agents own the README and keep it accurate in every PR. It must cover: what the app does and doesn't do, requirements (Hevy Pro, a Garmin watch with strength workouts), getting `HEVY_API_KEY`, running `login` (from home if hosting in the cloud), copying the hevy.com cookie for Trainer, the private-API note for Trainer, every variable, the Compose file, the Helm chart, running from a clone, and credits to hevy2garmin and python-garminconnect. Docs layout beyond the README is whatever `/initialize-project` sets up. |
+| D-7b | A dedicated doc in `./docs/` of the app repo (e.g. `docs/HEVY_TRAINER_RULES.md`) records the Trainer rules as findings: each rule (section 6 and F-46), every constant table, the inputs and endpoints used, the Hevy app version the rules match (3.2.5), and the cases checked against the app with dates and results. It records findings only, not how they were found (TJ, 2026-11-07). Never commit the app's code. |
+| D-9 | Build order (TJ, 2026-11-07): the first version includes everything in this spec before TJ switches over. One PR with everything: code, tests, exercise map CSV, this spec converted to Markdown as `docs/SPEC.md` (kept current as decisions change; with the same omissions as D-7b), the `docs/` Hevy rules doc (D-7b), `compose.yaml`, the Helm chart, README. Build from this page; the spec does not need its own PR first (TJ, 2026-11-07). CI is the test runner; open the PR as a draft early and push often. |
+| D-10 | Tests: CI cannot reach TJ's accounts. Hevy and Garmin are stubbed with real responses recorded once from TJ's accounts, with every name, id, token, email and other personal value replaced before commit (the repo is public). The Trainer cases checked against the app become fixed tests, anonymized: Side Bend 35 to 40 lb (increase), Goblet Squat warm-ups 30 and 50 lb, Lying Leg Raise to 15-20 reps, and the six unchanged exercises from the 3 Nov Lower; plus the predicted 7 Nov Upper (Seal Row 90, Floor Press 100, Upright Row 35, Pullover 30, Chest Fly 60, Hammer Curl 50, Skullcrusher 30) and the week case (6 Nov 2026 is program week 8, cycle 2 week 2, with Sunday as first weekday). Live runs against TJ's accounts happen at milestones, each with TJ's OK. |
+| D-8 | The repo is public: no tokens, ids or personal data in code, fixtures or logs. |
+
+</div>
+
+## 14. Backlog (not in the first version)
+
+<div class="wrap">
+
+| ID | Item |
+|----|----|
+| B-4 | Not in MVP; file as an issue once the repo exists (TJ, 2026-11-07). Re-evaluate how the app retries a workout Garmin rejected (F-16): today it waits for a Hevy change, startup or midnight. Find a design that recovers sooner without risking Garmin blocking the account for calling too often. |
+| B-3 | Not in MVP; file as an enhancement issue once the repo exists (TJ, 2026-11-07). Add last time's numbers to each set's note, as Hevy's PREVIOUS column shows them, e.g. `Drop set: 4-6 reps` then `Prev: 25lb x 6 @ 6 RPE`. Source: the public API's exercise history, so no private sign-in. Open points: (1) sets only share a repeat group when their notes match (F-20a), so differing previous numbers split a group back to SET 1/1; per set vs one list per exercise is undecided; (2) Hevy's rule for which old set counts as previous (warm-up against warm-up, same routine or any workout, a possible Hevy setting) must be copied exactly or not at all; (3) every logged workout changes the notes, so the app must watch saved workouts, rewrite and resend the affected Garmin workouts; (4) untested whether a line break in a note shows as two lines on the watch. |
+| B-2 | Users with several Garmin devices: push workouts to devices other than the last-synced one, if anyone asks. |
+| B-1 | Let users choose which days each workout goes on the calendar, e.g. Lower on Tuesday and Upper on Friday, from a config file, instead of every workout on every day. TJ asked for this on 2026-11-07. File it as an issue in the new repo once it exists. |
+
+</div>
+
+## 15. Acceptance (first usable version)
+
+1.  With only `HEVY_API_KEY`, `GARMIN_TOKEN` and a volume, `docker compose up` creates one Garmin workout per Hevy routine, named per F-15, all on today's calendar.
+2.  Editing a routine in Hevy updates the same Garmin workout within one poll interval; deleting it removes the workout and its calendar entry.
+3.  Restarting the container, or deleting the volume and re-seeding `GARMIN_TOKEN`, creates no duplicates.
+4.  At local midnight every workout has one entry on the new day, and the app's entries on past days are gone (F-32).
+5.  With `HEVY_SESSION` set, Trainer workouts match the Hevy app's prescribed weights and cycle/week for TJ's program.
+6.  On the watch: every set ends with the reps and weight prompt, including the last; rest steps use the routine's timers (open rest when it has none); matching sets count as SET 1/3, 2/3, 3/3; each set's note follows F-30.
+7.  On Strava, after a session done from a planned workout, every exercise whose Strava column is filled matches it.
+8.  Killing Garmin connectivity logs errors with a fix and recovers on its own; a bad env var exits at startup with a clear message.

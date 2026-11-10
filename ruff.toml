@@ -1,0 +1,9 @@
+# hevy-trainer-sync's rule set. Ruff's defaults are E4, E7, E9 and F only: no
+# import sorting, no bugbear, no pyupgrade. BLE is the blind `except
+# Exception`; a broad catch that stays says why on its line, as
+# `# noqa: BLE001 reason`.
+target-version = "py314"
+line-length = 120
+
+[lint]
+select = ["E", "F", "I", "B", "UP", "BLE"]

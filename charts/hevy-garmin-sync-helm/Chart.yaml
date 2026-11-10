@@ -1,0 +1,13 @@
+apiVersion: v2
+# Not the image's name: both live under zimmertr on Docker Hub, and a chart's
+# name is its OCI path (bluebird#111).
+name: hevy-garmin-sync-helm
+description: Keeps Hevy routines and Hevy Trainer workouts on your Garmin watch as strength workouts.
+type: application
+# The release packages the chart with its own version and appVersion
+# (release.yml), so these only matter for a chart installed from a clone.
+version: 0.0.0
+appVersion: "0.0.0"
+home: https://github.com/zimmertr/hevy-garmin-sync
+sources:
+  - https://github.com/zimmertr/hevy-garmin-sync
