@@ -403,8 +403,8 @@ class NoPrescriptionTest(TrainerCase):
         self.private.workouts = []
         self.public.templates += [
             hevy_template("T-SWING", "Kettlebell Swing", equipment="kettlebell"),
-            hevy_template("T-DIP", "Dip (Weighted)", type="bodyweight_reps", equipment="machine"),
-            hevy_template("T-ASSIST", "Pull Up (Assisted)", type="bodyweight_assisted_reps", equipment="machine"),
+            hevy_template("T-DIP", "Dip (Weighted)", type="bodyweight_weighted", equipment="machine"),
+            hevy_template("T-ASSIST", "Pull Up (Assisted)", type="bodyweight_assisted", equipment="machine"),
         ]
 
     def test_an_exercise_trainer_gives_no_weight_for_has_none_and_the_log_says_why(self) -> None:
@@ -436,13 +436,19 @@ class NoPrescriptionTest(TrainerCase):
     def test_a_weighted_bodyweight_exercise_gets_a_weight_once_it_is_logged(self) -> None:
         self.one(trainer_exercise("T-DIP"))
         self.log(TUESDAY, {"T-DIP": [logged_set(20, 12)] * 3})
-        self.assertEqual(self.said(), ["Dip (Weighted): 25 lbs (up)"])
+        for spelling in hevy.WEIGHTED_BODYWEIGHT:
+            with self.subTest(spelling):
+                self.public.templates[-2]["type"] = spelling
+                self.assertEqual(self.said(), ["Dip (Weighted): 25 lbs (up)"])
 
     def test_an_assisted_exercise_is_marked_assisted_and_gets_no_weight(self) -> None:
         self.one(trainer_exercise("T-ASSIST"))
-        (exercise,) = self.trainer.plans().workouts[0].exercises
-        self.assertTrue(exercise.assisted)
-        self.assertEqual(exercise.sets, (Set(rep_range=(10, 12)),) * 3)
+        for spelling in hevy.ASSISTED:
+            with self.subTest(spelling):
+                self.public.templates[-1]["type"] = spelling
+                (exercise,) = self.start().plans().workouts[0].exercises
+                self.assertTrue(exercise.assisted)
+                self.assertEqual(exercise.sets, (Set(rep_range=(10, 12)),) * 3)
 
     def test_with_no_rep_range_a_set_has_no_target_at_all(self) -> None:
         self.one(trainer_exercise("T-SIDE-BEND", rep_range=None, sets=2))

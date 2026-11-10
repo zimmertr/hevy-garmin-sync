@@ -86,6 +86,7 @@ To turn it on, open a private browser window, sign in at hevy.com, and copy the 
 - A change in Hevy is in Garmin Connect within a minute. The watch gets it at its next sync with your phone.
 - A routine you delete in Hevy leaves Garmin Connect, but the copy in the watch's saved workouts stays until you delete it on the watch.
 - Don't edit the description of a workout it made. That's how it knows the workout is its own.
+- Weights go to Garmin in the unit your Garmin Connect account uses. The watch shows them in its own weight unit, which is a separate setting on the watch.
 - If an exercise shows up under the wrong name on the watch, the fix is one line in [the exercise map](src/hevy_garmin_sync/data/exercise_map.csv). Open an issue or a PR.
 
 ## Docs

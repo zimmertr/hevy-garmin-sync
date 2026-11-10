@@ -6,7 +6,7 @@ from typing import Any
 
 from .errors import ConfigError
 from .exercises import ExerciseMap
-from .hevy import Hevy
+from .hevy import ASSISTED, Hevy
 from .sync import Plans
 from .workout import ROUTINE, Exercise, Set, Workout
 
@@ -14,7 +14,6 @@ log = logging.getLogger(__name__)
 
 Json = dict[str, Any]
 _SET_TYPES = ("normal", "warmup", "dropset", "failure")
-_ASSISTED = "bodyweight_assisted_reps"
 
 
 def missing_folders(entries: Sequence[str], folders: Sequence[Json]) -> list[str]:
@@ -101,7 +100,7 @@ class Routines:
             sets=tuple(_set(s) for s in sets),
             rest_seconds=_whole(exercise.get("rest_seconds")),
             superset=_whole(exercise.get("superset_id"), zero=True),
-            assisted=template.get("type") == _ASSISTED,
+            assisted=template.get("type") in ASSISTED,
         )
 
 

@@ -13,7 +13,7 @@ The rules match Hevy app 3.2.5. Nothing checks for a newer app that changes them
 | Hevy's private API | `GET /hevy_trainer/user_preferences` | `availableWeights`: the dumbbells, bars and plates the user owns |
 | Hevy's private API | `GET /exercise_template_units` | The exercises the user logs in the other unit |
 | Hevy's private API | `GET /user_workouts_paged` | Logged workouts since the program began, each with its `trainer_workout_template_id` |
-| Hevy's public API | `GET /v1/exercise_templates` | Each exercise's `type` and `equipment` |
+| Hevy's public API | `GET /v1/exercise_templates` | Each exercise's `type` and `equipment`. The equipment matched Hevy Trainer's own value for all 447 exercises compared on 2026-11-10 |
 | Hevy's public API | `GET /v1/exercise_history/{id}` | The last twelve months of one exercise, only for an exercise new to its workout |
 | Hevy's public API | `GET /v1/workouts/events` | Whether a workout was saved, edited or deleted since the last poll |
 
@@ -30,7 +30,7 @@ The program and the events are read on every poll. Everything else is read at st
 ## Which exercises get what
 
 - An exercise the program marks as resistance work, with a rep range, is the only kind that gets anything.
-- Logged by weight and reps (`weight_reps`), or weighted bodyweight (`bodyweight_reps`), on a machine, dumbbell or barbell: a weight.
+- Logged by weight and reps (`weight_reps`), or weighted bodyweight (`bodyweight_weighted`, also spelled `bodyweight_reps`), on a machine, dumbbell or barbell: a weight.
 - Logged by reps alone (`reps_only`): a rep range.
 - Anything else (time, distance, kettlebells, bands, plates, other equipment): nothing. The workout carries the program's rep range and no weight, and the log says why.
 
@@ -147,4 +147,3 @@ Not yet checked against the app: a new exercise's starting weight, a deload week
 
 - **The 3 and 12 month windows** are taken as the last 91 and 365 days. The exact day counts are not confirmed.
 - **The reply of `/exercise_template_units`** has not been seen. The app logs its shape, without values, the first time it reads it. Until it is confirmed, an exercise falls back to the account's unit.
-- **Equipment** comes from the public API's `equipment` field. That it matches what the Hevy app uses for every exercise is not confirmed.

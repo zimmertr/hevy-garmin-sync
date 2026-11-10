@@ -23,7 +23,7 @@ from .config import Config
 from .errors import ConfigError, RateLimited, Refused, Rejected, ServiceError, Stopped
 from .exercises import ExerciseMap
 from .garmin import LOGIN_FIX, Garmin
-from .hevy import API_KEY_FIX, Hevy
+from .hevy import KEY_FIX, Hevy
 from .hevy_private import SESSION, SESSION_FIX, HevyPrivate
 from .routines import Routines
 from .store import Store
@@ -127,7 +127,7 @@ class App:
 
     def _start(self) -> None:
         """One call to each service: a rejected credential exits here, with the fix (section 11)."""
-        self._until_ok("Hevy", API_KEY_FIX, self._hevy_backoff, self._routines.check)
+        self._until_ok("Hevy", KEY_FIX, self._hevy_backoff, self._routines.check)
         if self._trainer:
             self._until_ok("Hevy Trainer", SESSION_FIX, self._trainer_backoff, self._trainer.check)
         self._until_ok("Garmin", LOGIN_FIX, self._garmin_backoff, self._garmin.measurement_system)
@@ -213,7 +213,7 @@ class App:
             routines = self._routines.plans()
         except ServiceError as e:
             delay = self._hevy_backoff.failed(e)
-            log.error("%s. Trying again in %d min.", _problem("Hevy", API_KEY_FIX, e), delay / 60)
+            log.error("%s. Trying again in %d min.", _problem("Hevy", KEY_FIX, e), delay / 60)
             return None
         except Exception as e:  # noqa: BLE001 a reply in a shape the app didn't expect must not end the process
             delay = self._hevy_backoff.failed(e)

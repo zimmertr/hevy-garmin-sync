@@ -16,9 +16,13 @@ from .errors import NotFound, RateLimited, Refused, Rejected, ServiceError, Unav
 BASE = "https://api.hevyapp.com/v1"
 TIMEOUT_SECONDS = 30  # O-1a
 USER_AGENT = f"hevy-garmin-sync/{__version__} (+https://github.com/zimmertr/hevy-garmin-sync)"
-API_KEY_FIX = "check HEVY_API_KEY against https://hevy.com/settings?developer (the key needs Hevy Pro)"
+KEY_FIX = "check HEVY_API_KEY against https://hevy.com/settings?developer (the key needs Hevy Pro)"
 _PAGE = 10  # the API's maximum for routines, folders, workouts and events
 _TEMPLATE_PAGE = 100
+# An exercise template's `type`, in both spellings. The short ones are what the API returned on
+# 2026-11-10; the long ones are what its reference lists.
+WEIGHTED_BODYWEIGHT = ("bodyweight_weighted", "bodyweight_reps")
+ASSISTED = ("bodyweight_assisted", "bodyweight_assisted_reps")
 
 Json = dict[str, Any]
 

@@ -534,6 +534,7 @@ def exercise_map() -> ExerciseMap:
             "T-BENCH": GarminExercise("BENCH_PRESS", "BARBELL_BENCH_PRESS"),
             "T-PLANK": GarminExercise("PLANK", "PLANK"),
             "T-ASSIST": GarminExercise("PULL_UP", "BANDED_PULL_UPS"),
+            "T-ASSIST-2": GarminExercise("TRICEPS_EXTENSION", "BODY_WEIGHT_DIP"),
             "T-SIDE-BEND": GarminExercise("CORE", "SIDE_BEND"),
             "T-GOBLET": GarminExercise("SQUAT", "GOBLET_SQUAT"),
             "T-LEG-RAISE": GarminExercise("LEG_RAISE", "LYING_STRAIGHT_LEG_RAISE"),

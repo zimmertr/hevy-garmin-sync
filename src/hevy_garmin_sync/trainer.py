@@ -15,7 +15,7 @@ from typing import Any
 
 from . import trainer_rules as rules
 from .exercises import ExerciseMap
-from .hevy import Hevy
+from .hevy import ASSISTED, WEIGHTED_BODYWEIGHT, Hevy
 from .hevy_private import HevyPrivate, parse_time
 from .sync import Plans
 from .trainer_rules import Prescription, RepRange
@@ -25,8 +25,7 @@ log = logging.getLogger(__name__)
 
 Json = dict[str, Any]
 _FREQUENCY = re.compile(r"^\d+x$")
-_WEIGHT_TYPES = ("weight_reps", "bodyweight_reps")
-_ASSISTED = "bodyweight_assisted_reps"
+_WEIGHT_TYPES = ("weight_reps", *WEIGHTED_BODYWEIGHT)
 _ONE_REP_MAX_WINDOWS_DAYS = (91, 365)  # the last 3 months, else the last 12 (F-46)
 # How a prescription compares with the last session, in the words the log uses.
 _DIRECTIONS = {
@@ -210,7 +209,7 @@ class Trainer:
             name=garmin.name,
             sets=(*warmup_sets, *[working] * int(planned.get("set_count") or 0)),
             rest_seconds=int(rest) if rest else None,
-            assisted=details.get("type") == _ASSISTED,
+            assisted=details.get("type") in ASSISTED,
         )
 
     def _prescribe(

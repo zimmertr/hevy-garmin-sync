@@ -25,6 +25,10 @@ Every call has a 30 second timeout (O-1a) and a `User-Agent` that names the app 
 
 - **Routine page size** is at most 10; exercise templates take 100 (Hevy's OpenAPI spec, 2026-11-10).
 - **A routine's superset field** is `superset_id`, and a set has no RPE field (OpenAPI spec, 2026-11-10).
+- **Hevy's exercise list** held 451 built-in exercises on 2026-11-10. The map's ids and titles were checked against it that day: one row was missing (a second `Sled Push` id) and three had no title. Four rows are ids Hevy no longer lists; they stay, since a row nothing asks for costs nothing.
+- **An exercise template's `type`** came back as `bodyweight_weighted` and `bodyweight_assisted` on 2026-11-10, where the API reference lists `bodyweight_reps` and `bodyweight_assisted_reps`. That read went through a connector, not the raw API, so the app takes both spellings.
+- **A template's `equipment`** matched Hevy Trainer's own equipment value for all 447 exercises compared (2026-11-10, spec F-40).
+- **A routine's weights** are kilograms with the full conversion (`22.67964547178199` for 50 lbs), and a set with a rep range carries `rep_range` with `start` and `end` (2026-11-10).
 - **The session's refresh token rotates** on every refresh, and the refresh needs the old access token in `Authorization` even when it has expired (2026-11-04). The app saves the new pair before it makes another call.
 - **`/user_workouts_paged`** answered a `limit` of 10 with a 400 on 2026-11-07. The app asks for 3.
 - **The program's `current_week`** is not the week the Hevy app shows ([HEVY_TRAINER_RULES.md](HEVY_TRAINER_RULES.md)).
@@ -49,7 +53,9 @@ Garmin's unofficial web API, through [python-garminconnect](https://github.com/c
 
 - **python-garminconnect 0.3.20** times out API calls after 15 seconds and token calls after 30, and retries are turned off: the app has its own waits (O-1).
 - **The library rewrites the token file itself** each time Garmin rotates the token. The app writes it again with a flush to disk after each call.
-- **Weights go in the user's own unit.** A weight sent in kilograms to a pounds account showed as 0.0 lbs on a Fenix 8 (2026-11-07, spec F-21a). Kilogram accounts are untested ([#5](https://github.com/zimmertr/hevy-garmin-sync/issues/5)).
+- **Weights go in the user's own unit.** A weight sent in kilograms to a pounds account showed as 0.0 lbs on a Fenix 8 (2026-11-07, spec F-21a). With Garmin Connect set to metric the app sent 20 and 22.5 kilograms. The watch, still set to pounds, showed 44.1 and 49.6 lbs, and 20 and 22.5 kg once the watch itself was set to kilograms (2026-11-10, [#5](https://github.com/zimmertr/hevy-garmin-sync/issues/5)). So the unit to send is Garmin Connect's, and the watch's weight unit is a separate setting on the watch.
+- **Garmin takes every exercise category the tables use** in a strength workout: one workout holding all 42 was accepted (2026-11-10). For `BATTLE_ROPE` and `HYPEREXTENSION` the exercise Garmin stored differed from the one sent. What it stored is not known yet.
+- **The settings reply has a `timeZone` field** (`America/Los_Angeles` style), and the workout list carries each workout's `description` (2026-11-10).
 - **A workout deleted in Garmin Connect stays in the watch's saved list** until it is removed on the watch (2026-11-10, spec F-14).
 - **Garmin's exercise list** is published at https://connect.garmin.com/web-data/exercises/Exercises.json: 47 categories and 1,536 exercises on 2026-11-10. `tests/data/garmin_exercises.json` holds its keys.
 

@@ -206,11 +206,17 @@ class ConversionTest(RoutinesCase):
         self.assertEqual((planned.exercises[0].rest_seconds, planned.exercises[0].superset), (None, None))
 
     def test_an_assisted_exercise_is_known_by_its_template_type(self) -> None:
-        self.api.templates.append(
-            fixtures.hevy_template("T-ASSIST", "Pull Up (Assisted)", type="bodyweight_assisted_reps")
+        # The API returned the first spelling on 2026-11-10; its reference lists the second.
+        self.api.templates += [
+            fixtures.hevy_template("T-ASSIST", "Pull Up (Assisted)", type="bodyweight_assisted"),
+            fixtures.hevy_template("T-ASSIST-2", "Dip (Assisted)", type="bodyweight_assisted_reps"),
+        ]
+        planned = self.plan(
+            hevy_exercise("T-ASSIST", "Pull Up (Assisted)", [hevy_set(reps=8, weight_kg=20)]),
+            hevy_exercise("T-ASSIST-2", "Dip (Assisted)", [hevy_set(reps=8, weight_kg=20)]),
+            hevy_exercise("T-BENCH", "Bench Press (Barbell)", [hevy_set(reps=8, weight_kg=20)]),
         )
-        planned = self.plan(hevy_exercise("T-ASSIST", "Pull Up (Assisted)", [hevy_set(reps=8, weight_kg=20)]))
-        self.assertTrue(planned.exercises[0].assisted)
+        self.assertEqual([e.assisted for e in planned.exercises], [True, True, False])
 
     def test_a_custom_exercise_is_mapped_by_muscle_group_and_equipment(self) -> None:
         self.api.templates.append(
