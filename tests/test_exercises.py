@@ -61,6 +61,7 @@ class LoadTest(unittest.TestCase):
     def test_both_tables_are_read_from_csv(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             Path(folder, "exercise_map.csv").write_text(
+                "# A line that says where the table came from, which is not a row.\n"
                 "hevy_id,hevy_title,garmin_category,garmin_name,strava_name,observed_date\n"
                 'T-BENCH,"Bench Press (Barbell)",BENCH_PRESS,BARBELL_BENCH_PRESS,,\n',
                 encoding="utf-8",

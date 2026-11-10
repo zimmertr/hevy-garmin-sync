@@ -28,6 +28,12 @@ class GarminExercise:
     name: str
 
 
+def rows(path: Path) -> list[dict[str, str]]:
+    """One of the two tables as rows. Lines that start with `#` say where the table came from."""
+    with path.open(newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(line for line in f if not line.startswith("#")))
+
+
 class ExerciseMap:
     def __init__(
         self,
@@ -40,17 +46,14 @@ class ExerciseMap:
 
     @classmethod
     def load(cls, folder: Path = DATA) -> ExerciseMap:
-        with (folder / "exercise_map.csv").open(newline="", encoding="utf-8") as f:
-            by_template = {
-                row["hevy_id"]: GarminExercise(row["garmin_category"], row["garmin_name"]) for row in csv.DictReader(f)
-            }
-        with (folder / "custom_exercise_map.csv").open(newline="", encoding="utf-8") as f:
-            fallback = {
-                (row["primary_muscle_group"], row["equipment"]): GarminExercise(
-                    row["garmin_category"], row["garmin_name"]
-                )
-                for row in csv.DictReader(f)
-            }
+        by_template = {
+            row["hevy_id"]: GarminExercise(row["garmin_category"], row["garmin_name"])
+            for row in rows(folder / "exercise_map.csv")
+        }
+        fallback = {
+            (row["primary_muscle_group"], row["equipment"]): GarminExercise(row["garmin_category"], row["garmin_name"])
+            for row in rows(folder / "custom_exercise_map.csv")
+        }
         return cls(by_template, fallback)
 
     def find(self, template_id: str, title: str, template: Callable[[], dict[str, Any] | None]) -> GarminExercise:

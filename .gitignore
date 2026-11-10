@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# The app's data folder when it runs outside the image (DATA_DIR, the rotated tokens)
+/data/

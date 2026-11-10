@@ -70,12 +70,14 @@ jobs:
       build-args: APP_COMMIT=${{ github.event.pull_request.head.sha }}
       # What only a built image shows: the entry point starts on the image's
       # own Python, the zoneinfo data is there for TZ, Garmin's client and
-      # its compiled sign-in dependency import, it runs as the unprivileged
-      # user the chart expects, and it ships its license.
+      # its compiled sign-in dependency import, the two exercise tables are
+      # in the image and load, it runs as the unprivileged user the chart
+      # expects, and it ships its license.
       smoke-test: |
         docker run --rm "$IMAGE" --help
         docker run --rm "$IMAGE" --version
         docker run --rm --entrypoint python3 "$IMAGE" -c 'import zoneinfo; zoneinfo.ZoneInfo("America/Los_Angeles")'
         docker run --rm --entrypoint python3 "$IMAGE" -c 'import garminconnect, curl_cffi'
+        docker run --rm --entrypoint python3 "$IMAGE" -c 'from hevy_garmin_sync.exercises import ExerciseMap; ExerciseMap.load()'
         test "$(docker run --rm --entrypoint id "$IMAGE" -u)" = 1000
         docker run --rm --entrypoint test "$IMAGE" -s /app/LICENSE
