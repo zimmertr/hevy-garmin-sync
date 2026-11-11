@@ -623,9 +623,9 @@ class KeyValueStoreTest(LiveCheckCase):
         self.assertEqual(len(saved["hevy_trainer_key_values"]["entries"]), 60)
 
     def test_another_kind_of_reply_says_what_it_was(self) -> None:
-        self.private_api.key_values = "made up"
+        self.private_api.key_values = 7  # the fake sends a str as a body that is not JSON
         out, _ = self.run_hevy()
-        self.assertIn(self.HEADING + "Hevy sent str, 0 entries:\n", out)
+        self.assertIn(self.HEADING + "Hevy sent int, 0 entries:\n", out)
         self.assertEqual(lc.ProgramIds.of(None).look_alikes(self.SWAPPED_IN), [])
         self.assertEqual(list(lc._strings(["a", {"b": 1}, '["c"]'])), ["a", "b", '["c"]', "c"])
 
