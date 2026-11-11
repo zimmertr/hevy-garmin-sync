@@ -481,7 +481,7 @@ class TrainerTest(AppCase):
             self.private_api.workouts.append(
                 logged_workout("t-upper", fixtures.PROGRAM_WEEK_8, {"T-SIDE-BEND": [logged_set(35, 12)] * 3})
             )
-            self.hevy_api.events = [{"type": "updated", "workout": {"id": "made-up"}}]
+            self.hevy_api.events = [fixtures.hevy_workout_event("made-up", "T-SIDE-BEND", "Side Bend (Dumbbell)")]
             self.garmin_api.calls.clear()
 
         with self.assertLogs(LOGGER, "INFO") as logs:

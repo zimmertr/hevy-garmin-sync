@@ -1,0 +1,800 @@
+{
+ "garmin": {
+  "calendar": [
+   {
+    "associatedActivityDateTime": "NoneType",
+    "associatedActivityId": "NoneType",
+    "atpPlanTypeId": "NoneType",
+    "calendarDate": "str",
+    "consumer": "NoneType",
+    "createdDate": "str",
+    "itp": "bool",
+    "nameChanged": "bool",
+    "newName": "NoneType",
+    "ownerId": "int",
+    "priority": "NoneType",
+    "protected": "bool",
+    "race": "bool",
+    "tpType": "NoneType",
+    "workout": {
+     "<key>": "NoneType",
+     "atpPlanId": "NoneType",
+     "author": "NoneType",
+     "avgTrainingSpeed": "float",
+     "consumer": "NoneType",
+     "consumerImageURL": "NoneType",
+     "consumerName": "NoneType",
+     "consumerWebsiteURL": "NoneType",
+     "createdDate": "str",
+     "description": "str",
+     "estimateType": "NoneType",
+     "estimatedDistanceInMeters": "NoneType",
+     "estimatedDistanceUnit": {
+      "factor": "NoneType",
+      "unitId": "NoneType",
+      "unitKey": "NoneType"
+     },
+     "estimatedDurationInSecs": "int",
+     "isSessionTransitionEnabled": "NoneType",
+     "locale": "NoneType",
+     "ownerId": "int",
+     "poolLength": "NoneType",
+     "poolLengthUnit": "NoneType",
+     "shared": "bool",
+     "sharedWithUsers": "NoneType",
+     "sportType": {
+      "displayOrder": "int",
+      "sportTypeId": "int",
+      "sportTypeKey": "str"
+     },
+     "subSportType": "NoneType",
+     "trainingPlanId": "NoneType",
+     "updatedDate": "str",
+     "uploadTimestamp": "NoneType",
+     "workoutId": "int",
+     "workoutName": "str",
+     "workoutProvider": "NoneType",
+     "workoutSegments": [
+      {
+       "avgTrainingSpeed": "NoneType",
+       "description": "NoneType",
+       "estimateType": "NoneType",
+       "estimatedDistanceInMeters": "NoneType",
+       "estimatedDistanceUnit": "NoneType",
+       "estimatedDurationInSecs": "NoneType",
+       "poolLength": "NoneType",
+       "poolLengthUnit": "NoneType",
+       "segmentOrder": "int",
+       "sportType": {
+        "displayOrder": "int",
+        "sportTypeId": "int",
+        "sportTypeKey": "str"
+       },
+       "workoutSteps": [
+        {
+         "category": "str",
+         "childStepId": "NoneType",
+         "description": "str",
+         "endCondition": {
+          "conditionTypeId": "int",
+          "conditionTypeKey": "str",
+          "displayOrder": "int",
+          "displayable": "bool"
+         },
+         "endConditionCompare": "NoneType",
+         "endConditionValue": "NoneType",
+         "endConditionZone": "NoneType",
+         "equipmentType": {
+          "displayOrder": "int",
+          "equipmentTypeId": "int",
+          "equipmentTypeKey": "NoneType"
+         },
+         "exerciseName": "str",
+         "preferredEndConditionUnit": "NoneType",
+         "providerExerciseSourceId": "NoneType",
+         "secondaryTargetType": "NoneType",
+         "secondaryTargetValueOne": "NoneType",
+         "secondaryTargetValueTwo": "NoneType",
+         "secondaryTargetValueUnit": "NoneType",
+         "secondaryZoneNumber": "NoneType",
+         "stepId": "int",
+         "stepOrder": "int",
+         "stepType": {
+          "displayOrder": "int",
+          "stepTypeId": "int",
+          "stepTypeKey": "str"
+         },
+         "strokeType": {
+          "displayOrder": "int",
+          "strokeTypeId": "int",
+          "strokeTypeKey": "NoneType"
+         },
+         "targetType": {
+          "displayOrder": "int",
+          "workoutTargetTypeId": "int",
+          "workoutTargetTypeKey": "str"
+         },
+         "targetValueOne": "NoneType",
+         "targetValueTwo": "NoneType",
+         "targetValueUnit": "NoneType",
+         "type": "str",
+         "weightUnit": {
+          "factor": "float",
+          "unitId": "int",
+          "unitKey": "str"
+         },
+         "weightValue": "float",
+         "workoutProvider": "NoneType",
+         "zoneNumber": "NoneType"
+        }
+       ]
+      }
+     ],
+     "workoutSourceId": "NoneType",
+     "workoutThumbnailUrl": "NoneType"
+    },
+    "workoutScheduleId": "int"
+   }
+  ],
+  "schedule_reply": {
+   "associatedActivityDateTime": "NoneType",
+   "associatedActivityId": "NoneType",
+   "atpPlanTypeId": "NoneType",
+   "calendarDate": "str",
+   "consumer": "NoneType",
+   "createdDate": "str",
+   "itp": "bool",
+   "nameChanged": "bool",
+   "newName": "NoneType",
+   "ownerId": "int",
+   "priority": "NoneType",
+   "protected": "bool",
+   "race": "bool",
+   "tpType": "NoneType",
+   "workout": {
+    "<key>": "NoneType",
+    "atpPlanId": "NoneType",
+    "author": "NoneType",
+    "avgTrainingSpeed": "float",
+    "consumer": "NoneType",
+    "consumerImageURL": "NoneType",
+    "consumerName": "NoneType",
+    "consumerWebsiteURL": "NoneType",
+    "createdDate": "str",
+    "description": "str",
+    "estimateType": "NoneType",
+    "estimatedDistanceInMeters": "NoneType",
+    "estimatedDistanceUnit": {
+     "factor": "NoneType",
+     "unitId": "NoneType",
+     "unitKey": "NoneType"
+    },
+    "estimatedDurationInSecs": "int",
+    "isSessionTransitionEnabled": "NoneType",
+    "locale": "NoneType",
+    "ownerId": "int",
+    "poolLength": "NoneType",
+    "poolLengthUnit": "NoneType",
+    "shared": "bool",
+    "sharedWithUsers": "NoneType",
+    "sportType": {
+     "displayOrder": "int",
+     "sportTypeId": "int",
+     "sportTypeKey": "str"
+    },
+    "subSportType": "NoneType",
+    "trainingPlanId": "NoneType",
+    "updatedDate": "str",
+    "uploadTimestamp": "NoneType",
+    "workoutId": "int",
+    "workoutName": "str",
+    "workoutProvider": "NoneType",
+    "workoutSegments": [
+     {
+      "avgTrainingSpeed": "NoneType",
+      "description": "NoneType",
+      "estimateType": "NoneType",
+      "estimatedDistanceInMeters": "NoneType",
+      "estimatedDistanceUnit": "NoneType",
+      "estimatedDurationInSecs": "NoneType",
+      "poolLength": "NoneType",
+      "poolLengthUnit": "NoneType",
+      "segmentOrder": "int",
+      "sportType": {
+       "displayOrder": "int",
+       "sportTypeId": "int",
+       "sportTypeKey": "str"
+      },
+      "workoutSteps": [
+       {
+        "category": "str",
+        "childStepId": "NoneType",
+        "description": "NoneType",
+        "endCondition": {
+         "conditionTypeId": "int",
+         "conditionTypeKey": "str",
+         "displayOrder": "int",
+         "displayable": "bool"
+        },
+        "endConditionCompare": "NoneType",
+        "endConditionValue": "float",
+        "endConditionZone": "NoneType",
+        "equipmentType": {
+         "displayOrder": "int",
+         "equipmentTypeId": "int",
+         "equipmentTypeKey": "NoneType"
+        },
+        "exerciseName": "NoneType",
+        "preferredEndConditionUnit": "NoneType",
+        "providerExerciseSourceId": "NoneType",
+        "secondaryTargetType": "NoneType",
+        "secondaryTargetValueOne": "NoneType",
+        "secondaryTargetValueTwo": "NoneType",
+        "secondaryTargetValueUnit": "NoneType",
+        "secondaryZoneNumber": "NoneType",
+        "stepId": "int",
+        "stepOrder": "int",
+        "stepType": {
+         "displayOrder": "int",
+         "stepTypeId": "int",
+         "stepTypeKey": "str"
+        },
+        "strokeType": {
+         "displayOrder": "int",
+         "strokeTypeId": "int",
+         "strokeTypeKey": "NoneType"
+        },
+        "targetType": {
+         "displayOrder": "int",
+         "workoutTargetTypeId": "int",
+         "workoutTargetTypeKey": "str"
+        },
+        "targetValueOne": "NoneType",
+        "targetValueTwo": "NoneType",
+        "targetValueUnit": "NoneType",
+        "type": "str",
+        "weightUnit": "NoneType",
+        "weightValue": "NoneType",
+        "workoutProvider": "NoneType",
+        "zoneNumber": "NoneType"
+       }
+      ]
+     }
+    ],
+    "workoutSourceId": "NoneType",
+    "workoutThumbnailUrl": "NoneType"
+   },
+   "workoutScheduleId": "int"
+  },
+  "settings": {
+   "connectDate": "NoneType",
+   "id": "int",
+   "sourceType": "NoneType",
+   "userData": {
+    "<key>": "NoneType",
+    "activityLevel": "int",
+    "availableTrainingDays": [
+     "str"
+    ],
+    "birthDate": "str",
+    "diveNumber": "NoneType",
+    "externalBottomTime": "NoneType",
+    "firstDayOfWeek": {
+     "dayId": "int",
+     "dayName": "str",
+     "isPossibleFirstDay": "bool",
+     "sortOrder": "int"
+    },
+    "firstbeatCyclingLtTimestamp": "NoneType",
+    "firstbeatMaxStressScore": "NoneType",
+    "firstbeatRowingLtTimestamp": "NoneType",
+    "firstbeatRunningLtTimestamp": "int",
+    "ftpAutoDetected": "bool",
+    "gender": "str",
+    "golfDistanceUnit": "NoneType",
+    "golfElevationUnit": "NoneType",
+    "golfSpeedUnit": "NoneType",
+    "handedness": "str",
+    "heartRateFormat": {
+     "displayFormat": "NoneType",
+     "formatId": "int",
+     "formatKey": "str",
+     "groupingUsed": "bool",
+     "maxFraction": "int",
+     "minFraction": "int"
+    },
+    "height": "float",
+    "hydrationAutoGoalEnabled": "bool",
+    "hydrationContainers": [
+     {
+      "name": "NoneType",
+      "unit": "str",
+      "volume": "int"
+     }
+    ],
+    "hydrationMeasurementUnit": "str",
+    "intensityMinutesCalcMethod": "str",
+    "lactateThresholdHeartRate": "int",
+    "lactateThresholdHeartRateCycling": "NoneType",
+    "lactateThresholdHeartRateRowing": "NoneType",
+    "lactateThresholdRowingPace": "NoneType",
+    "lactateThresholdSpeed": "float",
+    "measurementSystem": "str",
+    "moderateIntensityMinutesHrZone": "int",
+    "numberDivesAutomatically": "NoneType",
+    "powerFormat": {
+     "displayFormat": "NoneType",
+     "formatId": "int",
+     "formatKey": "str",
+     "groupingUsed": "bool",
+     "maxFraction": "int",
+     "minFraction": "int"
+    },
+    "preferredLongTrainingDays": [
+     "str"
+    ],
+    "thresholdHeartRateAutoDetected": "bool",
+    "timeFormat": "str",
+    "trainingStatusPausedDate": "NoneType",
+    "vigorousIntensityMinutesHrZone": "int",
+    "virtualCaddieDataSource": "NoneType",
+    "weatherLocation": {
+     "isoCountryCode": "NoneType",
+     "latitude": "NoneType",
+     "locationName": "NoneType",
+     "longitude": "NoneType",
+     "postalCode": "NoneType",
+     "useFixedLocation": "NoneType"
+    },
+    "weight": "float",
+    "wheelchairModeEnabled": "bool",
+    "wtrPrimaryActivityType": "NoneType"
+   },
+   "userSleep": {
+    "defaultSleepTime": "bool",
+    "defaultWakeTime": "bool",
+    "sleepTime": "int",
+    "wakeTime": "int"
+   },
+   "userSleepWindows": [
+    {
+     "endSleepTimeSecondsFromMidnight": "int",
+     "sleepWindowFrequency": "str",
+     "startSleepTimeSecondsFromMidnight": "int"
+    }
+   ]
+  },
+  "stored_workout": {
+   "<key>": "NoneType",
+   "atpPlanId": "NoneType",
+   "author": {
+    "displayName": "str",
+    "fullName": "str",
+    "profileImgNameLarge": "NoneType",
+    "profileImgNameMedium": "str",
+    "profileImgNameSmall": "str",
+    "userPro": "bool",
+    "userProfilePk": "int",
+    "vivokidUser": "bool"
+   },
+   "avgTrainingSpeed": "float",
+   "consumer": "NoneType",
+   "consumerImageURL": "NoneType",
+   "consumerName": "NoneType",
+   "consumerWebsiteURL": "NoneType",
+   "createdDate": "str",
+   "description": "str",
+   "estimateType": "NoneType",
+   "estimatedDistanceInMeters": "NoneType",
+   "estimatedDistanceUnit": {
+    "factor": "NoneType",
+    "unitId": "NoneType",
+    "unitKey": "NoneType"
+   },
+   "estimatedDurationInSecs": "int",
+   "isSessionTransitionEnabled": "NoneType",
+   "locale": "NoneType",
+   "ownerId": "int",
+   "poolLength": "NoneType",
+   "poolLengthUnit": "NoneType",
+   "shared": "bool",
+   "sharedWithUsers": "NoneType",
+   "sportType": {
+    "displayOrder": "int",
+    "sportTypeId": "int",
+    "sportTypeKey": "str"
+   },
+   "subSportType": "NoneType",
+   "trainingPlanId": "NoneType",
+   "updatedDate": "str",
+   "uploadTimestamp": "NoneType",
+   "workoutId": "int",
+   "workoutName": "str",
+   "workoutProvider": "NoneType",
+   "workoutSegments": [
+    {
+     "avgTrainingSpeed": "NoneType",
+     "description": "NoneType",
+     "estimateType": "NoneType",
+     "estimatedDistanceInMeters": "NoneType",
+     "estimatedDistanceUnit": "NoneType",
+     "estimatedDurationInSecs": "NoneType",
+     "poolLength": "NoneType",
+     "poolLengthUnit": "NoneType",
+     "segmentOrder": "int",
+     "sportType": {
+      "displayOrder": "int",
+      "sportTypeId": "int",
+      "sportTypeKey": "str"
+     },
+     "workoutSteps": [
+      {
+       "category": "str",
+       "childStepId": "NoneType",
+       "description": "NoneType",
+       "endCondition": {
+        "conditionTypeId": "int",
+        "conditionTypeKey": "str",
+        "displayOrder": "int",
+        "displayable": "bool"
+       },
+       "endConditionCompare": "NoneType",
+       "endConditionValue": "float",
+       "endConditionZone": "NoneType",
+       "equipmentType": {
+        "displayOrder": "int",
+        "equipmentTypeId": "int",
+        "equipmentTypeKey": "NoneType"
+       },
+       "exerciseName": "str",
+       "preferredEndConditionUnit": "NoneType",
+       "providerExerciseSourceId": "NoneType",
+       "secondaryTargetType": "NoneType",
+       "secondaryTargetValueOne": "NoneType",
+       "secondaryTargetValueTwo": "NoneType",
+       "secondaryTargetValueUnit": "NoneType",
+       "secondaryZoneNumber": "NoneType",
+       "stepId": "int",
+       "stepOrder": "int",
+       "stepType": {
+        "displayOrder": "int",
+        "stepTypeId": "int",
+        "stepTypeKey": "str"
+       },
+       "strokeType": {
+        "displayOrder": "int",
+        "strokeTypeId": "int",
+        "strokeTypeKey": "NoneType"
+       },
+       "targetType": {
+        "displayOrder": "int",
+        "workoutTargetTypeId": "int",
+        "workoutTargetTypeKey": "str"
+       },
+       "targetValueOne": "NoneType",
+       "targetValueTwo": "NoneType",
+       "targetValueUnit": "NoneType",
+       "type": "str",
+       "weightUnit": "NoneType",
+       "weightValue": "NoneType",
+       "workoutProvider": "NoneType",
+       "zoneNumber": "NoneType"
+      }
+     ]
+    }
+   ],
+   "workoutSourceId": "NoneType",
+   "workoutThumbnailUrl": "NoneType"
+  },
+  "workout_list_item": {
+   "<key>": "NoneType",
+   "atpPlanId": "NoneType",
+   "author": {
+    "displayName": "NoneType",
+    "fullName": "NoneType",
+    "profileImgNameLarge": "NoneType",
+    "profileImgNameMedium": "NoneType",
+    "profileImgNameSmall": "NoneType",
+    "userPro": "bool",
+    "userProfilePk": "NoneType",
+    "vivokidUser": "bool"
+   },
+   "consumer": "NoneType",
+   "createdDate": "str",
+   "description": "str",
+   "estimateType": "NoneType",
+   "estimated": "bool",
+   "estimatedDistanceInMeters": "NoneType",
+   "estimatedDistanceUnit": {
+    "factor": "NoneType",
+    "unitId": "NoneType",
+    "unitKey": "NoneType"
+   },
+   "estimatedDurationInSecs": "int",
+   "ownerId": "int",
+   "poolLength": "float",
+   "poolLengthUnit": {
+    "factor": "NoneType",
+    "unitId": "NoneType",
+    "unitKey": "NoneType"
+   },
+   "shared": "bool",
+   "sportType": {
+    "displayOrder": "int",
+    "sportTypeId": "int",
+    "sportTypeKey": "str"
+   },
+   "trainingPlanId": "NoneType",
+   "updateDate": "str",
+   "workoutId": "int",
+   "workoutName": "str",
+   "workoutProvider": "NoneType",
+   "workoutSourceId": "NoneType",
+   "workoutThumbnailUrl": "NoneType"
+  }
+ },
+ "hevy": {
+  "exercise_history": "not yet recorded",
+  "folders": "not yet recorded",
+  "routines": "not yet recorded",
+  "template": "not yet recorded",
+  "workout_events": [
+   {
+    "type": "str",
+    "workout": {
+     "created_at": "str",
+     "description": "str",
+     "end_time": "str",
+     "exercises": [
+      {
+       "exercise_template_id": "str",
+       "index": "int",
+       "notes": "NoneType",
+       "sets": [
+        {
+         "custom_metric": "NoneType",
+         "distance_meters": "NoneType",
+         "duration_seconds": "NoneType",
+         "index": "int",
+         "reps": "int",
+         "rpe": "int",
+         "type": "str",
+         "weight_kg": "float"
+        }
+       ],
+       "superset_id": "NoneType",
+       "title": "str"
+      }
+     ],
+     "id": "str",
+     "routine_id": "NoneType",
+     "start_time": "str",
+     "title": "str",
+     "updated_at": "str"
+    }
+   }
+  ]
+ },
+ "hevy_trainer": {
+  "exercise_template_units": [],
+  "program": {
+   "cardio_preference": "str",
+   "created_at": "str",
+   "current_week": "int",
+   "deloads_enabled": "bool",
+   "equipments": [
+    "str"
+   ],
+   "exercises_rotated_at": "str",
+   "goal": "str",
+   "id": "str",
+   "level": "str",
+   "next_workout_index": "int",
+   "next_workout_index_updated_at": "str",
+   "program_variety": "str",
+   "rest_timer_length": "str",
+   "schema_version": "str",
+   "split_type": "str",
+   "templates": [
+    {
+     "edits": [
+      {
+       "from_exercise_template_id": "str",
+       "to_exercise_template_id": "str",
+       "type": "str"
+      }
+     ],
+     "exercises": [
+      {
+       "exercise_template_id": "str",
+       "id": "str",
+       "index": "int",
+       "kind": "str",
+       "rep_range": {
+        "end": "int",
+        "start": "int"
+       },
+       "rest_seconds": "int",
+       "set_count": "int",
+       "warmup_set_count": "int"
+      }
+     ],
+     "hevy_trainer_program_id": "str",
+     "id": "str",
+     "index": "int",
+     "key": "str",
+     "name": "str"
+    }
+   ],
+   "updated_at": "str",
+   "weekly_frequency": "int",
+   "workout_duration_minutes": "int"
+  },
+  "trainer_preferences": {
+   "availableEquipment": {
+    "barsKg": [
+     "int"
+    ],
+    "barsLbs": [
+     "int"
+    ],
+    "dumbbellsKg": [
+     "float"
+    ],
+    "dumbbellsLbs": [
+     "int"
+    ],
+    "platesKg": [
+     "int"
+    ],
+    "platesLbs": [
+     "int"
+    ]
+   },
+   "availableWeights": {
+    "barsKg": [
+     "int"
+    ],
+    "barsLbs": [
+     "int"
+    ],
+    "dumbbellsKg": [
+     "float"
+    ],
+    "dumbbellsLbs": [
+     "int"
+    ],
+    "platesKg": [
+     "int"
+    ],
+    "platesLbs": [
+     "int"
+    ]
+   },
+   "excludedExercisesIds": [
+    "str"
+   ],
+   "injuries": [],
+   "updated_at": "str"
+  },
+  "user_preferences": {
+   "body_measurement_unit": "str",
+   "default_workout_show_on_gym_profile": "bool",
+   "default_workout_visibility_public": "bool",
+   "distance_unit": "str",
+   "first_weekday": "str",
+   "inline_set_timer_enabled": "bool",
+   "plate_calculator_enabled": "bool",
+   "rpe_enabled": "bool",
+   "superset_scrolling": "bool",
+   "username": "str",
+   "volume_includes_warmup_sets": "bool",
+   "weight_unit": "str",
+   "workout_keep_awake": "bool"
+  },
+  "user_workouts_paged": {
+   "workouts": [
+    {
+     "apple_watch": "bool",
+     "comment_count": "int",
+     "comments": [],
+     "created_at": "str",
+     "description": "str",
+     "end_time": "int",
+     "estimated_volume_kg": "float",
+     "exercises": [
+      {
+       "ar_title": "str",
+       "ca_title": "str",
+       "custom_exercise_image_url": "NoneType",
+       "de_title": "str",
+       "equipment_category": "str",
+       "es_title": "str",
+       "exercise_template_id": "str",
+       "exercise_type": "str",
+       "fr_title": "str",
+       "hi_title": "str",
+       "id": "str",
+       "it_title": "str",
+       "ja_title": "str",
+       "ko_title": "str",
+       "media_type": "str",
+       "muscle_group": "str",
+       "notes": "str",
+       "other_muscles": [
+        "str"
+       ],
+       "pinned_notes": [],
+       "pl_title": "str",
+       "priority": "int",
+       "pt_br_title": "str",
+       "pt_title": "str",
+       "rest_seconds": "int",
+       "ru_title": "str",
+       "sets": [
+        {
+         "completed_at": "str",
+         "custom_metric": "NoneType",
+         "distance_meters": "NoneType",
+         "duration_seconds": "NoneType",
+         "geospatial_data": "NoneType",
+         "id": "str",
+         "index": "int",
+         "indicator": "str",
+         "personalRecords": [],
+         "prs": [],
+         "reps": "int",
+         "rpe": "int",
+         "weight_kg": "float",
+         "yearly_prs": []
+        }
+       ],
+       "superset_id": "NoneType",
+       "thumbnail_url": "str",
+       "title": "str",
+       "tr_title": "str",
+       "url": "str",
+       "volume_doubling_enabled": "bool",
+       "zh_cn_title": "str",
+       "zh_tw_title": "str"
+      }
+     ],
+     "gym": {
+      "type": "str"
+     },
+     "id": "str",
+     "image_urls": [],
+     "include_warmup_sets": "bool",
+     "index": "int",
+     "is_biometrics_public": "bool",
+     "is_liked_by_user": "bool",
+     "is_private": "bool",
+     "is_trainer_workout": "bool",
+     "like_count": "int",
+     "like_images": [],
+     "media": [],
+     "name": "str",
+     "nth_workout": "int",
+     "preview_workout_likes": [],
+     "profile_image": "str",
+     "short_id": "str",
+     "show_on_gym_profile": "bool",
+     "start_time": "int",
+     "trainer_program_id": "str",
+     "trainer_workout_template_id": "str",
+     "updated_at": "str",
+     "userGym": {
+      "type": "str"
+     },
+     "user_gym": {
+      "type": "str"
+     },
+     "user_id": "str",
+     "username": "str",
+     "verified": "bool",
+     "wearos_watch": "bool"
+    }
+   ]
+  }
+ }
+}

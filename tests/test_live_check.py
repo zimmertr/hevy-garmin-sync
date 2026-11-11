@@ -57,7 +57,6 @@ class LiveCheckCase(unittest.TestCase):
             next_workout_index=1,
         )
         self.garmin_api = fixtures.FakeGarminApi()
-        self.garmin_api.renamed = {("BATTLE_ROPE", "BATTLE_ROPE"): "ALTERNATING_WAVE"}
         self.clock = fixtures.FakeClock()
         self.tokens: list[str | None] = []
         self.asked: list[str] = []
@@ -162,19 +161,25 @@ class RecordTest(LiveCheckCase):
         self.assertEqual({category for category, _ in rows}, set(lc.CHECKED_CATEGORIES))
         steps = self.saved()["garmin"]["steps"]
         self.assertEqual(len(steps), len(rows))
-        self.assertIn("sent BATTLE_ROPE / BATTLE_ROPE, Garmin stored BATTLE_ROPE / ALTERNATING_WAVE", out)
-        self.assertIn("sent HYPEREXTENSION / HYPEREXTENSION, Garmin stored HYPEREXTENSION / HYPEREXTENSION", out)
+        # As Garmin stored them on 2026-11-10: two with an empty exercise name, the rest as sent.
+        self.assertIn("sent BATTLE_ROPE / BATTLE_ROPE, Garmin stored BATTLE_ROPE / \n", out)
+        self.assertIn("sent HYPEREXTENSION / HYPEREXTENSION, Garmin stored HYPEREXTENSION / \n", out)
+        as_sent = "HYPEREXTENSION / SUPERMAN_FROM_FLOOR"
+        self.assertIn(f"sent {as_sent}, Garmin stored {as_sent}\n", out)
         self.assertNotIn("stepName", "\n".join(steps))
-        wanted = "Step 1: sent CORE with a stepName and no exercise, Garmin stored CORE / None, stepName kept"
+        wanted = "Step 1: sent CORE with a stepName and no exercise, Garmin stored CORE / None, stepName not kept"
         self.assertEqual(self.saved()["garmin"]["step_name"], [wanted])
         self.assertIn(f"{lc.STEP_NAME_WORKOUT}:\n{wanted}\n", out)
 
     def test_the_step_name_step_sends_a_name_and_no_exercise(self) -> None:
+        (sent,) = lc.sets(lc.step_name_body(None))
+        self.assertEqual((sent["category"], sent["stepName"]), (lc.STEP_NAME_CATEGORY, lc.STEP_NAME))
+        self.assertNotIn("exerciseName", sent)
         self.record()
         (named,) = [w for w in self.garmin_api.workouts.values() if w["workoutName"] == lc.STEP_NAME_WORKOUT]
-        (only,) = lc.sets(named)
-        self.assertEqual((only["category"], only["stepName"]), (lc.STEP_NAME_CATEGORY, lc.STEP_NAME))
-        self.assertNotIn("exerciseName", only)
+        (stored,) = lc.sets(named)
+        self.assertEqual((stored["category"], stored["exerciseName"]), (lc.STEP_NAME_CATEGORY, None))
+        self.assertNotIn("stepName", stored)
 
     def test_garmin_refusing_the_step_name_step_still_runs_the_other_checks(self) -> None:
         self.garmin_api.no_exercise_error = fixtures.garmin_error(400)
@@ -223,6 +228,7 @@ class RecordTest(LiveCheckCase):
     def test_a_step_name_garmin_drops_is_reported(self) -> None:
         sent = lc.step_name_body(None)
         stored = json.loads(json.dumps(sent))
+        self.assertTrue(lc.compare(sent, stored)[-1].endswith("stepName kept"))
         del list(lc.sets(stored))[-1]["stepName"]
         self.assertTrue(lc.compare(sent, stored)[-1].endswith("stepName not kept"))
 
