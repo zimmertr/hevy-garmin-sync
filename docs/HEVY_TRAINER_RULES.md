@@ -141,9 +141,11 @@ An exercise with no previous session in its template (after a rotation, say) sta
 | 2026-11-06, 2026-11-07 | Lying Leg Raise, logged by reps, every set at the top of its range | The next rep range up, 15-20 | The next rung of the ladder |
 | 2026-11-06, 2026-11-07 | Goblet Squat, two warm-ups, last session at 80 lb inside its rep range | 80 lb, warm-ups 30 and 50 lb | 80 lb, warm-ups 30 and 50 lb |
 
+On 2026-11-10 the first run against a real account gave the same weight and warm-ups as hevy-trainer-sync, the tool these rules were first written for, on all 12 weighted exercises of a two-workout program, and the same rep range on the one logged by reps.
+
 Not yet checked against the app: a new exercise's starting weight, a deload week, an account in kilograms, an exercise logged in the other unit, and a barbell exercise.
 
 ## Open points
 
 - **The 3 and 12 month windows** are taken as the last 91 and 365 days. The exact day counts are not confirmed.
-- **The reply of `/exercise_template_units`** has not been seen. The app logs its shape, without values, the first time it reads it. Until it is confirmed, an exercise falls back to the account's unit.
+- **The reply of `/exercise_template_units`** was an empty list on 2026-11-10, for an account that logs no exercise in the other unit. What a row looks like has not been seen. The app logs the shape, without values, the first time it reads it. Until a row is confirmed, an exercise falls back to the account's unit.
