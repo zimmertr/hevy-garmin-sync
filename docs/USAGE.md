@@ -26,9 +26,10 @@ What you see when it runs, and what to do when it breaks.
 | You see | Do |
 |---|---|
 | It exits at startup naming a variable | Fix that variable. The message says how |
+| The pod is in `CrashLoopBackOff`, or `docker compose ps` shows it restarting | A sign-in was rejected. The last line of the log says which one, and the rows below say what to do. Nothing syncs until it is fixed; each restart exits again |
 | `Garmin rejected the app's credentials` | Run `login` again and set `GARMIN_TOKEN` to the new value |
 | `Hevy rejected the app's credentials; check HEVY_API_KEY` | Make a new key at https://hevy.com/settings?developer. The key needs Hevy Pro |
-| `Hevy Trainer rejected the app's credentials` | Copy the `auth2.0-token` cookie from hevy.com again, in a private window you then close without logging out, and set `HEVY_SESSION` to it. Routines keep syncing meanwhile |
+| `Hevy Trainer rejected the app's credentials` | Copy the `auth2.0-token` cookie from hevy.com again, in a private window you then close without logging out, and set `HEVY_SESSION` to it. To sync routines only meanwhile, unset `HEVY_SESSION`, which also takes the Trainer workouts out of Garmin |
 | `... can't be reached or is failing ... Trying again in N min` | Nothing. It retries by itself, waiting longer each time, up to 30 minutes |
 | `Garmin is rate limiting the app` | Nothing. It waits at least 15 minutes |
 | `Garmin refused '<workout>' (N steps)` | Garmin won't take that one workout. The others still sync. It is tried again when the routine changes, at the next start and at midnight. Open an issue with the line |

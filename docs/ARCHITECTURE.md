@@ -34,7 +34,7 @@ One long-running process and one thread (spec F-1). Nothing listens on a port (F
 5. **Midnight.** At local midnight, a full run again: yesterday's calendar entries go and today's are added.
 6. **Stop.** SIGTERM or SIGINT lets the write in progress finish and starts no new one.
 
-A failing service gets its own wait, one minute doubling to thirty (O-1). Hevy's public API, Hevy's private API and Garmin each have one, so routines keep syncing while only Trainer is down, and Hevy is still read while Garmin is down.
+A failing service gets its own wait, one minute doubling to thirty (O-1). Hevy's public API, Hevy's private API and Garmin each have one, so routines keep syncing while only Trainer is down, and Hevy is still read while Garmin is down. A rejected key, token or session is not waited out: it exits 1 with the fix, as at startup, so Kubernetes or Docker shows the app as failing.
 
 ## The modules
 
@@ -73,7 +73,7 @@ Two CSV files in `src/hevy_garmin_sync/data/`:
 
 ## The image
 
-Built by the release for `linux/amd64` and `linux/arm64`, tagged with the version only, at `docker.io/zimmertr/hevy-garmin-sync` (record [0003](architectural-decision-records/0003-docker-hub-until-yggdrasil-has-ghcr.md)). It runs as uid and gid 1000, and the only folder it writes is `/data` (`DATA_DIR`, spec C-8). The entry point is `python3 -m hevy_garmin_sync`.
+Built by the release for `linux/amd64` and `linux/arm64`, tagged with the version only, at `ghcr.io/zimmertr/hevy-garmin-sync` (record [0006](architectural-decision-records/0006-ghcr-and-a-digest-pinned-chart.md)). It runs as uid and gid 1000, and the only folder it writes is `/data` (`DATA_DIR`, spec C-8). The entry point is `python3 -m hevy_garmin_sync`.
 
 ## The chart
 
