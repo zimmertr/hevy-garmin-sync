@@ -36,11 +36,12 @@ It is safe to run again.
 nothing made anywhere, and not held back by an earlier run that wasn't cleaned up.
 
 `notes` is for #3, last time's numbers in a set's note: one Garmin sign-in and no Hevy read. It
-creates `HGS check notes`, three exercises whose notes carry made-up numbers in three forms: a short
-list on two matching sets, which stay one repeat group (F-20a); a list with units and RPE on a new
-line after the note the app writes today (F-30); and a list of five sets, the longest a note is
-likely to get. It puts it on today and sends it to the watch, so TJ can see how each note reads
-there. `cleanup` removes it like the others.
+creates `HGS check notes`, four exercises. Three carry made-up numbers, last time's working sets one
+to a line: the form TJ chose after the note the app writes today (F-30), on two matching sets, which
+stay one repeat group (F-20a); the widest line such a note is likely to hold; and four sets, six
+lines in all. The fourth carries fifteen numbered lines, to read off how many the watch shows. It
+reads the workout back and says whether Garmin stored every note whole, then puts it on today and
+sends it to the watch, so TJ can see how each note reads there. `cleanup` removes it like the others.
 
 Safety, enforced in code:
 - Never writes to Hevy: only the read methods of `Hevy` and `HevyPrivate` are called.
@@ -107,23 +108,33 @@ SET_EXERCISES = (
     Exercise("Check", "SQUAT", "SQUAT", (_TEN,) * 2, rest_seconds=60, superset=1),
 )
 _KG_PER_LB = 0.45359237
-# `HGS check notes` (#3): each exercise and the line its sets' note gets, in three forms. The numbers are
-# made up. Whole pounds, so a watch set to pounds shows the weights the notes name.
-PREVIOUS_NOTES = (
-    # Two matching sets, which must stay one repeat group with the note on both (F-20a): the shortest form.
+# `HGS check notes` (#3): each exercise and the lines its sets' note gets, last time's working sets one to
+# a line (TJ, 2026-11-11, after the first run showed the watch breaking a list of sets inside a set). The
+# numbers are made up.
+NOTE_LINES = 15  # the numbered lines of the last note, more than the watch is likely to show at once
+CHECK_NOTES = (
+    # The form TJ chose, after the note the app writes for a rep range (F-30): five lines. Two matching
+    # sets, which must stay one repeat group with the note on both (F-20a).
     (
-        Exercise("Check", "CURL", "CURL", (Set(reps=12, weight_kg=45 * _KG_PER_LB),) * 2, rest_seconds=60),
-        "Prev: 45x12, 45x12, 45x10",
+        Exercise(
+            "Check", "CURL", "CURL", (Set(rep_range=(4, 6), weight_kg=65 * _KG_PER_LB),) * 2, rest_seconds=60
+        ),
+        "Prev:\n65 lb x 6 @ RPE 7\n65 lb x 6 @ RPE 7.5\n65 lb x 5 @ RPE 8",
     ),
-    # A rep range, so the app writes a note of its own (F-30) and this line follows it on a new one.
+    # The widest a line is likely to get: a weight with a decimal, in kilograms, two-digit reps.
     (
-        Exercise("Check", "SQUAT", "SQUAT", (Set(rep_range=(4, 6), weight_kg=65 * _KG_PER_LB),)),
-        "Prev: 65 lb x 6 @ 7, 65 lb x 6 @ 7.5, 65 lb x 5 @ 8",
+        Exercise("Check", "SQUAT", "SQUAT", (Set(reps=12, weight_kg=102.5),)),
+        "Prev:\n102.5 kg x 12 @ RPE 7.5\n102.5 kg x 12 @ RPE 8.5\n102.5 kg x 10 @ RPE 9.5",
     ),
-    # Five sets, the warm-ups marked: the longest a note is likely to get.
+    # Four sets after a rep range: six lines, one more than the first run showed whole.
     (
-        Exercise("Check", "ROW", "ROW", (Set(reps=6, weight_kg=65 * _KG_PER_LB),)),
-        "Prev: W 20x8, W 40x6, 65x6 @7, 65x6 @7.5, 65x5 @8",
+        Exercise("Check", "ROW", "ROW", (Set(rep_range=(8, 12), weight_kg=45 * _KG_PER_LB),)),
+        "Prev:\n45 lb x 12 @ RPE 7\n45 lb x 12 @ RPE 8\n45 lb x 10 @ RPE 9\n45 lb x 9 @ RPE 10",
+    ),
+    # Numbered lines, so the highest number on the watch is how many lines a note can show.
+    (
+        Exercise("Check", "LUNGE", "LUNGE", (Set(reps=10),)),
+        "\n".join(f"Line {number}" for number in range(1, NOTE_LINES + 1)),
     ),
 )
 STEP_SIZES = (250, 100, 50)  # the step probe's sizes, largest first; it stops at the first Garmin takes
@@ -420,12 +431,23 @@ def steps_body(size: int, system: str | None) -> Json:
 
 
 def notes_body(system: str | None) -> Json:
-    """`HGS check notes`: the app's own steps, each set's note followed by its line of PREVIOUS_NOTES."""
-    body = _body(NOTES_WORKOUT, [exercise for exercise, _ in PREVIOUS_NOTES], system)
+    """`HGS check notes`: the app's own steps, each set's note followed by its lines of CHECK_NOTES."""
+    body = _body(NOTES_WORKOUT, [exercise for exercise, _ in CHECK_NOTES], system)
     # One set step per exercise: the two matching sets are one step inside their group.
-    for step, (_, previous) in zip(sets(body), PREVIOUS_NOTES, strict=True):
-        step["description"] = "\n".join(part for part in (step.get("description"), previous) if part)
+    for step, (_, lines) in zip(sets(body), CHECK_NOTES, strict=True):
+        step["description"] = "\n".join(part for part in (step.get("description"), lines) if part)
     return body
+
+
+def notes_kept(sent: Json, stored: Json) -> list[str]:
+    """Whether Garmin stored each note as sent: one line for each it changed, else one line saying none."""
+    changed = [
+        f"Garmin stored {len(back.get('description') or '')} of the {len(out['description'])} characters of "
+        f"exercise {number}'s note."
+        for number, (out, back) in enumerate(zip(sets(sent), sets(stored), strict=False), start=1)
+        if back.get("description") != out["description"]
+    ]
+    return changed or ["Garmin stored every note whole."]
 
 
 def sets(body: Json) -> Iterator[Json]:
@@ -737,6 +759,7 @@ def check_notes(
         notes_id = garmin.create(body)
         created.append(notes_id)
         save(store, CREATED, {"workouts": created})  # at once, so a failure later still leaves cleanup the id
+        kept = notes_kept(body, garmin.stored(notes_id))
         garmin.schedule(notes_id, today)
         try:
             garmin.send_to_device(notes_id)
@@ -747,15 +770,17 @@ def check_notes(
         print(_partway(e, created), file=out)
         return 1
 
-    print(f"{NOTES_WORKOUT} is on today's calendar {where}. Its three exercises and their notes:", file=out)
+    print(f"{NOTES_WORKOUT} is on today's calendar {where}. Its exercises and their notes, line by line:", file=out)
     for number, step in enumerate(sets(body), start=1):
-        note = step["description"].replace("\n", " (new line) ")
-        print(f"{number}. {step['exerciseName'].capitalize()}: {note}", file=out)
+        print(f"{number}. {step['exerciseName'].capitalize()}: {step['description'].replace('\n', ' / ')}", file=out)
+    for line in kept:
+        print(line, file=out)
     print(
-        "\nSync the watch and start it. For each exercise, look at the step list, then at the note's own "
-        "screen during the set, and photograph the note. The first exercise has two sets: check that the "
-        "watch counts SET 1/2 and 2/2 and shows the note on both. Then discard the activity and run "
-        "`make live-cleanup`.",
+        "\nSync the watch and start it. For each exercise, open the note's own screen during the set and "
+        "photograph it. Does every set stay on one line? The first exercise has two sets: check that the watch "
+        f"counts SET 1/2 and 2/2 and shows the note on both. The last note is {NOTE_LINES} numbered lines: which "
+        "is the highest the watch shows, and does the screen scroll to the rest? Then discard the activity and "
+        "run `make live-cleanup`.",
         file=out,
     )
     return 0
