@@ -112,22 +112,28 @@ class LiveCheckCase(unittest.TestCase):
 
 
 class RecordTest(LiveCheckCase):
-    def test_it_makes_the_seven_check_workouts_on_today_and_sends_each_to_the_watch(self) -> None:
+    def test_it_makes_the_eight_check_workouts_on_today_and_sends_each_to_the_watch(self) -> None:
         code, out = self.record()
         self.assertEqual(code, 0)
+        self.assertEqual(len(lc.NAMES), 8)
         self.assertEqual(self.names(), sorted(lc.NAMES))
         self.assertEqual({e["calendarDate"] for e in self.garmin_api.entries.values()}, {fixtures.TODAY.isoformat()})
-        self.assertEqual(len(self.garmin_api.entries), 7)
+        self.assertEqual(len(self.garmin_api.entries), 8)
         self.assertEqual(sorted(self.garmin_api.pushed), sorted(self.garmin_api.workouts))
         created = json.loads(self.store.read(lc.CREATED) or "{}")
         self.assertEqual(sorted(created["workouts"]), sorted(self.garmin_api.workouts))
-        self.assertIn("make live-cleanup", out)
+        self.assertIn("The 8 check workouts are on today's calendar", out)
+
+    def test_the_step_name_workout_is_made_last(self) -> None:
+        self.record()
+        created = json.loads(self.store.read(lc.CREATED) or "{}")["workouts"]
+        self.assertEqual(self.garmin_api.workouts[created[-1]]["workoutName"], lc.STEP_NAME_WORKOUT)
 
     def test_garmin_writes_are_a_second_apart_as_the_app_spaces_them(self) -> None:
         self.record()
         kinds = ("upload_workout", "schedule_workout", "push_workout_to_device")
-        self.assertEqual(len([call for call in self.garmin_api.calls if call in kinds]), 21)
-        self.assertEqual(self.clock.sleeps, [1.0] * 20)  # O-1b
+        self.assertEqual(len([call for call in self.garmin_api.calls if call in kinds]), 24)
+        self.assertEqual(self.clock.sleeps, [1.0] * 23)  # O-1b
 
     def test_no_check_workout_carries_the_apps_description(self) -> None:
         self.assertIsNone(workout.owner(lc.DESCRIPTION))
@@ -142,18 +148,58 @@ class RecordTest(LiveCheckCase):
         self.assertGreater(len(rows), 0)
         self.assertEqual({category for category, _ in rows}, set(lc.CHECKED_CATEGORIES))
         steps = self.saved()["garmin"]["steps"]
-        self.assertEqual(len(steps), len(rows) + 1)
+        self.assertEqual(len(steps), len(rows))
         self.assertIn("sent BATTLE_ROPE / BATTLE_ROPE, Garmin stored BATTLE_ROPE / ALTERNATING_WAVE", out)
         self.assertIn("sent HYPEREXTENSION / HYPEREXTENSION, Garmin stored HYPEREXTENSION / HYPEREXTENSION", out)
-        wanted = f"Step {len(steps)}: sent CORE with a stepName and no exercise, Garmin stored CORE / None"
-        self.assertEqual(steps[-1], f"{wanted}, stepName kept")
+        self.assertNotIn("stepName", "\n".join(steps))
+        wanted = "Step 1: sent CORE with a stepName and no exercise, Garmin stored CORE / None, stepName kept"
+        self.assertEqual(self.saved()["garmin"]["step_name"], [wanted])
+        self.assertIn(f"{lc.STEP_NAME_WORKOUT}:\n{wanted}\n", out)
 
     def test_the_step_name_step_sends_a_name_and_no_exercise(self) -> None:
         self.record()
-        (names,) = [w for w in self.garmin_api.workouts.values() if w["workoutName"] == lc.NAMES_WORKOUT]
-        last = list(lc.sets(names))[-1]
-        self.assertEqual(last["stepName"], lc.STEP_NAME)
-        self.assertNotIn("exerciseName", last)
+        (named,) = [w for w in self.garmin_api.workouts.values() if w["workoutName"] == lc.STEP_NAME_WORKOUT]
+        (only,) = lc.sets(named)
+        self.assertEqual((only["category"], only["stepName"]), (lc.STEP_NAME_CATEGORY, lc.STEP_NAME))
+        self.assertNotIn("exerciseName", only)
+
+    def test_garmin_refusing_the_step_name_step_still_runs_the_other_checks(self) -> None:
+        self.garmin_api.no_exercise_error = fixtures.garmin_error(400)
+        code, out = self.record()
+        self.assertEqual(code, 0)
+        self.assertEqual(self.names(), sorted(lc.NAMES[:-1]))
+        self.assertEqual(len(self.garmin_api.entries), 7)
+        self.assertEqual(len(self.garmin_api.pushed), 7)
+        self.assertEqual(len(json.loads(self.store.read(lc.CREATED) or "{}")["workouts"]), 7)
+        refused = "Garmin refused a step with a stepName and no exercise (Refused)"
+        self.assertEqual(self.saved()["garmin"]["step_name"], [refused])
+        self.assertIn(refused, out)
+        self.assertIn("The 7 check workouts are on today's calendar", out)
+
+    def test_any_other_failure_on_the_step_name_step_stops_as_before(self) -> None:
+        self.garmin_api.no_exercise_error = fixtures.garmin_error(500)
+        code, out = self.record()
+        self.assertEqual(code, 1)
+        self.assertIn("Garmin failed partway (Unavailable). 7 of 8 check workouts were made", out)
+
+    def test_a_stored_workout_nested_another_way_lists_every_step_found(self) -> None:
+        sent = lc.names_body(None)
+        stored = {"workoutSegments": [{"steps": list(lc.sets(json.loads(json.dumps(sent))))}]}
+        lines = lc.compare(sent, stored)
+        counts = f"The counts differed: {len(lc.checked_rows())} steps sent, 0 found where the app reads them."
+        self.assertEqual(lines[0], f"{counts} Every step found anywhere in the stored workout:")
+        self.assertEqual(len(lines), 1 + len(lc.checked_rows()))
+        self.assertIn("- category BATTLE_ROPE, exerciseName BATTLE_ROPE, stepName None", lines)
+
+    def test_a_count_that_differs_lists_every_step_after_the_ones_that_pair_up(self) -> None:
+        sent = lc.names_body(None)
+        stored = json.loads(json.dumps(sent))
+        extra = {"stepType": {"stepTypeKey": "interval"}, "stepName": "Extra", "category": None}
+        stored["workoutSegments"][0]["workoutSteps"].append(extra)
+        lines = lc.compare(sent, stored)
+        self.assertTrue(lines[len(lc.checked_rows())].startswith("The counts differed"))
+        self.assertEqual(lines[-1], "- category None, exerciseName None, stepName Extra")
+        self.assertEqual(lc.compare(sent, json.loads(json.dumps(sent)))[-1][:5], "Step ")
 
     def test_set_steps_inside_a_repeat_group_are_read_and_rests_left_out(self) -> None:
         three = workout.Exercise("Check", "CURL", "CURL", (workout.Set(reps=10),) * 3, rest_seconds=60)
@@ -162,7 +208,7 @@ class RecordTest(LiveCheckCase):
         self.assertEqual([step["exerciseName"] for step in lc.sets(body)], ["CURL"])
 
     def test_a_step_name_garmin_drops_is_reported(self) -> None:
-        sent = lc.names_body(None)
+        sent = lc.step_name_body(None)
         stored = json.loads(json.dumps(sent))
         del list(lc.sets(stored))[-1]["stepName"]
         self.assertTrue(lc.compare(sent, stored)[-1].endswith("stepName not kept"))
@@ -190,6 +236,7 @@ class RecordTest(LiveCheckCase):
                 "not_sent_to_the_watch",
                 "schedule_reply",
                 "settings",
+                "step_name",
                 "steps",
                 "stored_workout",
                 "workout_list_item",
@@ -254,10 +301,10 @@ class RecordTest(LiveCheckCase):
                 self.assertEqual(days, {fixtures.NOW.astimezone(UTC).date().isoformat()})
 
     def test_a_watch_that_takes_none_is_counted_and_the_run_goes_on(self) -> None:
-        self.garmin_api.fail("push_workout_to_device", *[fixtures.garmin_error(400)] * 7)
+        self.garmin_api.fail("push_workout_to_device", *[fixtures.garmin_error(400)] * 8)
         code, _ = self.record()
         self.assertEqual(code, 0)
-        self.assertEqual(self.saved()["garmin"]["not_sent_to_the_watch"], 7)
+        self.assertEqual(self.saved()["garmin"]["not_sent_to_the_watch"], 8)
 
     def test_an_earlier_run_not_cleaned_up_stops_it_before_any_call(self) -> None:
         self.store.write(lc.CREATED, json.dumps({"workouts": [1]}))
@@ -299,8 +346,8 @@ class RecordTest(LiveCheckCase):
         self.garmin_api.fail("schedule_workout", fixtures.garmin_error(500))
         code, out = self.record()
         self.assertEqual(code, 1)
-        self.assertIn("Garmin failed partway (Unavailable). 7 of 7 check workouts were made", out)
-        self.assertEqual(len(json.loads(self.store.read(lc.CREATED) or "{}")["workouts"]), 7)
+        self.assertIn("Garmin failed partway (Unavailable). 8 of 8 check workouts were made", out)
+        self.assertEqual(len(json.loads(self.store.read(lc.CREATED) or "{}")["workouts"]), 8)
 
 
 class CleanupTest(LiveCheckCase):
@@ -314,14 +361,14 @@ class CleanupTest(LiveCheckCase):
         self.assertEqual(self.names(), ["HGS check 1", "Hevy: Push"])
         self.assertEqual([e["workout"]["workoutId"] for e in self.garmin_api.entries.values()], [2])
         self.assertEqual(sorted(p.name for p in self.folder.iterdir()), [lc.RECORDED])
-        self.assertIn("Removed 7 calendar entries and 7 check workouts", out)
+        self.assertIn("Removed 8 calendar entries and 8 check workouts", out)
 
     def test_a_second_run_has_nothing_to_do(self) -> None:
         self.record()
         self.cleanup()
         self.assertEqual(self.cleanup(), (0, "Nothing to clean up.\n"))
 
-    def test_with_no_id_file_it_goes_by_the_seven_names_alone(self) -> None:
+    def test_with_no_id_file_it_goes_by_the_eight_names_alone(self) -> None:
         self.garmin_api.fail("upload_workout", fixtures.garmin_error(500))
         self.record()
         self.store.remove(lc.CREATED)

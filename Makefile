@@ -81,8 +81,8 @@ upstream-update:
 # Not checks: one run by hand against TJ's own Hevy and Garmin accounts
 # (scripts/live_check.py, #22, #24, #6). Interactive, for the Garmin sign-in
 # and for the Hevy key and cookie when they aren't in the environment. The
-# first records the replies' shapes into live-check/ and puts seven check
-# workouts on the watch; the second deletes them and the saved token.
+# first records the replies' shapes into live-check/ and puts up to eight
+# check workouts on the watch; the second deletes them and the saved token.
 LIVE := $(RUN) -it -e HEVY_API_KEY -e HEVY_SESSION $(PYTHON_IMAGE) sh -c \
   'pip install -q --root-user-action=ignore --require-hashes -r requirements.txt && \
   PYTHONPATH=src python scripts/live_check.py $$0'

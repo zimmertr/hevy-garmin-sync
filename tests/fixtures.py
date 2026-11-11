@@ -97,6 +97,8 @@ class FakeGarminApi:
         self.bare_schedule_reply = False
         # (category, exercise) sent -> the exercise Garmin stores instead, as it did for two categories on 2026-11-10.
         self.renamed: dict[tuple[str, str], str] = {}
+        # Raised for a workout holding a step with a `stepName` and no exercise, should Garmin refuse one.
+        self.no_exercise_error: BaseException | None = None
         self._failures: dict[str, list[BaseException]] = {}
         self._rotate_on: set[str] = set()
         self._next_id = 1000
@@ -147,6 +149,8 @@ class FakeGarminApi:
 
     def upload_workout(self, body: dict[str, Any]) -> dict[str, Any]:
         self._enter("upload_workout")
+        if self.no_exercise_error and '"stepName"' in json.dumps(body) and '"exerciseName"' not in json.dumps(body):
+            raise self.no_exercise_error
         workout_id = self._new_id()
         self.workouts[workout_id] = self._as_stored(body) | {"workoutId": workout_id}
         return self.workouts[workout_id]
