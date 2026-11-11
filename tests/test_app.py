@@ -284,6 +284,46 @@ class FailureTest(AppCase):
         self.run_app(None)
         self.assertIn("Hevy/PPL: Legs", self.names())
 
+    def test_a_garmin_rate_limit_asking_for_an_hour_is_waited_an_hour_past_the_cap(self) -> None:
+        # TJ, 2026-11-10, #27: the service's wait wins over the 30 minute cap (O-1).
+        limited = fixtures.garmin_error(429, headers={"Retry-After": "3600"})
+        calls_at_the_hour: list[list[str]] = []
+
+        def an_hour_on() -> None:
+            calls_at_the_hour.append(list(self.garmin_api.calls))
+
+        with self.assertLogs(LOGGER, "ERROR") as logs:
+            self.assertEqual(self.run_app(self.break_garmin(limited), *[None] * 59, an_hour_on), 0)
+        self.assertIn("Garmin is rate limiting the app and said how long to wait", logs.output[0])
+        self.assertIn("Trying again in 60 min.", logs.output[0])
+        self.assertEqual(calls_at_the_hour, [["upload_workout"]])
+        self.assertIn("Hevy/PPL: Legs", self.names())
+
+    def test_a_hevy_rate_limit_asking_for_two_minutes_leaves_hevy_alone_that_long(self) -> None:
+        def limited() -> None:
+            self.hevy_api.fail(fixtures.rate_limited("120"))
+            self.hevy_api.requests.clear()
+
+        reads: list[int] = []
+
+        def note() -> None:
+            reads.append(len(self.hevy_api.requests))
+
+        with self.assertLogs(LOGGER, "ERROR") as logs:
+            self.assertEqual(self.run_app(limited, note, note), 0)
+        self.assertIn("Hevy is rate limiting the app and said how long to wait", logs.output[0])
+        self.assertIn("Trying again in 2 min.", logs.output[0])
+        # The 429 a minute after startup, nothing a minute later, and Hevy read again two minutes on.
+        self.assertEqual(reads, [1, 1])
+        self.assertGreater(len(self.hevy_api.requests), 1)
+
+    def test_a_rate_limit_at_startup_is_waited_as_long_as_it_asks(self) -> None:
+        self.hevy_api.fail(fixtures.rate_limited("30"))
+        with self.assertLogs(LOGGER, "ERROR") as logs:
+            self.assertEqual(self.run_app(HEVY_POLL_INTERVAL_SECONDS="10"), 0)
+        self.assertIn("Trying again in 30 s.", logs.output[0])
+        self.assertEqual(self.waits, [30])
+
     def test_a_token_garmin_rejects_while_running_exits_one_with_the_fix(self) -> None:
         # O-1: exit at once, as at startup, so Kubernetes and Docker show the app as failing.
         with self.assertLogs(LOGGER, "ERROR") as logs:
@@ -514,6 +554,19 @@ class BackoffTest(unittest.TestCase):
         self.backoff.succeeded()
         self.backoff.failed(errors.Unavailable())
         self.assertEqual(self.backoff.failed(errors.RateLimited()), 900)
+
+    def test_a_rate_limit_that_says_how_long_is_waited_that_long_even_past_thirty_minutes(self) -> None:
+        # TJ, 2026-11-10, #27: the service's wait wins over the app's own, shorter or longer.
+        self.assertEqual(self.backoff.failed(errors.RateLimited(retry_after=120)), 120)
+        self.assertEqual(self.backoff.failed(errors.RateLimited(retry_after=3600)), 3600)
+        self.now = 3599
+        self.assertFalse(self.backoff.ready())
+        self.now = 3600
+        self.assertTrue(self.backoff.ready())
+
+    def test_a_rate_limit_asking_for_less_than_the_shortest_wait_gets_the_shortest(self) -> None:
+        backoff = app.Backoff(lambda: self.now, shortest=45)
+        self.assertEqual(backoff.failed(errors.RateLimited(retry_after=0)), 45)
 
 
 class MainTest(unittest.TestCase):

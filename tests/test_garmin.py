@@ -151,6 +151,29 @@ class ErrorTest(GarminCase):
                     self.garmin.create({})
                 self.assertIs(type(caught.exception), expected)
 
+    def test_a_rate_limit_carries_the_wait_garmin_asked_for_on_a_read_and_on_a_write(self) -> None:
+        # python-garminconnect 0.3.20 puts the reply on the cause of a read's 429, and on a write's own error.
+        self.api.fail("get_user_profile", fixtures.garmin_read_rate_limited({"Retry-After": "3600"}))
+        with self.assertRaises(errors.RateLimited) as read:
+            self.garmin.measurement_system()
+        self.api.fail("upload_workout", fixtures.garmin_error(429, headers={"Retry-After": "120"}))
+        with self.assertRaises(errors.RateLimited) as write:
+            self.garmin.create({})
+        self.assertEqual((read.exception.retry_after, write.exception.retry_after), (3600, 120))
+
+    def test_a_rate_limit_with_no_reply_or_no_wait_carries_none(self) -> None:
+        cases: list[BaseException] = [
+            garminconnect.GarminConnectTooManyRequestsError("DI token exchange rate limited"),
+            fixtures.garmin_read_rate_limited(),
+            fixtures.garmin_error(429),
+        ]
+        for raised in cases:
+            with self.subTest(raised=raised):
+                self.api.fail("upload_workout", raised)
+                with self.assertRaises(errors.RateLimited) as caught:
+                    self.garmin.create({})
+                self.assertIsNone(caught.exception.retry_after)
+
     def test_garmins_reason_for_refusing_a_workout_is_kept(self) -> None:
         self.api.fail("upload_workout", fixtures.garmin_error(400, "Invalid workout"))
         with self.assertRaisesRegex(errors.Refused, "API Error 400 - Invalid workout"):

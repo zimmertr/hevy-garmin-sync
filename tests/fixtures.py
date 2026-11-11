@@ -8,12 +8,13 @@ service fails.
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 import garminconnect
+import requests
+from requests.structures import CaseInsensitiveDict
 
 from hevy_garmin_sync.exercises import ExerciseMap, GarminExercise
 
@@ -30,10 +31,25 @@ PROGRAM_WEEK_8 = datetime(2026, 11, 6, 18, 0, tzinfo=ZONE)
 GARMIN_TOKENS = json.dumps({"di_token": "access-1", "di_refresh_token": "refresh-1", "di_client_id": "client"})
 
 
-def garmin_error(status: int, detail: str = "") -> garminconnect.GarminConnectConnectionError:
-    """What python-garminconnect raises for an HTTP error: the status is on `.response`."""
+def garmin_error(
+    status: int, detail: str = "", headers: dict[str, str] | None = None
+) -> garminconnect.GarminConnectConnectionError:
+    """What python-garminconnect 0.3.20 raises for an HTTP error: the `requests` reply is on `.response`.
+
+    A real `requests.Response`, because one with a 4xx status is falsy.
+    """
     error = garminconnect.GarminConnectConnectionError(f"API Error {status}" + (f" - {detail}" if detail else ""))
-    error.response = SimpleNamespace(status_code=status)
+    reply = requests.Response()
+    reply.status_code = status
+    reply.headers.update(headers or {})
+    error.response = reply
+    return error
+
+
+def garmin_read_rate_limited(headers: dict[str, str] | None = None) -> garminconnect.GarminConnectTooManyRequestsError:
+    """What the library raises for a 429 on a read: its own error, raised from the one that holds the reply."""
+    error = garminconnect.GarminConnectTooManyRequestsError("Rate limit exceeded: API Error 429")
+    error.__cause__ = garmin_error(429, headers=headers)
     return error
 
 
@@ -189,15 +205,24 @@ class FakeClock:
 
 
 class FakeResponse:
-    def __init__(self, status: int, body: Any) -> None:
+    def __init__(self, status: int, body: Any, headers: dict[str, str] | None = None) -> None:
         self.status_code = status
         self._body = body
         self.text = body if isinstance(body, str) else json.dumps(body)
+        self.headers = CaseInsensitiveDict(headers or {})
 
     def json(self) -> Any:
         if isinstance(self._body, str):
             raise ValueError("not JSON")
         return self._body
+
+
+def rate_limited(retry_after: str) -> FakeResponse:
+    """A Hevy 429 that says how long to wait, for `fail`."""
+    return FakeResponse(429, {"error": "made up"}, {"Retry-After": retry_after})
+
+
+Scripted = BaseException | int | str | FakeResponse | None
 
 
 def hevy_folder(folder_id: int, title: str) -> dict[str, Any]:
@@ -271,11 +296,11 @@ class FakeHevyApi:
         self.requests: list[tuple[str, dict[str, Any]]] = []
         self.headers: list[dict[str, str]] = []
         self.timeouts: list[float | None] = []
-        self._failures: list[BaseException | int | str | None] = []
+        self._failures: list[Scripted] = []
 
-    def fail(self, *failures: BaseException | int | str | None) -> None:
+    def fail(self, *failures: Scripted) -> None:
         """Script the next requests, one each: an exception to raise, a status to answer, a body that is
-        not JSON, or None to answer normally."""
+        not JSON, a whole reply, or None to answer normally."""
         self._failures.extend(failures)
 
     def get(
@@ -294,6 +319,8 @@ class FakeHevyApi:
             failure = self._failures.pop(0)
             if isinstance(failure, BaseException):
                 raise failure
+            if isinstance(failure, FakeResponse):
+                return failure
             if isinstance(failure, str):
                 return FakeResponse(200, failure)
             if failure is not None:
@@ -450,9 +477,9 @@ class FakeHevyPrivateApi:
         self.requests: list[tuple[str, dict[str, Any]]] = []
         self.headers: list[dict[str, str]] = []
         self.timeouts: list[float | None] = []
-        self._failures: list[BaseException | int | str | None] = []
+        self._failures: list[Scripted] = []
 
-    def fail(self, *failures: BaseException | int | str | None) -> None:
+    def fail(self, *failures: Scripted) -> None:
         """Script the next requests, one each, as `FakeHevyApi.fail` does."""
         self._failures.extend(failures)
 
@@ -469,6 +496,8 @@ class FakeHevyPrivateApi:
             failure = self._failures.pop(0)
             if isinstance(failure, BaseException):
                 raise failure
+            if isinstance(failure, FakeResponse):
+                return failure
             if isinstance(failure, str):
                 return FakeResponse(200, failure)
             if failure is not None:

@@ -12,7 +12,7 @@ from typing import Any
 import requests
 
 from . import __version__
-from .errors import NotFound, RateLimited, Refused, Rejected, ServiceError, Unavailable
+from .errors import NotFound, RateLimited, Refused, Rejected, ServiceError, Unavailable, retry_after
 
 BASE = "https://api.hevyapp.com/v1"
 TIMEOUT_SECONDS = 30  # O-1a
@@ -40,7 +40,10 @@ def get_json(send: Callable[[], requests.Response]) -> Any:
         # Never the exception's text: it can carry the whole URL.
         raise Unavailable(type(e).__name__) from e
     if reply.status_code >= 400:
-        raise by_status(reply.status_code, f"HTTP {reply.status_code}: {reply.text[:200]}")
+        error = by_status(reply.status_code, f"HTTP {reply.status_code}: {reply.text[:200]}")
+        if isinstance(error, RateLimited):
+            error.retry_after = retry_after(reply)  # O-1, #27
+        raise error
     try:
         return reply.json()
     except ValueError as e:

@@ -57,6 +57,20 @@ class HevyTest(unittest.TestCase):
                     self.hevy.folders()
                 self.assertIs(type(caught.exception), expected)
 
+    def test_a_rate_limit_carries_the_wait_hevy_asked_for(self) -> None:
+        self.api.fail(fixtures.rate_limited("120"))
+        with self.assertRaises(errors.RateLimited) as caught:
+            self.hevy.folders()
+        self.assertEqual(caught.exception.retry_after, 120)
+
+    def test_a_rate_limit_with_no_wait_or_one_that_cant_be_read_carries_none(self) -> None:
+        for failure in (429, fixtures.rate_limited("in a while")):
+            with self.subTest(failure=failure):
+                self.api.fail(failure)
+                with self.assertRaises(errors.RateLimited) as caught:
+                    self.hevy.folders()
+                self.assertIsNone(caught.exception.retry_after)
+
     def test_a_network_error_never_puts_the_url_in_the_message(self) -> None:
         self.api.fail(requests.ConnectionError("https://api.hevyapp.com/v1/routines?secret=1"))
         with self.assertRaises(errors.Unavailable) as caught:

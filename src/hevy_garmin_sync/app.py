@@ -40,16 +40,19 @@ class Backoff:
     """How long to leave one service alone after it fails (O-1).
 
     One minute, doubling, at most thirty; a rate limit starts at
-    `rate_limited` seconds. Each service has its own, so Hevy is still polled
-    while Garmin is down.
+    `rate_limited` seconds. A rate limit that says how long to wait is waited
+    that long instead, even past thirty minutes, but never less than
+    `shortest` (TJ, 2026-11-10, #27). Each service has its own, so Hevy is
+    still polled while Garmin is down.
     """
 
     FIRST = 60.0
     LIMIT = 1800.0
 
-    def __init__(self, clock: Callable[[], float], rate_limited: float = FIRST) -> None:
+    def __init__(self, clock: Callable[[], float], rate_limited: float = FIRST, shortest: float = FIRST) -> None:
         self._clock = clock
         self._rate_limited = rate_limited
+        self._shortest = shortest  # the poll interval, so a `Retry-After: 0` can't become a burst of calls
         self._delay = 0.0
         self._until = float("-inf")
 
@@ -61,18 +64,28 @@ class Backoff:
         if isinstance(error, RateLimited):
             delay = max(delay, self._rate_limited)
         self._delay = min(delay, self.LIMIT)
-        self._until = self._clock() + self._delay
-        return self._delay
+        wait = self._delay
+        if isinstance(error, RateLimited) and error.retry_after is not None:
+            wait = max(error.retry_after, self._shortest)
+        self._until = self._clock() + wait
+        return wait
 
     def succeeded(self) -> None:
         self._delay = 0.0
         self._until = float("-inf")
 
 
+def _for(seconds: float) -> str:
+    """A wait for the log: whole minutes, or seconds under one, so a short wait never reads as 0 min."""
+    return f"{seconds / 60:.0f} min" if seconds >= 60 else f"{seconds:.0f} s"
+
+
 def _problem(service: str, fix: str, error: ServiceError) -> str:
     """What failed and how to fix it, for the log (O-1)."""
     if isinstance(error, Rejected):
         return f"{service} rejected the app's credentials; {fix}"
+    if isinstance(error, RateLimited) and error.retry_after is not None:
+        return f"{service} is rate limiting the app and said how long to wait; nothing to do but wait"
     if isinstance(error, RateLimited):
         return f"{service} is rate limiting the app; nothing to do but wait"
     if isinstance(error, Refused):
@@ -103,9 +116,9 @@ class App:
         self._routines = Routines(hevy, config.include_folders, exercises)
         self._trainer = Trainer(hevy_private, hevy, exercises, self._now) if hevy_private else None
         self._sync = Sync(garmin, config.scheduled, self._now)
-        self._hevy_backoff = Backoff(clock)
-        self._trainer_backoff = Backoff(clock)
-        self._garmin_backoff = Backoff(clock, rate_limited=900.0)
+        self._hevy_backoff = Backoff(clock, shortest=config.poll_seconds)
+        self._trainer_backoff = Backoff(clock, shortest=config.poll_seconds)
+        self._garmin_backoff = Backoff(clock, rate_limited=900.0, shortest=config.poll_seconds)
         self._plans: list[Plans] | None = None
         # Until Hevy Trainer has answered once, its workouts in Garmin are left as they are.
         self._trainer_plans = Plans(TRAINER, (), hold=True)
@@ -143,7 +156,7 @@ class App:
                 raise ConfigError(_problem(service, fix, e)) from e
             except ServiceError as e:
                 delay = backoff.failed(e)
-                log.error("%s. Trying again in %d min.", _problem(service, fix, e), delay / 60)
+                log.error("%s. Trying again in %s.", _problem(service, fix, e), _for(delay))
                 if self._wait(delay):
                     raise Stopped from None
 
@@ -183,13 +196,13 @@ class App:
                 except ServiceError as e:
                     full = True  # whatever was half done is finished by a full run (O-1, O-3a)
                     delay = self._garmin_backoff.failed(e)
-                    log.error("%s. Trying again in %d min.", _problem("Garmin", LOGIN_FIX, e), delay / 60)
+                    log.error("%s. Trying again in %s.", _problem("Garmin", LOGIN_FIX, e), _for(delay))
                 except Stopped:
                     raise
                 except Exception as e:  # noqa: BLE001 a bug must not become a restart loop that hammers Garmin
                     full = True
                     delay = self._garmin_backoff.failed(e)
-                    log.exception("Unexpected error while syncing. Trying again in %d min.", delay / 60)
+                    log.exception("Unexpected error while syncing. Trying again in %s.", _for(delay))
                 else:
                     self._garmin_backoff.succeeded()
                     if full or counts.any():
@@ -219,11 +232,11 @@ class App:
             raise ConfigError(_problem("Hevy", KEY_FIX, e)) from e  # O-1, as at startup
         except ServiceError as e:
             delay = self._hevy_backoff.failed(e)
-            log.error("%s. Trying again in %d min.", _problem("Hevy", KEY_FIX, e), delay / 60)
+            log.error("%s. Trying again in %s.", _problem("Hevy", KEY_FIX, e), _for(delay))
             return None
         except Exception as e:  # noqa: BLE001 a reply in a shape the app didn't expect must not end the process
             delay = self._hevy_backoff.failed(e)
-            log.exception("Unexpected error while reading Hevy. Trying again in %d min.", delay / 60)
+            log.exception("Unexpected error while reading Hevy. Trying again in %s.", _for(delay))
             return None
         self._hevy_backoff.succeeded()
         log.debug("Hevy poll: %d calls, %d routines", self._hevy.calls - calls, len(routines.workouts))
@@ -250,10 +263,10 @@ class App:
             raise ConfigError(_problem("Hevy Trainer", SESSION_FIX, e)) from e
         except ServiceError as e:
             delay = self._trainer_backoff.failed(e)
-            log.error("%s. Trying again in %d min.", _problem("Hevy Trainer", SESSION_FIX, e), delay / 60)
+            log.error("%s. Trying again in %s.", _problem("Hevy Trainer", SESSION_FIX, e), _for(delay))
         except Exception as e:  # noqa: BLE001 a reply in a shape the app didn't expect must not end the process
             delay = self._trainer_backoff.failed(e)
-            log.exception("Unexpected error while reading Hevy Trainer. Trying again in %d min.", delay / 60)
+            log.exception("Unexpected error while reading Hevy Trainer. Trying again in %s.", _for(delay))
         else:
             self._trainer_backoff.succeeded()
             log.debug(

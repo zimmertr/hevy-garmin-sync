@@ -139,6 +139,13 @@ class RequestTest(PrivateCase):
                 with self.assertRaises(expected):
                     self.client().user_preferences()
 
+    def test_a_rate_limit_carries_the_wait_hevy_asked_for(self) -> None:
+        # The private client shares get_json, so Hevy Trainer honours Retry-After too (O-1, #27).
+        self.api.fail(fixtures.rate_limited("120"))
+        with self.assertRaises(errors.RateLimited) as caught:
+            self.client().user_preferences()
+        self.assertEqual(caught.exception.retry_after, 120)
+
 
 class RefreshTest(PrivateCase):
     def test_a_session_that_has_not_expired_is_used_as_it_is(self) -> None:
