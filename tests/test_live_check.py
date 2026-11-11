@@ -184,9 +184,10 @@ class RecordTest(LiveCheckCase):
         self.assertEqual(
             lines,
             [
-                # Garmin stored this pair with an empty exercise name on 2026-11-10, and the fake does too.
+                # Garmin stored these two pairs with an empty exercise name, on 2026-11-10 and 2026-11-11, and
+                # the fake does too.
                 "Set 1: sent HYPEREXTENSION / HYPEREXTENSION, Garmin stored HYPEREXTENSION / ",
-                "Set 2: sent CURL / CURL, Garmin stored CURL / CURL",
+                "Set 2: sent CURL / CURL, Garmin stored CURL / ",
                 "Set 3: sent CRUNCH / CRUNCH, Garmin stored CRUNCH / CRUNCH",
                 "Set 4: sent SQUAT / SQUAT, Garmin stored SQUAT / SQUAT",
             ],

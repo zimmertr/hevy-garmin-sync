@@ -4,7 +4,8 @@ The fakes answer in the shapes Hevy and Garmin answer in, with every name, id
 and token made up (spec D-10), and each can be told to fail the way the real
 service fails. Every reply follows the shapes in tests/data/recorded_shapes.json,
 which tests/test_recorded_shapes.py holds them to: Garmin's and Hevy Trainer's
-recorded on 2026-11-10, Hevy's public API's on 2026-11-11.
+recorded on 2026-11-10, Hevy's public API's on 2026-11-11, and on 2026-11-11 too
+a stored repeat group, a row of the unit list and `user_key_values`.
 """
 
 import io
@@ -176,8 +177,8 @@ def garmin_settings(measurement_system: str | None = "statute_us") -> dict[str, 
     }
 
 
-# What Garmin adds to a workout body it stores, at each level. A repeat group's stored shape is not recorded,
-# so a group is kept as sent.
+# What Garmin adds to a workout body it stores, at each level. A repeat group stays a group, its steps inside
+# it (recorded 2026-11-11).
 _GARMIN_WORKOUT: dict[str, Any] = dict.fromkeys(
     (
         "atpPlanId",
@@ -259,6 +260,7 @@ _GARMIN_STEP: dict[str, Any] = dict.fromkeys(
     "equipmentType": {"equipmentTypeId": 0, "equipmentTypeKey": None, "displayOrder": 0},
     "strokeType": {"strokeTypeId": 0, "strokeTypeKey": None, "displayOrder": 0},
 }
+_GARMIN_GROUP: dict[str, Any] = dict.fromkeys(("endConditionCompare", "preferredEndConditionUnit"))
 _GARMIN_LIST_ITEM: dict[str, Any] = dict.fromkeys(
     (
         "atpPlanId",
@@ -332,11 +334,13 @@ class FakeGarminApi:
         self.calls: list[str] = []
         self.signed_in = False
         self.bare_schedule_reply = False
-        # (category, exercise) sent -> the exercise Garmin stores instead. On 2026-11-10 it stored these two
-        # with an empty exercise name, and every other exercise sent as it was (#22).
+        # (category, exercise) sent -> the exercise Garmin stores instead. It stored these with an empty
+        # exercise name, the first two on 2026-11-10 and `CURL` on 2026-11-11, and every other exercise sent
+        # as it was (#22).
         self.renamed: dict[tuple[str, str], str] = {
             ("HYPEREXTENSION", "HYPEREXTENSION"): "",
             ("BATTLE_ROPE", "BATTLE_ROPE"): "",
+            ("CURL", "CURL"): "",
         }
         # A workout of more steps than this is refused with `too_many_steps`, should Garmin cap them.
         self.max_steps: int | None = None
@@ -415,7 +419,8 @@ class FakeGarminApi:
             kept: list[dict[str, Any]] = []
             for step in steps:
                 if "workoutSteps" in step:
-                    kept.append(step | {"stepId": next(step_ids), "workoutSteps": stored_steps(step["workoutSteps"])})
+                    group = _filled(_GARMIN_GROUP, step) | {"stepId": next(step_ids)}
+                    kept.append(group | {"workoutSteps": stored_steps(step["workoutSteps"])})
                     continue
                 step.pop("stepName", None)
                 pair = (step.get("category"), step.get("exerciseName"))
@@ -768,6 +773,11 @@ def trainer_program(templates: list[dict[str, Any]], **fields: Any) -> dict[str,
     } | fields
 
 
+def hevy_unit_row(template_id: str, unit: str) -> dict[str, Any]:
+    """An exercise logged in `unit` ("kg" or "lbs"): a row of `/exercise_template_units`, as sent on 2026-11-11."""
+    return {"id": 1, "exercise_template_id": template_id, "weight_unit": unit}
+
+
 def logged_set(pounds: float | None, reps: int | None, indicator: str = "normal") -> dict[str, Any]:
     """One set of a logged workout as the private API returns it: its type is its `indicator`."""
     return {
@@ -955,9 +965,11 @@ class FakeHevyPrivateApi:
             "injuries": [],
             "updated_at": "2026-01-15T18:00:00Z",
         }
+        # An account that logs no exercise in the other unit; `hevy_unit_row` builds a row for one that does.
         self.units: Any = []
-        # Hevy's per-user key and value store; the live check reads it, the app does not. Shape not seen yet.
-        self.key_values: Any = {}
+        # Hevy's per-user key and value store; the live check reads it, the app does not. On 2026-11-11 it was a
+        # dict of ten interface settings, each a str or a bool.
+        self.key_values: Any = {"TimerSound": "made up", "DisableSuggestedUsers": False}
         self.program: dict[str, Any] | None = None
         self.workouts: list[dict[str, Any]] = []
         self.requests: list[tuple[str, dict[str, Any]]] = []
