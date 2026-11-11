@@ -95,6 +95,8 @@ class FakeGarminApi:
         self.calls: list[str] = []
         self.signed_in = False
         self.bare_schedule_reply = False
+        # (category, exercise) sent -> the exercise Garmin stores instead, as it did for two categories on 2026-11-10.
+        self.renamed: dict[tuple[str, str], str] = {}
         self._failures: dict[str, list[BaseException]] = {}
         self._rotate_on: set[str] = set()
         self._next_id = 1000
@@ -146,8 +148,28 @@ class FakeGarminApi:
     def upload_workout(self, body: dict[str, Any]) -> dict[str, Any]:
         self._enter("upload_workout")
         workout_id = self._new_id()
-        self.workouts[workout_id] = body | {"workoutId": workout_id}
+        self.workouts[workout_id] = self._as_stored(body) | {"workoutId": workout_id}
         return self.workouts[workout_id]
+
+    def get_workout_by_id(self, workout_id: int) -> dict[str, Any]:
+        self._enter("get_workout_by_id")
+        if workout_id not in self.workouts:
+            raise garmin_error(404)
+        return self.workouts[workout_id]
+
+    def _as_stored(self, body: dict[str, Any]) -> dict[str, Any]:
+        stored: dict[str, Any] = json.loads(json.dumps(body))
+
+        def walk(steps: list[dict[str, Any]]) -> None:
+            for step in steps:
+                walk(step.get("workoutSteps") or [])
+                sent = (step.get("category"), step.get("exerciseName"))
+                if sent in self.renamed:
+                    step["exerciseName"] = self.renamed[sent]
+
+        for segment in stored.get("workoutSegments") or []:
+            walk(segment.get("workoutSteps") or [])
+        return stored
 
     def update_workout(self, workout_id: int, body: dict[str, Any]) -> dict[str, Any]:
         self._enter("update_workout")

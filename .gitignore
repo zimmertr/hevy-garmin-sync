@@ -221,3 +221,6 @@ __marimo__/
 
 # The app's data folder when it runs outside the image (DATA_DIR, the rotated tokens)
 /data/
+
+# scripts/live_check.py's output, and the Garmin token it keeps until `make live-cleanup`
+/live-check/

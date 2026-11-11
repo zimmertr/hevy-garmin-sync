@@ -17,6 +17,19 @@ CI is the test runner. Branch from the latest `main`, open a draft PR early, pus
 | `make lock` | Not a check: recompiles `requirements.txt` and `requirements-dev.txt` from the `.in` files, hashed. A pin change ships with its lock in the same PR |
 | `make upstream-check` | Not a check: the weekly upstream check ([CICD.md](CICD.md#the-upstream-check)). Reads Garmin's exercise list and Hevy's published API spec and prints what differs from the repo's copies of them. Exits 3 on a difference and 2 when a source can't be read |
 | `make upstream-update` | Not a check: the same, then rewrites the copies that differ |
+| `make live-check` | Not a check: the one run against TJ's own accounts ([below](#the-live-check)) |
+| `make live-cleanup` | Not a check: deletes what `make live-check` made, and its saved Garmin token |
+
+## The live check
+
+`scripts/live_check.py` records the shapes of Hevy's and Garmin's real replies, so the fakes in `tests/fixtures.py` can follow them (spec D-10), and puts check workouts on the watch for #22, #24 and #6. TJ runs it by hand, from a clone, with his OK each time. CI never does.
+
+1. `make live-check`. It asks for the Hevy API key, then for a Hevy `auth2.0-token` cookie copied from a private window (Enter skips Hevy Trainer), unless `HEVY_API_KEY` and `HEVY_SESSION` are set. Then it asks for the Garmin email, password and 2FA code, once: one Garmin sign-in, its own session, never the pod's token.
+2. It reads Hevy, makes seven Garmin workouts (`HGS check names` and `HGS check 1` to `HGS check 6`), puts them on today and sends them to the watch. It prints the exercise sent and the one Garmin stored for each step of `HGS check names`, then everything it recorded.
+3. Everything lands in `live-check/` in the clone, which git and Docker builds ignore: `recorded.json` (shapes and Garmin's exercise keys, no values), `created.json` (the ids of the seven workouts) and the Garmin token. The token is never printed.
+4. Look at the watch, then `make live-cleanup`. It removes the seven from the calendar, deletes them and the saved token, and touches nothing else. Running it twice is safe.
+
+If `make live-check` stops partway, it says how many workouts it made; `make live-cleanup` removes them. The script's docstring lists what it will never do.
 
 ## Tests
 
