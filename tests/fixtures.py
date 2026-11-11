@@ -365,6 +365,8 @@ def trainer_program(templates: list[dict[str, Any]], **fields: Any) -> dict[str,
         "created_at": PROGRAM_START.astimezone(UTC).isoformat().replace("+00:00", "Z"),
         "current_week": 5,  # not the week the Hevy app shows; the app counts from `created_at`
         "deloads_enabled": False,
+        # The workout the Hevy app would start next, counted in `index` order (spec F-31).
+        "next_workout_index": 0,
         "templates": [t | {"index": i} for i, t in enumerate(templates)],
     } | fields
 
