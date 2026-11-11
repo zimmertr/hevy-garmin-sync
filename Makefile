@@ -10,7 +10,7 @@ IMAGE        := hevy-garmin-sync:dev
 RUN          := docker run --rm -v "$(CURDIR)":/repo -w /repo
 DEV          := pip install -q --root-user-action=ignore --require-hashes -r requirements-dev.txt
 
-.PHONY: test test-one lint typecheck lint-docker chart build scan lock
+.PHONY: test test-one lint typecheck lint-docker chart build scan lock upstream-check upstream-update
 
 # The suite under coverage, with its line and branch report, as the test job
 # runs it.
@@ -65,3 +65,13 @@ lock:
 	$(RUN) $(PYTHON_IMAGE) sh -c "pip install -q --root-user-action=ignore 'pip<26' pip-tools==7.5.3 && \
 	  pip-compile -q --generate-hashes --allow-unsafe --strip-extras --output-file=requirements.txt requirements.in && \
 	  pip-compile -q --generate-hashes --allow-unsafe --strip-extras --output-file=requirements-dev.txt requirements-dev.in"
+
+# Not checks: the weekly upstream-check.yml run, here. Both fetch Garmin's
+# exercise list and Hevy's published API spec, which need no sign-in, and
+# compare them with the copies in tests/data. The first exits 3 on a
+# difference and 2 when a source can't be read; the second rewrites the copies.
+upstream-check:
+	$(RUN) $(PYTHON_IMAGE) python scripts/check_upstream.py
+
+upstream-update:
+	$(RUN) $(PYTHON_IMAGE) python scripts/check_upstream.py --write

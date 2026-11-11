@@ -1,0 +1,151 @@
+name: Upstream Check
+
+# The tests check every exercise map row against tests/data/garmin_exercises.json
+# and read Hevy's enums from tests/data/hevy_api.json, so a change upstream that
+# nobody copied still passes CI. Every week this compares both copies with their
+# source (scripts/check_upstream.py). On a difference it opens one issue, or
+# comments on the one still open, and opens or updates one PR that rewrites the
+# copies, so the PR's tests show any map row the change broke. A source it can't
+# read fails the run, and GitHub emails. Not a required check. #26, record 0010.
+#
+# No yggdrasil module compares a repo's copies with an upstream source, so this
+# lives here (record 0002).
+on:
+  schedule:
+    - cron: '37 15 * * 1' # Mondays 15:37 UTC, off the top of the hour, when GitHub sheds cron load
+  workflow_dispatch:
+
+# Two runs at once could each find no open issue and open one each.
+concurrency:
+  group: upstream-check
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  check:
+    name: Compare
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # the checkout
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+      report: ${{ steps.compare.outputs.report }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      # Exit 3 is a difference, handed to the issue and PR jobs. Anything else
+      # but 0 fails here: 2 is a source that can't be read, 1 a crash.
+      - id: compare
+        run: |
+          code=0
+          python scripts/check_upstream.py --report "$RUNNER_TEMP/upstream.md" || code=$?
+          if [ "$code" -ne 0 ] && [ "$code" -ne 3 ]; then
+            exit "$code"
+          fi
+          cat "$RUNNER_TEMP/upstream.md" >> "$GITHUB_STEP_SUMMARY"
+          changed=false
+          if [ "$code" -eq 3 ]; then
+            changed=true
+          fi
+          # A random delimiter, since the report holds text from upstream.
+          delimiter="REPORT_$(openssl rand -hex 16)"
+          {
+            echo "changed=$changed"
+            echo "report<<$delimiter"
+            cat "$RUNNER_TEMP/upstream.md"
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+
+  # The issue is found again by its fixed title, so a difference that stays
+  # for weeks is one issue with a comment from each run.
+  issue:
+    name: Issue
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write # open the issue, or comment on the open one
+    outputs:
+      number: ${{ steps.issue.outputs.number }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TITLE: Garmin's exercise list or Hevy's API changed
+      REPORT: ${{ needs.check.outputs.report }}
+      RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - id: issue
+        run: |
+          body="$RUNNER_TEMP/body.md"
+          {
+            echo "The weekly upstream check found a source that no longer matches its copy in \`tests/data\`: $RUN"
+            echo
+            printf '%s\n' "$REPORT"
+            echo "The same run opens or updates a PR from the \`chore/upstream-copies\` branch that rewrites the copies. Its tests show any exercise map row the change broke."
+          } > "$body"
+          number=$(gh issue list --state open --limit 500 --json number,title --jq 'map(select(.title == env.TITLE)) | first | .number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file "$body"
+          else
+            url=$(gh issue create --title "$TITLE" --label P2 --label enhancement --label ci --body-file "$body")
+            number="${url##*/}"
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+  # create-pull-request keeps one PR on one fixed branch: it opens the PR, or
+  # force-pushes the new copies to the one already open. A failure here fails
+  # the run and leaves the issue open.
+  pr:
+    name: PR
+    needs: [check, issue]
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # the checkout; the push and the PR use GH_PAT
+    env:
+      TITLE: "test(upstream): update the copies of Garmin's exercise list and Hevy's API"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      # Read again rather than handed over from the check job, so the PR
+      # holds the sources as they are now. A source that can't be read this
+      # time exits 2 and fails the job.
+      - run: python scripts/check_upstream.py --write
+      # GH_PAT, not GITHUB_TOKEN: a PR that GITHUB_TOKEN opens starts no
+      # workflows, so its required checks would never report. zizmor would
+      # have `gh pr create` instead, which does only the last of the branch,
+      # commit, push and PR (yggdrasil record 0033).
+      - id: pr  # zizmor: ignore[superfluous-actions]
+        uses: peter-evans/create-pull-request@15733dbdfeedb4f7fdb73d13c6f5ac83b710fab8 # v8.1.2
+        with:
+          token: ${{ secrets.GH_PAT }}
+          branch: chore/upstream-copies
+          add-paths: |
+            tests/data/garmin_exercises.json
+            tests/data/hevy_api.json
+          commit-message: ${{ env.TITLE }}
+          title: ${{ env.TITLE }}
+          body: |
+            The weekly upstream check rewrote the copies in `tests/data`: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            ${{ needs.check.outputs.report }}
+            Before merging:
+
+            - Fix any exercise map row the tests flag, in `src/hevy_garmin_sync/data/exercise_map.csv` or `custom_exercise_map.csv` (spec F-51).
+            - Add the change, dated, to `docs/DATA.md`.
+
+            The next weekly run force-pushes this branch while the difference stays, so a commit added here by hand is lost unless the PR merges first.
+
+            Closes #${{ needs.issue.outputs.number }}

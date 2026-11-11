@@ -25,6 +25,7 @@ Every call has a 30 second timeout (O-1a) and a `User-Agent` that names the app 
 
 - **Hevy publishes no rate limit** for the public API. Its docs ask that a job running hourly or daily not send its requests at minute :00. The app polls every minute, which that request does not speak to (read 2026-11-05, first recorded in hevy-trainer-sync).
 - **Hevy has one webhook, for saved workouts.** It is set up in the "Webhooks" section of the developer settings page (https://hevy.com/settings?developer): "Subscribe to our webhook and get notified when you save a new workout." Hevy sends a POST with `{"workoutId": "<id>"}` to a URL the user gives, with an authorization header the user gives, and expects a 200 within 5 seconds. The section says nothing about routines. Hevy's published API spec has no webhook path (14 paths), so the page is the only place to set it up (2026-11-10). The app has no receiver: routines have no feed, and a receiver needs a listening port, which spec F-2 rules out.
+- **Hevy's published spec** is not served as a file of its own: it sits inside https://api.hevyapp.com/docs/swagger-ui-init.js, as the `swaggerDoc` object of the script's options. The enums are schemas of their own: `CustomExerciseType` (8 exercise types), `EquipmentCategory` (9), `MuscleGroup` (20) and the `type` of `PostRoutinesRequestSet` (4 set types). `tests/data/hevy_api.json` keeps those and the 14 paths with their methods (2026-11-10, #26).
 - **Routine page size** is at most 10; exercise templates take 100 (Hevy's OpenAPI spec, 2026-11-10).
 - **A routine's superset field** is `superset_id`, and a set has no RPE field (OpenAPI spec, 2026-11-10).
 - **Hevy's exercise list** held 451 built-in exercises on 2026-11-10. The map's ids and titles were checked against it that day: one row was missing (a second `Sled Push` id) and three had no title. Four rows are ids Hevy no longer lists; they stay, since a row nothing asks for costs nothing.
@@ -68,7 +69,7 @@ Garmin's unofficial web API, through [python-garminconnect](https://github.com/c
 - **The settings reply has a `timeZone` field** (`America/Los_Angeles` style), and the workout list carries each workout's `description` (2026-11-10).
 - **A workout updated in place and sent again** is one copy on the watch, with the new name and weights (2026-11-10, spec U-24).
 - **A workout deleted in Garmin Connect stays in the watch's saved list** until it is removed on the watch (2026-11-10, spec F-14).
-- **Garmin's exercise list** is published at https://connect.garmin.com/web-data/exercises/Exercises.json: 47 categories and 1,536 exercises on 2026-11-10. `tests/data/garmin_exercises.json` holds its keys.
+- **Garmin's exercise list** is published at https://connect.garmin.com/web-data/exercises/Exercises.json: 47 categories and 1,536 exercises on 2026-11-10. `tests/data/garmin_exercises.json` holds its keys. The first weekly comparison, on 2026-11-10, found it the same as the copy (#26).
 
 ## Strava
 
