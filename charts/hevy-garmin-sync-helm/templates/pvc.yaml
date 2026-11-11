@@ -3,6 +3,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ include "hgs.claim" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "hgs.labels" . | nindent 4 }}
 spec:

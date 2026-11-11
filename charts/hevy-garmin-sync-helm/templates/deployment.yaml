@@ -2,6 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Release.Name }}
+  # Stated, not left to the installer: kustomize 5.8 no longer adds a namespace to
+  # a chart's resources, and Argo CD refuses one without (seen 2026-11-10).
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "hgs.labels" . | nindent 4 }}
 spec:
