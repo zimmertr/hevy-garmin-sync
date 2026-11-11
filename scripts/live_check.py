@@ -9,7 +9,9 @@ machine.
    (a fresh cookie from a private window, never the pod's), and keeps the shape of each reply.
    The exercise template and its history are read for the first exercise of a routine, else of
    a logged workout. For Hevy Trainer it also keeps `next_workout_index` and the templates'
-   `index` values, which the calendar rule reads (spec F-31).
+   `index` values, which the calendar rule reads (spec F-31), and prints, per template, whether
+   each of its `edits` (an exercise swapped in the Hevy app) is already in its `exercises`, and
+   how many minutes ago the program last changed.
 2. Signs in to Garmin as its own session (`login.sign_in`), then creates `HGS check set`: one set
    of `HYPEREXTENSION` / `HYPEREXTENSION` for 10 reps, a pair Garmin stores with an empty exercise
    name, then three matching sets that become a repeat group, then a two-round superset that
@@ -37,8 +39,9 @@ Safety, enforced in code:
   None), so the running app never claims or deletes them.
 - Prints and saves shapes, never a value: `shape` keeps keys and type names, and replaces any key
   that could itself be a value, such as an id or a date, with `<key>`. The only values out are
-  Garmin's exercise and step type keys, the step counts tried, and the two Trainer index values
-  above. Errors print their type only, but for Garmin refusing the step probe: there the status and
+  Garmin's exercise and step type keys, the step counts tried, the two Trainer index values above,
+  and for Trainer's edits their type word, two yes-or-no answers, exercise counts and minutes.
+  Errors print their type only, but for Garmin refusing the step probe: there the status and
   Garmin's own reason are the answer, and they hold no personal data.
 - Never reads a token or session from DATA_DIR or a cluster. The Garmin token is the one its own
   sign-in returned, kept only in live-check/ (git and Docker builds ignore it), never printed, and
@@ -66,7 +69,7 @@ from hevy_garmin_sync import login, trainer, workout
 from hevy_garmin_sync.errors import ConfigError, Refused, ServiceError, Unavailable
 from hevy_garmin_sync.garmin import TOKENS, Garmin
 from hevy_garmin_sync.hevy import Hevy
-from hevy_garmin_sync.hevy_private import _WORKOUT_PAGE, HevyPrivate, parse_cookie
+from hevy_garmin_sync.hevy_private import _WORKOUT_PAGE, HevyPrivate, parse_cookie, parse_time
 from hevy_garmin_sync.store import Store
 from hevy_garmin_sync.workout import Exercise, Set, Workout
 
@@ -150,8 +153,53 @@ def read_hevy(hevy: Hevy, now: datetime) -> Json:
     return shapes
 
 
-def read_trainer(private: HevyPrivate) -> tuple[Json, Json]:
-    """The shapes of the private replies, and the two index values the calendar rule reads."""
+def trainer_edits(program: Json | None, now: datetime) -> Json:
+    """Whether each template's `edits` are already in its `exercises`, with no id, title or date.
+
+    Per template in `index` order: its exercise count, and for each edit its `type` and whether its
+    `from_` and `to_exercise_template_id` are among the template's exercises. A swap applied to
+    `exercises` has its `to` there and its `from` gone. Beside them, how many whole minutes ago the
+    program's `updated_at` was, to show whether the swap touched the program at all.
+    """
+    templates = sorted((program or {}).get("templates") or [], key=lambda t: t.get("index") or 0)
+    found = []
+    for template in templates:
+        listed = template.get("exercises") or []
+        ids = {e.get("exercise_template_id") for e in listed}
+        edits = []
+        for edit in template.get("edits") or []:
+            kind = edit.get("type")
+            edits.append(
+                {
+                    # Hevy's enum word; anything else shows as its type, in case it is not one.
+                    "type": kind if isinstance(kind, str) and _KEY.fullmatch(kind) else type(kind).__name__,
+                    "from_in_exercises": edit.get("from_exercise_template_id") in ids,
+                    "to_in_exercises": edit.get("to_exercise_template_id") in ids,
+                }
+            )
+        found.append({"exercise_count": len(listed), "edits": edits})
+    updated = parse_time((program or {}).get("updated_at"))
+    minutes = int((now - updated).total_seconds() // 60) if updated else "NoneType"
+    return {"program_updated_minutes_ago": minutes, "templates": found}
+
+
+def edit_lines(edits: Json) -> list[str]:
+    ago = edits["program_updated_minutes_ago"]
+    lines = [f"Program updated {ago} minutes ago" if isinstance(ago, int) else f"Program's updated_at: {ago}"]
+    for number, template in enumerate(edits["templates"], start=1):
+        head = f"Template {number} ({template['exercise_count']} exercises):"
+        if not template["edits"]:
+            lines.append(f"{head} no edits")
+        for edit in template["edits"]:
+            lines.append(
+                f"{head} {edit['type']}, from in exercises {edit['from_in_exercises']}, "
+                f"to in exercises {edit['to_in_exercises']}"
+            )
+    return lines
+
+
+def read_trainer(private: HevyPrivate, now: datetime) -> tuple[Json, Json, Json]:
+    """The shapes of the private replies, the two index values the calendar rule reads, and `trainer_edits`."""
     user = private.user_preferences()
     program = private.program()
     shapes: Json = {
@@ -172,7 +220,7 @@ def read_trainer(private: HevyPrivate) -> tuple[Json, Json]:
         "next_workout_index": index_value((program or {}).get("next_workout_index")),
         "template_index_values": [index_value(t.get("index")) for t in templates],
     }
-    return shapes, order
+    return shapes, order, trainer_edits(program, now)
 
 
 def _body(name: str, steps: Sequence[Exercise], system: str | None) -> Json:
@@ -422,13 +470,20 @@ def read_all_hevy(
         if cookie:
             with tempfile.TemporaryDirectory() as scratch:
                 private = HevyPrivate(parse_cookie(cookie), Store(Path(scratch)), private_session)
-                recorded["hevy_trainer"], recorded["hevy_trainer_order"] = read_trainer(private)
+                recorded["hevy_trainer"], recorded["hevy_trainer_order"], recorded["hevy_trainer_edits"] = (
+                    read_trainer(private, utcnow())
+                )
     except ConfigError as e:
         print(f"{e}. Nothing was made in Garmin.", file=out)  # the app's own words, which hold no value
         return None
     except ServiceError as e:
         print(f"Reading Hevy failed ({type(e).__name__}). Nothing was made in Garmin.", file=out)
         return None
+    if "hevy_trainer_edits" in recorded:
+        print("Hevy Trainer edits, per template in index order (is each edit already in its exercises?):", file=out)
+        for line in edit_lines(recorded["hevy_trainer_edits"]):
+            print(line, file=out)
+        print(file=out)
     return recorded
 
 

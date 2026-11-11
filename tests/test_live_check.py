@@ -4,7 +4,7 @@ import io
 import json
 import tempfile
 import unittest
-from datetime import UTC
+from datetime import UTC, timedelta
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -16,7 +16,15 @@ from hevy_garmin_sync.errors import Refused
 from hevy_garmin_sync.store import Store
 from scripts import live_check as lc
 from tests import fixtures
-from tests.fixtures import hevy_exercise, hevy_folder, hevy_routine, hevy_set, trainer_program, trainer_template
+from tests.fixtures import (
+    hevy_exercise,
+    hevy_folder,
+    hevy_routine,
+    hevy_set,
+    trainer_exercise,
+    trainer_program,
+    trainer_template,
+)
 
 API_KEY = "made-up-key"
 TOKEN = garmin.encode_token(fixtures.GARMIN_TOKENS)
@@ -479,6 +487,67 @@ class RecordHevyTest(LiveCheckCase):
             with self.subTest(secret=secret):
                 self.assertNotIn(secret, out)
                 self.assertNotIn(secret, written)
+
+
+class TrainerEditsTest(LiveCheckCase):
+    def test_each_edit_says_whether_it_is_already_in_its_template_and_nothing_personal_shows(self) -> None:
+        applied = {"type": "swap", "from_exercise_template_id": "T-OLD", "to_exercise_template_id": "T-GOBLET"}
+        pending = {"type": "swap", "from_exercise_template_id": "T-LUNGE", "to_exercise_template_id": "T-NEW"}
+        exercises = [trainer_exercise("T-GOBLET"), trainer_exercise("T-LUNGE")]
+        lower = trainer_template("t-lower", "lower_2x_a", exercises, edits=[applied, pending])
+        upper = trainer_template("t-upper", "upper_2x_a", [trainer_exercise("T-SIDE-BEND")])
+        updated = (fixtures.NOW - timedelta(minutes=12, seconds=30)).astimezone(UTC).isoformat()
+        program = trainer_program([upper, lower], updated_at=updated)
+        program["templates"].reverse()  # the reply's order is not `index` order
+        self.private_api.program = program
+        code, out = self.record_hevy()
+        self.assertEqual(code, 0)
+        saved = json.loads(self.store.read(lc.HEVY_RECORDED) or "{}")
+        self.assertEqual(
+            saved["hevy_trainer_edits"],
+            {
+                "program_updated_minutes_ago": 12,
+                "templates": [
+                    {"exercise_count": 1, "edits": []},
+                    {
+                        "exercise_count": 2,
+                        "edits": [
+                            {"type": "swap", "from_in_exercises": False, "to_in_exercises": True},
+                            {"type": "swap", "from_in_exercises": True, "to_in_exercises": False},
+                        ],
+                    },
+                ],
+            },
+        )
+        self.assertIn(
+            "Hevy Trainer edits, per template in index order (is each edit already in its exercises?):\n"
+            "Program updated 12 minutes ago\n"
+            "Template 1 (1 exercises): no edits\n"
+            "Template 2 (2 exercises): swap, from in exercises False, to in exercises True\n"
+            "Template 2 (2 exercises): swap, from in exercises True, to in exercises False\n",
+            out,
+        )
+        written = self.store.read(lc.HEVY_RECORDED) or ""
+        for secret in ("T-OLD", "T-NEW", "T-GOBLET", "T-LUNGE", "t-lower", updated[:10]):
+            with self.subTest(secret=secret):
+                self.assertNotIn(secret, out)
+                self.assertNotIn(secret, written)
+
+    def test_an_odd_edit_type_shows_as_its_type_and_a_missing_date_says_so(self) -> None:
+        program = {"templates": [{"edits": [{"type": "Swap-1"}, {"type": None}]}]}
+        found = lc.trainer_edits(program, fixtures.NOW)
+        self.assertEqual(found["program_updated_minutes_ago"], "NoneType")
+        self.assertEqual([e["type"] for e in found["templates"][0]["edits"]], ["str", "NoneType"])
+        self.assertEqual(found["templates"][0]["exercise_count"], 0)
+        self.assertEqual(lc.edit_lines(lc.trainer_edits(None, fixtures.NOW)), ["Program's updated_at: NoneType"])
+
+    def test_the_full_run_prints_them_too_and_without_a_cookie_there_are_none(self) -> None:
+        _, out = self.record()
+        self.assertIn("Hevy Trainer edits, per template in index order", out)
+        self.assertIn("hevy_trainer_edits", self.saved())
+        self.answers = [""]
+        _, out = self.record_hevy(env={"HEVY_API_KEY": API_KEY})
+        self.assertNotIn("Hevy Trainer edits", out)
 
 
 class CleanupTest(LiveCheckCase):
