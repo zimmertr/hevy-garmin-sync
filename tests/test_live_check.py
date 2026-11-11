@@ -519,15 +519,17 @@ class NotesTest(LiveCheckCase):
         self.assertIn("1. Curl: 102.5 kg x 12 @ 9.5 / 102.5kg x12 @9.5 / 102.5kg x12 9.5 / 1002.5kg x12 @9.5\n", out)
         self.assertIn("2. Squat: Prev (kg): / 102.5 x 12 @ 9.5 / 1002.5 x 12 @ 9.5 / 1002.5 x12 @9.5\n", out)
         self.assertIn(f"3. Row: {lc.RULER} / kg x reps @ RPE / Prev: kg x reps @ RPE\n", out)
-        self.assertIn("RPE\nGarmin stored every note whole.\n", out)
+        self.assertIn("4. Lunge: 4-6 reps / Prev: / 65lb x6 @7 / 65lb x6 @7.5 / 65lb x5 @8\n", out)
+        self.assertIn("5. Crunch: 4-6 reps / Prev (lb): / 65 x 6 @ 7 / 65 x 6 @ 7.5 / 65 x 5 @ 8\n", out)
+        self.assertIn("@ 8\nGarmin stored every note whole.\n", out)
         self.assertIn("how many digits of the ruler", out)
 
-    def test_each_exercise_is_one_set_with_its_lines_and_no_note_of_the_apps_own(self) -> None:
+    def test_each_exercise_is_one_set_with_its_lines(self) -> None:
         body = lc.notes_body("statute_us")
         steps = body["workoutSegments"][0]["workoutSteps"]
-        self.assertEqual([s["type"] for s in steps], ["ExecutableStepDTO"] * 6)
+        self.assertEqual([s["type"] for s in steps], ["ExecutableStepDTO"] * 10)
         found = list(lc.sets(body))
-        self.assertEqual([s["exerciseName"] for s in found], ["CURL", "SQUAT", "ROW"])
+        self.assertEqual([s["exerciseName"] for s in found], ["CURL", "SQUAT", "ROW", "LUNGE", "CRUNCH"])
         self.assertEqual(
             [s["description"].split("\n") for s in found],
             [
@@ -536,6 +538,9 @@ class NotesTest(LiveCheckCase):
                 # The unit once, in the heading.
                 ["Prev (kg):", "102.5 x 12 @ 9.5", "1002.5 x 12 @ 9.5", "1002.5 x12 @9.5"],
                 ["123456789012345678901234567890", "kg x reps @ RPE", "Prev: kg x reps @ RPE"],
+                # Whole notes, each after the app's own note for a rep range (F-30).
+                ["4-6 reps", "Prev:", "65lb x6 @7", "65lb x6 @7.5", "65lb x5 @8"],
+                ["4-6 reps", "Prev (lb):", "65 x 6 @ 7", "65 x 6 @ 7.5", "65 x 5 @ 8"],
             ],
         )
 

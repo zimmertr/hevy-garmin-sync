@@ -36,10 +36,11 @@ It is safe to run again.
 nothing made anywhere, and not held back by an earlier run that wasn't cleaned up.
 
 `notes` is for #3, last time's numbers in a set's note: one Garmin sign-in and no Hevy read. It
-creates `HGS check notes`, three exercises, to find a way to write one of last time's sets that fits
+creates `HGS check notes`, five exercises, to find a way to write one of last time's sets that fits
 on one line of the watch. The first note writes the widest likely set four ways with its unit on
 every line; the second names the unit once, in a heading, and holds numbers only; the third is a
-ruler of thirty digits and two headings. It reads the workout back and says whether Garmin stored
+ruler of thirty digits and two headings. The last two are whole notes of ordinary numbers, one in
+each form, after the note the app writes today (F-30). It reads the workout back and says whether Garmin stored
 every note whole, then puts it on today and sends it to the watch, so TJ can see which lines stay
 whole there. `cleanup` removes it like the others.
 
@@ -128,6 +129,16 @@ CHECK_NOTES = (
     (
         Exercise("Check", "ROW", "ROW", (_TEN,)),
         f"{RULER}\nkg x reps @ RPE\nPrev: kg x reps @ RPE",
+    ),
+    # Each of the two forms as a whole note of ordinary numbers, after the note the app writes for a rep
+    # range (F-30), to judge how it reads.
+    (
+        Exercise("Check", "LUNGE", "LUNGE", (Set(rep_range=(4, 6)),)),
+        "Prev:\n65lb x6 @7\n65lb x6 @7.5\n65lb x5 @8",
+    ),
+    (
+        Exercise("Check", "CRUNCH", "CRUNCH", (Set(rep_range=(4, 6)),)),
+        "Prev (lb):\n65 x 6 @ 7\n65 x 6 @ 7.5\n65 x 5 @ 8",
     ),
 )
 STEP_SIZES = (250, 100, 50)  # the step probe's sizes, largest first; it stops at the first Garmin takes
@@ -769,8 +780,9 @@ def check_notes(
         print(line, file=out)
     print(
         "\nSync the watch and start it. For each exercise, open the note's own screen during the set and "
-        "photograph it. Which lines stay on one line? In the last note, how many digits of the ruler does the "
-        "first line hold? Then discard the activity and run `make live-cleanup`.",
+        "photograph it. Which lines stay on one line? In the third note, how many digits of the ruler does the "
+        "first line hold? Which of the last two notes reads better? Then discard the activity and run "
+        "`make live-cleanup`.",
         file=out,
     )
     return 0
