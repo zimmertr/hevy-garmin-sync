@@ -19,7 +19,17 @@ from typing import Any
 import garminconnect
 import requests
 
-from .errors import ConfigError, NotFound, RateLimited, Refused, Rejected, ServiceError, Stopped, Unavailable
+from .errors import (
+    ConfigError,
+    NotFound,
+    RateLimited,
+    Refused,
+    Rejected,
+    ServiceError,
+    Stopped,
+    Unavailable,
+    retry_after,
+)
 from .store import Store
 
 log = logging.getLogger(__name__)
@@ -152,11 +162,16 @@ class Garmin:
         try:
             return request()
         except garminconnect.GarminConnectTooManyRequestsError as e:
-            raise RateLimited(str(e)) from e
+            # The library raises a read's 429 from its own error that holds the reply. A 429 on its
+            # token exchange holds none, so the app's own wait applies (O-1, #27).
+            raise RateLimited(str(e), retry_after(getattr(e.__cause__, "response", None))) from e
         except garminconnect.GarminConnectAuthenticationError as e:
             raise Rejected(str(e)) from e
         except garminconnect.GarminConnectConnectionError as e:
-            raise _by_status(getattr(e.response, "status_code", None), str(e)) from e
+            error = _by_status(getattr(e.response, "status_code", None), str(e))
+            if isinstance(error, RateLimited):
+                error.retry_after = retry_after(e.response)  # a write's 429 comes untranslated, reply attached
+            raise error from e
         except requests.RequestException as e:
             # Writes reach `requests` without the library's translation.
             raise Unavailable(type(e).__name__) from e

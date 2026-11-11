@@ -34,3 +34,4 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0008](0008-read-only-root-filesystem-by-default.md) | The container runs with a read-only root filesystem by default, in the chart and in compose.yaml | 2026-11-10 | Accepted |
 | [0009](0009-only-the-next-trainer-workout-on-today.md) | Only the Hevy Trainer workout Hevy says is next is on today, and the calendar follows it within a poll | 2026-11-10 | Accepted |
 | [0010](0010-a-weekly-check-of-the-upstream-copies.md) | A weekly check compares Garmin's exercise list and Hevy's API spec with their copies, and on a difference opens one issue and one PR | 2026-11-10 | Accepted |
+| [0011](0011-retry-refused-workouts-and-honour-retry-after.md) | A refused workout is retried at growing gaps until midnight, then daily, and a rate limit's own wait beats the app's | 2026-11-10 | Accepted |

@@ -4,13 +4,14 @@ A full run reads Garmin's workout list and calendar first, and happens at
 startup, at local midnight, and after Garmin comes back from a failure. Every
 other run works from what the last run left in memory and calls Garmin only for
 what changed in Hevy (F-4a), including a workout that moved on or off today's
-calendar (F-31, #25).
+calendar (F-31, #25), and for a workout Garmin refused once its retry is due
+(F-16, #4).
 """
 
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from . import workout
 from .errors import Refused
@@ -21,6 +22,7 @@ log = logging.getLogger(__name__)
 
 Key = tuple[str, str]  # a workout's kind and its Hevy id
 _CALENDAR_DAYS_BACK = 31  # F-32
+_FIRST_RETRY = timedelta(minutes=5)  # after Garmin refuses a workout, doubling until midnight (F-16, #4)
 
 
 @dataclass(frozen=True)
@@ -62,13 +64,25 @@ class _Known:
 
 
 @dataclass
+class _Refused:
+    """A version of a workout Garmin refused, and when to try it again (F-16)."""
+
+    version: str
+    day: date  # the local day of the last refusal
+    gap: timedelta
+    # The next try between full runs, in UTC so a clock change can't move it. None once
+    # it has been refused across a midnight: from then on only a full run tries it.
+    due: datetime | None
+
+
+@dataclass
 class Sync:
     garmin: Garmin
     scheduled: bool  # ENABLE_SCHEDULED_WORKOUTS (F-30a)
     now: Callable[[], datetime]  # the current time in the user's zone
     _system: str | None = None
     _known: dict[Key, _Known] = field(default_factory=dict)
-    _refused: dict[Key, str] = field(default_factory=dict)  # the version Garmin refused (F-16)
+    _refused: dict[Key, _Refused] = field(default_factory=dict)  # F-16
     _absent: set[Key] = field(default_factory=set)
     _empty: set[Key] = field(default_factory=set)
     _unsent: list[int] = field(default_factory=list)
@@ -87,7 +101,7 @@ class Sync:
         desired = self._desired(plans)
         off_calendar = {(p.kind, source_id) for p in plans for source_id in p.off_calendar}
         for key, plan in desired.items():
-            self._write(key, plan, key in off_calendar, today, counts)
+            self._write(key, plan, key in off_calendar, today, full, counts)
         self._delete_missing(desired, {p.kind for p in plans if p.hold}, counts)
         if full:
             self._reconcile_calendar(today, off_calendar, counts)
@@ -98,8 +112,6 @@ class Sync:
     def _read_garmin(self, counts: Counts) -> None:
         self._system = self.garmin.measurement_system()
         self._known = {}
-        # Whatever Garmin refused gets one more try (F-16).
-        self._refused = {}
         for item in self.garmin.workouts():
             owner = workout.owner(item.get("description"))
             if not owner:
@@ -126,12 +138,20 @@ class Sync:
         self._empty = empty
         return desired
 
-    def _write(self, key: Key, plan: Workout, off_calendar: bool, today: date, counts: Counts) -> None:
+    def _write(self, key: Key, plan: Workout, off_calendar: bool, today: date, full: bool, counts: Counts) -> None:
         body = workout.build(plan, self._system)
         version = workout.version(body)
         known = self._known.get(key)
-        if (known and known.version == version) or self._refused.get(key) == version:
+        if known and known.version == version:
             return
+        refused = self._refused.get(key)
+        if refused and refused.version != version:
+            refused = None  # changed in Hevy, so it is tried at once and its gaps start over
+        if refused:
+            # Only a full run or a retry that is due calls Garmin again, never every poll (F-4a, F-16).
+            if not full and (refused.due is None or self.now() < refused.due):
+                return
+            log.info("Trying %r again, which Garmin refused", plan.name)
         stamped = workout.stamped(body, plan, self.now())
         try:
             if known:
@@ -139,16 +159,17 @@ class Sync:
             else:
                 created = self.garmin.create(stamped)
         except Refused as e:
-            self._refused[key] = version
             counts.failed += 1
+            next_try = self._refuse(key, version, refused, today)
             log.error(
-                "Garmin refused %r (%d steps): %s. It is skipped until the routine changes, the next start, "
-                "or midnight.",
+                "Garmin refused %r (%d steps): %s. It is tried again %s, or as soon as the routine changes.",
                 plan.name,
                 workout.step_count(body),
                 e,
+                next_try,
             )
             return
+        self._refused.pop(key, None)
         if known:
             known.version = version
             counts.updated += 1
@@ -161,6 +182,27 @@ class Sync:
                 self._schedule(created, today, counts)
         self._unsent.append(known.workout_id)
         self._send()
+
+    def _refuse(self, key: Key, version: str, before: _Refused | None, today: date) -> str:
+        """Note that Garmin refused this version, and say when it is tried next (F-16; TJ, 2026-11-10, #4).
+
+        The gaps start at 5 minutes and double until local midnight. The full
+        run at midnight tries it once more, and one refused there too is tried
+        once a day from then on. A full run on the same day (after a Garmin
+        failure) also tries it, and doubles the gap like any other try.
+        """
+        now = self.now()
+        if before is None:
+            refused = _Refused(version, today, _FIRST_RETRY, now.astimezone(UTC) + _FIRST_RETRY)
+        elif before.day < today:
+            refused = _Refused(version, today, before.gap, None)
+        elif before.due is None:
+            refused = before
+        else:
+            refused = _Refused(version, today, before.gap * 2, now.astimezone(UTC) + before.gap * 2)
+        self._refused[key] = refused
+        due = refused.due.astimezone(now.tzinfo) if refused.due else None
+        return f"at {due:%H:%M}" if due and due.date() == today else "at midnight"
 
     def _send(self) -> None:
         """Send every created or changed workout to the watch (F-31a).

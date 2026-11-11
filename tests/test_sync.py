@@ -2,7 +2,7 @@
 
 import tempfile
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -234,15 +234,111 @@ class DeleteTest(SyncCase):
 
 
 class RefusedTest(SyncCase):
-    def refuse(self, method: str = "upload_workout") -> None:
-        self.api.fail(method, fixtures.garmin_error(400, "Too many steps"))
+    def refuse(self, method: str = "upload_workout", times: int = 1) -> None:
+        self.api.fail(method, *[fixtures.garmin_error(400, "Too many steps")] * times)
+
+    def at(self, hour: int, minute: int, days_later: int = 0) -> None:
+        """Move the clock to a local time on the fixture's day, or a later one."""
+        day = fixtures.TODAY + timedelta(days=days_later)
+        self.time = datetime.combine(day, time(hour, minute), tzinfo=fixtures.ZONE)
+
+    def uploads(self) -> int:
+        return self.api.calls.count("upload_workout")
 
     def test_a_refused_workout_is_logged_and_skipped_and_the_rest_sync(self) -> None:
         self.refuse()
         with self.assertLogs("hevy_garmin_sync.sync", "ERROR") as logs:
             counts = self.run_full(self.push, self.pull)
         self.assertIn("Garmin refused 'Hevy: Push' (2 steps): API Error 400 - Too many steps", logs.output[0])
+        self.assertIn("It is tried again at 17:45, or as soon as the routine changes.", logs.output[0])
         self.assertEqual((counts.failed, counts.created, self.names()), (1, 1, ["Hevy: Pull"]))
+
+    def test_one_refused_once_syncs_at_the_retry_five_minutes_later(self) -> None:
+        # F-16, #4: the first gap is 5 minutes, and a poll before it calls Garmin for nothing (F-4a).
+        self.refuse()
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR"):
+            self.run_full(self.push)
+        self.at(17, 44)
+        self.api.calls.clear()
+        self.assertFalse(self.run_poll(self.push).any())
+        self.assertEqual(self.api.calls, [])
+        self.at(17, 45)
+        with self.assertLogs("hevy_garmin_sync.sync", "INFO") as logs:
+            counts = self.run_poll(self.push)
+        self.assertEqual(logs.output, ["INFO:hevy_garmin_sync.sync:Trying 'Hevy: Push' again, which Garmin refused"])
+        self.assertEqual((counts.created, counts.failed, self.names()), (1, 0, ["Hevy: Push"]))
+        self.at(18, 30)
+        self.api.calls.clear()
+        self.run_poll(self.push)
+        self.assertEqual(self.api.calls, [])
+
+    def test_one_always_refused_is_tried_8_more_times_before_midnight_then_once_a_day(self) -> None:
+        self.refuse(times=12)
+        self.at(0, 0)
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR") as logs:
+            self.run_full(self.push)
+            for _ in range(24 * 60 - 1):
+                self.time += timedelta(minutes=1)
+                self.run_poll(self.push)
+        # Gaps of 5, 10, 20 ... 640 minutes: tries at 00:05, 00:15, 00:35, 01:15, 02:35, 05:15, 10:35 and 21:15.
+        self.assertEqual(self.uploads(), 1 + 8)
+        nexts = [line.split("tried again ")[1].split(",")[0] for line in logs.output]
+        self.assertEqual(nexts[:3], ["at 00:05", "at 00:15", "at 00:35"])
+        self.assertEqual(nexts[-2:], ["at 21:15", "at midnight"])
+
+        self.at(0, 0, days_later=1)
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR") as logs:
+            self.run_full(self.push)
+            for _ in range(24 * 60 - 1):
+                self.time += timedelta(minutes=1)
+                self.run_poll(self.push)
+        self.assertEqual(self.uploads(), 1 + 8 + 1)
+        self.assertIn("tried again at midnight", logs.output[0])
+
+        self.at(0, 0, days_later=2)
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR"):
+            self.run_full(self.push)
+        self.assertEqual(self.uploads(), 1 + 8 + 1 + 1)
+
+    def test_a_full_run_on_the_same_day_tries_it_and_keeps_its_gaps(self) -> None:
+        # A full run after a Garmin failure (F-16): one more try, and the gap doubles rather than starting over.
+        self.refuse(times=4)
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR"):
+            self.run_full(self.push)
+        self.at(17, 41)
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR") as logs:
+            self.run_full(self.push)
+        self.assertIn("tried again at 17:51", logs.output[0])
+        self.assertEqual(self.uploads(), 2)
+        # One that already waits for midnight still does after a same-day full run.
+        self.at(0, 0, days_later=1)
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR"):
+            self.run_full(self.push)
+        self.at(9, 0, days_later=1)
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR") as logs:
+            self.run_full(self.push)
+        self.assertIn("tried again at midnight", logs.output[0])
+        self.assertEqual(self.uploads(), 4)
+
+    def test_a_changed_routine_is_tried_at_once_and_its_gaps_start_over(self) -> None:
+        self.refuse(times=3)
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR"):
+            self.run_full(self.push)
+        self.at(17, 45)
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR"):
+            self.run_poll(self.push)
+        self.at(17, 46)
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR") as logs:
+            self.run_poll(routine("r-push", "Hevy: Push", reps=5))
+        self.assertIn("tried again at 17:51", logs.output[0])
+        self.assertEqual(self.uploads(), 3)
+
+    def test_a_restart_forgets_the_refusal_and_tries_it_at_startup(self) -> None:
+        self.refuse()
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR"):
+            self.run_full(self.push)
+        self.sync = self.new_sync()
+        self.assertEqual(self.run_full(self.push).created, 1)
 
     def test_it_is_not_tried_again_on_the_next_poll(self) -> None:
         self.refuse()
