@@ -11,13 +11,15 @@ The rules match Hevy app 3.2.5. Nothing checks for a newer app that changes them
 | Hevy's private API | `GET /hevy_trainer/v3/program` | The program: its `created_at`, `deloads_enabled`, `next_workout_index`, and each template's exercises with `set_count`, `warmup_set_count`, `rep_range` and `rest_seconds`. `next_workout_index` is the workout the Hevy app would start next, counted in the templates' `index` order; only that one goes on today's calendar |
 | Hevy's private API | `GET /v2/user_preferences` | `username`, `weight_unit`, `first_weekday` |
 | Hevy's private API | `GET /hevy_trainer/user_preferences` | `availableWeights`: the dumbbells, bars and plates the user owns |
-| Hevy's private API | `GET /exercise_template_units` | The exercises the user logs in the other unit |
+| Hevy's private API | `GET /exercise_template_units` | The exercises the user logs in the other unit: a row per exercise, with `exercise_template_id` and `weight_unit` |
 | Hevy's private API | `GET /user_workouts_paged` | Logged workouts since the program began, each with its `trainer_workout_template_id` |
 | Hevy's public API | `GET /v1/exercise_templates` | Each exercise's `type` and `equipment`. The equipment matched Hevy Trainer's own value for all 447 exercises compared on 2026-11-10 |
 | Hevy's public API | `GET /v1/exercise_history/{id}` | The last twelve months of one exercise, only for an exercise new to its workout |
 | Hevy's public API | `GET /v1/workouts/events` | Whether a workout was saved, edited or deleted since the last poll |
 
 The program and the events are read on every poll. Everything else is read at startup, at local midnight, and after a workout event.
+
+An exercise swapped in the Hevy app and answered "Replace permanently? Yes" is already in its template's `exercises` the next time the program is read, so it reaches the watch like any other change. A swap answered "No", for that workout only, is kept on the phone until the workout is saved and is in nothing read here, so the watch keeps the old exercise (2026-11-11). Tracked in [issue 44](https://github.com/zimmertr/hevy-garmin-sync/issues/44).
 
 ## The week
 
@@ -141,12 +143,13 @@ An exercise with no previous session in its template (after a rotation, say) sta
 | 2026-11-06, 2026-11-07 | Lying Leg Raise, logged by reps, every set at the top of its range | The next rep range up, 15-20 | The next rung of the ladder |
 | 2026-11-06, 2026-11-07 | Goblet Squat, two warm-ups, last session at 80 lb inside its rep range | 80 lb, warm-ups 30 and 50 lb | 80 lb, warm-ups 30 and 50 lb |
 | 2026-11-10 | The 14 exercises of both workouts of a two-workout program, as the running app worked them out | 12 weights with their warm-ups, one rep range, and one exercise with no weight | The same on all 14. TJ: "These look correct" (#22) |
+| 2026-11-11 | One exercise logged in the other unit, kilograms | 20 kg | 20 kg |
+| 2026-11-11 | One exercise swapped in permanently, weighted bodyweight (`bodyweight_weighted`) with no equipment, never logged in its template | No suggested weight, only the last session's numbers as placeholders | No prescription |
 
 On 2026-11-10 the first run against a real account gave the same weight and warm-ups as hevy-trainer-sync, the tool these rules were first written for, on all 12 weighted exercises of a two-workout program, and the same rep range on the one logged by reps.
 
-Not yet checked against the app: a new exercise's starting weight, a deload week, an account in kilograms, an exercise logged in the other unit, and a barbell exercise.
+Not yet checked against the app: a new exercise's starting weight, a deload week, an account in kilograms, and a barbell exercise.
 
 ## Open points
 
 - **The 3 and 12 month windows** are taken as the last 91 and 365 days. The exact day counts are not confirmed.
-- **The reply of `/exercise_template_units`** was an empty list on 2026-11-10, for an account that logs no exercise in the other unit. What a row looks like has not been seen. The app logs the shape, without values, the first time it reads it. Until a row is confirmed, an exercise falls back to the account's unit.
