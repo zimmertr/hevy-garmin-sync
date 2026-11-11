@@ -460,7 +460,7 @@ Invalid or missing configuration MUST exit non-zero at startup with a message na
 1.  With only `HEVY_API_KEY`, `GARMIN_TOKEN` and a volume, `docker compose up` creates one Garmin workout per Hevy routine, named per F-15, all on today's calendar.
 2.  Editing a routine in Hevy updates the same Garmin workout within one poll interval; deleting it removes the workout and its calendar entry.
 3.  Restarting the container, or deleting the volume and re-seeding `GARMIN_TOKEN`, creates no duplicates.
-4.  At local midnight every workout has one entry on the new day, and the app's entries on past days are gone (F-32).
+4.  At local midnight every routine, and Hevy Trainer's next workout (F-33), has one entry on the new day, and the app's entries on past days are gone (F-32).
 5.  With `HEVY_SESSION` set, Trainer workouts match the Hevy app's prescribed weights and cycle/week for TJ's program.
 6.  On the watch: every set ends with the reps and weight prompt, including the last; rest steps use the routine's timers (open rest when it has none); matching sets count as SET 1/3, 2/3, 3/3; each set's note follows F-30.
 7.  On Strava, after a session done from a planned workout, every exercise whose Strava column is filled matches it.
