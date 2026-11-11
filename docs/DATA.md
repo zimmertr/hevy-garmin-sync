@@ -1,6 +1,6 @@
 # Data
 
-Each upstream service, its terms, and every quirk found, dated. The spec's [section 10](SPEC.md#10-known-api-facts-verified-unless-marked) and its watch tests (F-21a, F-20a, F-27, F-30, F-31a) hold the facts verified before the build. A finding made while building or running the app goes here, dated, in the same PR as the code that relies on it.
+Each upstream service, its terms, and every quirk found, dated. The spec's [section 10](SPEC.md#10-known-api-facts-verified-unless-marked) and its watch tests (F-21a, F-20a, F-27, F-30, F-31a) hold the facts verified before the build. A finding made while building or running the app goes here, dated, in the same PR as the code that relies on it. A finding first recorded in hevy-trainer-sync, the archived tool this app replaced, keeps the date it was recorded there.
 
 ## Hevy
 
@@ -23,15 +23,21 @@ Every call has a 30 second timeout (O-1a) and a `User-Agent` that names the app 
 
 ### Findings
 
+- **Hevy publishes no rate limit** for the public API. Its docs ask that a job running hourly or daily not send its requests at minute :00. The app polls every minute, which that request does not speak to (read 2026-11-05, first recorded in hevy-trainer-sync).
+- **Hevy has one webhook, for saved workouts.** It is set up in the "Webhooks" section of the developer settings page (https://hevy.com/settings?developer): "Subscribe to our webhook and get notified when you save a new workout." Hevy sends a POST with `{"workoutId": "<id>"}` to a URL the user gives, with an authorization header the user gives, and expects a 200 within 5 seconds. The section says nothing about routines. Hevy's published API spec has no webhook path (14 paths), so the page is the only place to set it up (2026-11-10). The app has no receiver: routines have no feed, and a receiver needs a listening port, which spec F-2 rules out.
 - **Routine page size** is at most 10; exercise templates take 100 (Hevy's OpenAPI spec, 2026-11-10).
 - **A routine's superset field** is `superset_id`, and a set has no RPE field (OpenAPI spec, 2026-11-10).
 - **Hevy's exercise list** held 451 built-in exercises on 2026-11-10. The map's ids and titles were checked against it that day: one row was missing (a second `Sled Push` id) and three had no title. Four rows are ids Hevy no longer lists; they stay, since a row nothing asks for costs nothing.
 - **An exercise template's `type`** came back as `bodyweight_weighted` and `bodyweight_assisted` on 2026-11-10, where the API reference lists `bodyweight_reps` and `bodyweight_assisted_reps`. That read went through a connector, not the raw API, so the app takes both spellings.
 - **A template's `equipment`** matched Hevy Trainer's own equipment value for all 447 exercises compared (2026-11-10, spec F-40).
 - **A routine's weights** are kilograms with the full conversion (`22.67964547178199` for 50 lbs), and a set with a rep range carries `rep_range` with `start` and `end` (2026-11-10).
+- **`GET /v1/workouts/events`** lists `updated` and `deleted` events, each with the whole workout, newest first (2026-11-05, first recorded in hevy-trainer-sync).
 - **The session's refresh token rotates** on every refresh, and the refresh needs the old access token in `Authorization` even when it has expired (2026-11-04). The app saves the new pair before it makes another call.
+- **Not yet known:** whether the session's refresh token has an absolute lifetime. The question was first recorded in hevy-trainer-sync on 2026-11-04 and is still open.
 - **`/user_workouts_paged`** answered a `limit` of 10 with a 400 on 2026-11-07. The app asks for 3.
 - **The program's `current_week`** is not the week the Hevy app shows ([HEVY_TRAINER_RULES.md](HEVY_TRAINER_RULES.md)).
+- **The program also carries** `next_workout_index`, `program_variety`, `exercises_rotated_at` and `edits` (2026-11-04, first recorded in hevy-trainer-sync). The app reads none of them.
+- **`exercises_rotated_at`** read Thursday 29 October 2026, so exercises do not rotate on a week boundary (2026-11-04, first recorded in hevy-trainer-sync).
 - **Not yet seen live:** what the program call answers for an account with no program (the app takes a 404 or a reply without a program as "no program"), and a row of `/exercise_template_units`. That call answered with an empty list on 2026-11-10, for an account that logs no exercise in the other unit; the app logs the shape, without values, the first time.
 - **A Trainer template's `name`** held its key (`upper_2x_a`) on 2026-11-10, not a display name. The app reads a name in a key's form as a key, so the workout is called "Upper".
 - **The first run against a real account** (2026-11-10, from a clone, Hevy Trainer on): two routines and a two-workout program became four Garmin workouts with no failure.
@@ -61,6 +67,18 @@ Garmin's unofficial web API, through [python-garminconnect](https://github.com/c
 - **A workout updated in place and sent again** is one copy on the watch, with the new name and weights (2026-11-10, spec U-24).
 - **A workout deleted in Garmin Connect stays in the watch's saved list** until it is removed on the watch (2026-11-10, spec F-14).
 - **Garmin's exercise list** is published at https://connect.garmin.com/web-data/exercises/Exercises.json: 47 categories and 1,536 exercises on 2026-11-10. `tests/data/garmin_exercises.json` holds its keys.
+
+## Strava
+
+The app never calls Strava (spec S-1). Garmin's own Strava connection forwards the watch's recording, so the planned workout on the watch decides what Strava shows (spec G-2). These findings are why.
+
+### Findings
+
+- **Garmin forwards a new activity to Strava** within seconds of the phone sync, and nothing after that. A later change to the activity in Garmin Connect does not reach Strava (2026-11-05, first recorded in hevy-trainer-sync).
+- **Strava shows what Garmin first forwarded.** Its API cannot edit an activity's sets or delete an activity, and has had no delete since 17 January 2017 (2026-11-05, first recorded in hevy-trainer-sync).
+- **Without a planned workout the watch guesses the exercise** for each set, so the name can change from set to set within one exercise (2026-11-05, first recorded in hevy-trainer-sync).
+- **The watch's FIT files store weight in sixteenths of a kilogram.** 25, 45 and 80 lb entered on the watch read 24.9, 45.1 and 80.1 lb on Strava (2026-11-05, first recorded in hevy-trainer-sync).
+- **Not yet known:** whether the watch records the planned rep target or its own rep count for a set that is not edited on the watch. The question was first recorded in hevy-trainer-sync on 2026-11-05 and is still open.
 
 ## Quirks
 
