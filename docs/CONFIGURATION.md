@@ -47,10 +47,10 @@ Both services replace the refresh token every time it is used, so the folder mus
 | `persistence.existingClaim` | empty | A claim you made instead of a new one |
 | `resources`, `nodeSelector`, `tolerations` | empty | As usual for a pod |
 | `podSecurityContext` | uid and gid 1000, `fsGroup` 1000, non-root | Makes the volume writable by the image's user |
-| `securityContext` | no privilege escalation, all capabilities dropped | The container's |
+| `securityContext` | no privilege escalation, all capabilities dropped, read-only root filesystem | The container's. The app writes only to `/data` (spec O-4) |
 
 The chart sets `DATA_DIR` to `/data` itself.
 
 ## Compose
 
-`compose.yaml` runs the same image with a named volume on `/data` and reads the variables from a `.env` file beside it. `.env` is ignored by git.
+`compose.yaml` runs the same image with a named volume on `/data` and a read-only root filesystem, and reads the variables from a `.env` file beside it. `.env` is ignored by git.
