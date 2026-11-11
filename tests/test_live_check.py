@@ -10,6 +10,7 @@ from typing import Any
 from unittest import mock
 
 import garminconnect
+import requests
 
 from hevy_garmin_sync import garmin, trainer, workout
 from hevy_garmin_sync.errors import Refused
@@ -294,6 +295,7 @@ class RecordTest(LiveCheckCase):
                 "exercise_template_units",
                 "program",
                 "trainer_preferences",
+                "user_key_values",
                 "user_preferences",
                 "user_workouts_paged",
             ],
@@ -548,6 +550,104 @@ class TrainerEditsTest(LiveCheckCase):
         self.answers = [""]
         _, out = self.record_hevy(env={"HEVY_API_KEY": API_KEY})
         self.assertNotIn("Hevy Trainer edits", out)
+
+
+class KeyValueStoreTest(LiveCheckCase):
+    """`user_key_values`, read to find where Hevy keeps a swap made for one workout only."""
+
+    HEADING = "Hevy user_key_values, where a one-off swap may be kept (key names, types and shapes, no values):\n"
+    SWAPPED_IN = "T-BOGLE"  # the form of the program's exercise ids, and not one of them
+    VALUES = ("dark", SWAPPED_IN, "t-lower", "T-LUNGE", "T-GOBLET", "someone", "from-me")
+
+    def setUp(self) -> None:
+        super().setUp()
+        lower = trainer_template("t-lower", "lower_2x_a", [trainer_exercise("T-GOBLET"), trainer_exercise("T-LUNGE")])
+        self.private_api.program = trainer_program([lower])
+
+    def run_hevy(self) -> tuple[str, dict[str, Any]]:
+        code, out = self.record_hevy()
+        self.assertEqual(code, 0)
+        saved: dict[str, Any] = json.loads(self.store.read(lc.HEVY_RECORDED) or "{}")
+        return out, saved
+
+    def assert_no_value(self, out: str) -> None:
+        written = self.store.read(lc.HEVY_RECORDED) or ""
+        for value in self.VALUES:
+            with self.subTest(value=value):
+                self.assertNotIn(value, out)
+                self.assertNotIn(value, written)
+
+    def test_a_dict_of_keys_lists_each_name_type_and_json_shape_and_finds_a_swapped_in_id(self) -> None:
+        self.private_api.key_values = {
+            "trainer_one_off_swaps": json.dumps({"t-lower": {"from": "T-LUNGE", "to": self.SWAPPED_IN}}),
+            "theme": "dark",
+            "workout_count": 5,
+            f"swap_{self.SWAPPED_IN}": None,
+            "prefs_someone": "from-me",
+            "someone@example.com": "1",
+        }
+        out, saved = self.run_hevy()
+        lines = [
+            "Hevy sent a dict of keys, 6 entries:",
+            '- trainer_one_off_swaps: str, JSON {"<key>": {"from": "str", "to": "str"}}; a template id True, '
+            "a program exercise id True, an exercise id not in the program True",
+            "- theme: str",
+            "- workout_count: int; a template id False, a program exercise id False, an exercise id not in the "
+            "program False",
+            "- swap_<id>: NoneType; a template id False, a program exercise id False, an exercise id not in the "
+            "program True",
+            "- prefs_<id>: str",
+            '- <key>: str, JSON "int"',
+        ]
+        self.assertIn(self.HEADING + "\n".join(lines) + "\n", out)
+        self.assertEqual(saved["hevy_trainer_key_values"]["form"], "a dict of keys")
+        self.assertEqual(saved["hevy_trainer"]["user_key_values"]["theme"], "str")
+        self.assert_no_value(out)
+
+    def test_a_list_of_rows_is_read_by_its_key_and_value(self) -> None:
+        self.private_api.key_values = [{"key": "trainer_swap", "value": self.SWAPPED_IN}, "loose"]
+        out, saved = self.run_hevy()
+        self.assertIn(
+            self.HEADING + "Hevy sent a list of rows, 2 entries:\n- trainer_swap: str; a template id False, a program "
+            "exercise id False, an exercise id not in the program True\n- <key>: str\n",
+            out,
+        )
+        self.assertEqual(saved["hevy_trainer"]["user_key_values"], [{"key": "str", "value": "str"}])
+        self.assert_no_value(out)
+
+    def test_a_long_store_lists_sixty_and_counts_the_rest(self) -> None:
+        self.private_api.key_values = {f"key_{n}": n for n in range(65)}
+        out, saved = self.run_hevy()
+        self.assertIn("Hevy sent a dict of keys, 65 entries:\n", out)
+        self.assertIn("- key_59: int\nand 5 more\n", out)
+        self.assertEqual(len(saved["hevy_trainer_key_values"]["entries"]), 60)
+
+    def test_another_kind_of_reply_says_what_it_was(self) -> None:
+        self.private_api.key_values = "made up"
+        out, _ = self.run_hevy()
+        self.assertIn(self.HEADING + "Hevy sent str, 0 entries:\n", out)
+        self.assertEqual(lc.ProgramIds.of(None).look_alikes(self.SWAPPED_IN), [])
+        self.assertEqual(list(lc._strings(["a", {"b": 1}, '["c"]'])), ["a", "b", '["c"]', "c"])
+
+    def test_a_refusal_is_recorded_and_the_run_goes_on(self) -> None:
+        for reply, said in (
+            (fixtures.FakeResponse(404, {"error": "made up"}), "refused (NotFound, HTTP 404)"),
+            (fixtures.FakeResponse(503, "from-me"), "refused (Unavailable, HTTP 503)"),
+        ):
+            with self.subTest(said=said):
+                self.setUp()
+                self.private_api.key_values = reply
+                out, saved = self.run_hevy()
+                self.assertIn(self.HEADING + said + "\n", out)
+                self.assertEqual(saved["hevy_trainer"]["user_key_values"], said)
+                self.assertIn("program", saved["hevy_trainer"])
+                self.assert_no_value(out)
+
+    def test_a_failure_with_no_status_says_none(self) -> None:
+        self.private_api.fail(None, None, None, None, None, requests.ConnectionError("from-me"))
+        out, saved = self.run_hevy()
+        self.assertEqual(saved["hevy_trainer"]["user_key_values"], "refused (Unavailable, HTTP none)")
+        self.assertNotIn("from-me", out)
 
 
 class CleanupTest(LiveCheckCase):

@@ -11,7 +11,11 @@ machine.
    a logged workout. For Hevy Trainer it also keeps `next_workout_index` and the templates'
    `index` values, which the calendar rule reads (spec F-31), and prints, per template, whether
    each of its `edits` (an exercise swapped in the Hevy app) is already in its `exercises`, and
-   how many minutes ago the program last changed.
+   how many minutes ago the program last changed. It also reads `user_key_values`, Hevy's per-user
+   store, where a swap "for this workout only" may be kept, and prints each entry's key name,
+   value type and the shape of a value holding JSON; for an entry whose key names Trainer, a
+   workout, an exercise or a swap, whether the program's ids, or an exercise id not in the
+   program, occur in it. A refusal there is recorded and the run goes on.
 2. Signs in to Garmin as its own session (`login.sign_in`), then creates `HGS check set`: one set
    of `HYPEREXTENSION` / `HYPEREXTENSION` for 10 reps, a pair Garmin stores with an empty exercise
    name, then three matching sets that become a repeat group, then a two-round superset that
@@ -40,7 +44,8 @@ Safety, enforced in code:
 - Prints and saves shapes, never a value: `shape` keeps keys and type names, and replaces any key
   that could itself be a value, such as an id or a date, with `<key>`. The only values out are
   Garmin's exercise and step type keys, the step counts tried, the two Trainer index values above,
-  and for Trainer's edits their type word, two yes-or-no answers, exercise counts and minutes.
+  for Trainer's edits their type word, two yes-or-no answers, exercise counts and minutes, and the
+  key names of `user_key_values`, with any id or the username in them shown as `<id>`.
   Errors print their type only, but for Garmin refusing the step probe: there the status and
   Garmin's own reason are the answer, and they hold no personal data.
 - Never reads a token or session from DATA_DIR or a cluster. The Garmin token is the one its own
@@ -57,9 +62,10 @@ import re
 import sys
 import tempfile
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, Self, TextIO
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import garminconnect
@@ -99,6 +105,11 @@ _PROBE_PAIRS = (("CURL", "CURL"), ("CRUNCH", "CRUNCH"), ("SQUAT", "SQUAT"), ("LU
 _REASON_LENGTH = 500  # how much of Garmin's reason the probe prints
 CALENDAR_DAYS = 31  # how far either side of today `cleanup` looks for the check workouts' entries
 _KEY = re.compile(r"[a-z][A-Za-z_]*")  # a key that names a field; anything else may be a value
+# `user_key_values`, where a one-off Trainer swap may be kept: the key names printed as sent, the
+# ones worth searching for the program's ids, and how many entries the run lists.
+_STORE_KEY = re.compile(r"[A-Za-z0-9_.:-]+")
+_STORE_HINTS = ("trainer", "workout", "swap", "replace", "edit", "exercise")
+_STORE_LIMIT = 60
 
 Json = dict[str, Any]
 
@@ -198,8 +209,142 @@ def edit_lines(edits: Json) -> list[str]:
     return lines
 
 
-def read_trainer(private: HevyPrivate, now: datetime) -> tuple[Json, Json, Json]:
-    """The shapes of the private replies, the two index values the calendar rule reads, and `trainer_edits`."""
+@dataclass(frozen=True)
+class ProgramIds:
+    """The program's template and exercise template ids, and the form of the latter, to look for in a value."""
+
+    templates: frozenset[str]
+    exercises: frozenset[str]
+
+    @classmethod
+    def of(cls, program: Json | None) -> Self:
+        templates = (program or {}).get("templates") or []
+        return cls(
+            frozenset(str(t["id"]) for t in templates if t.get("id")),
+            frozenset(
+                str(e["exercise_template_id"])
+                for t in templates
+                for e in t.get("exercises") or []
+                if e.get("exercise_template_id")
+            ),
+        )
+
+    def look_alikes(self, text: str) -> list[str]:
+        """Each run of `text` with an exercise id's length and characters, known or not."""
+        chars = "".join(sorted(set("".join(self.exercises))))
+        if not chars:
+            return []
+        lengths = {len(i) for i in self.exercises}
+        return [run for run in re.findall(f"[{re.escape(chars)}]+", text) if len(run) in lengths]
+
+
+def _parsed(text: str) -> tuple[bool, Any]:
+    try:
+        return True, json.loads(text)
+    except ValueError:
+        return False, None
+
+
+def _strings(node: Any) -> Iterator[str]:
+    """Every string anywhere in a value, dict keys included, and inside a string that holds JSON."""
+    if isinstance(node, dict):
+        for key, item in node.items():
+            yield from _strings(key)
+            yield from _strings(item)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _strings(item)
+    elif isinstance(node, str):
+        yield node
+        ok, parsed = _parsed(node)
+        if ok and isinstance(parsed, dict | list):
+            yield from _strings(parsed)
+
+
+def mentions(key: str, value: Any, ids: ProgramIds) -> Json:
+    """Whether the program's ids, or a stranger in their form, occur in an entry: three yes-or-no answers."""
+    texts = [key, *_strings(value)]
+    known = ids.templates | ids.exercises
+    return {
+        "mentions_a_template_id": any(i in t for t in texts for i in ids.templates),
+        "mentions_a_program_exercise_id": any(i in t for t in texts for i in ids.exercises),
+        # What an exercise swapped in for one workout would look like.
+        "mentions_an_exercise_id_not_in_the_program": any(
+            run not in known for t in texts for run in ids.look_alikes(t)
+        ),
+    }
+
+
+def store_key(key: Any, ids: ProgramIds, username: str) -> str:
+    """A key's name as sent, when it is a plain name, with any id or the username in it hidden."""
+    name = key if isinstance(key, str) else ""
+    if not _STORE_KEY.fullmatch(name):
+        return "<key>"
+    for hidden in sorted(ids.templates | ids.exercises | {username}, key=len, reverse=True):
+        if hidden:
+            name = name.replace(hidden, "<id>")
+    for run in ids.look_alikes(name):
+        name = name.replace(run, "<id>")
+    return name
+
+
+def read_store(private: HevyPrivate, program: Json | None, username: str) -> tuple[Any, Json]:
+    """`user_key_values`: its shape, and per entry its key name, value type and, for a value holding JSON,
+    that JSON's shape. An entry whose key names Trainer, a workout, an exercise or a swap also says whether
+    the program's ids occur in it. A refusal is recorded, never fatal: the call is a guess.
+    """
+    try:
+        reply = private._get("user_key_values")
+    except ServiceError as e:
+        status = re.match(r"HTTP (\d+)", str(e))  # the status only: the rest of the text is Hevy's reply
+        refused = f"refused ({type(e).__name__}, HTTP {status.group(1) if status else 'none'})"
+        return refused, {"form": refused, "entries": [], "more": 0}
+    if isinstance(reply, dict):
+        form, rows = "a dict of keys", list(reply.items())
+    elif isinstance(reply, list):
+        form = "a list of rows"
+        rows = [(row.get("key"), row.get("value")) if isinstance(row, dict) else (None, row) for row in reply]
+    else:
+        form, rows = type(reply).__name__, []
+    ids = ProgramIds.of(program)
+    entries = []
+    for key, value in rows[:_STORE_LIMIT]:
+        entry: Json = {"key": store_key(key, ids, username), "value_type": type(value).__name__}
+        if isinstance(value, str):
+            ok, parsed = _parsed(value)
+            if ok:
+                entry["json_shape"] = shape(parsed)
+        if isinstance(key, str) and any(hint in key.lower() for hint in _STORE_HINTS):
+            entry |= mentions(key, value, ids)
+        entries.append(entry)
+    # A dict's own keys may be anything, so they reach the shape only as `store_key` writes them.
+    named = {store_key(k, ids, username): v for k, v in reply.items()} if isinstance(reply, dict) else reply
+    return shape(named), {"form": form, "entries": entries, "more": max(0, len(rows) - _STORE_LIMIT)}
+
+
+def store_lines(store: Json) -> list[str]:
+    if not store["entries"] and store["form"].startswith("refused"):
+        return [store["form"]]
+    lines = [f"Hevy sent {store['form']}, {len(store['entries']) + store['more']} entries:"]
+    for entry in store["entries"]:
+        line = f"- {entry['key']}: {entry['value_type']}"
+        if "json_shape" in entry:
+            line += f", JSON {json.dumps(entry['json_shape'], sort_keys=True)}"
+        if "mentions_a_template_id" in entry:
+            line += (
+                f"; a template id {entry['mentions_a_template_id']}, a program exercise id "
+                f"{entry['mentions_a_program_exercise_id']}, an exercise id not in the program "
+                f"{entry['mentions_an_exercise_id_not_in_the_program']}"
+            )
+        lines.append(line)
+    if store["more"]:
+        lines.append(f"and {store['more']} more")
+    return lines
+
+
+def read_trainer(private: HevyPrivate, now: datetime) -> Json:
+    """The shapes of the private replies, the two index values the calendar rule reads, `trainer_edits`
+    and `read_store`'s entries, each under its own key of the recorded file."""
     user = private.user_preferences()
     program = private.program()
     shapes: Json = {
@@ -220,7 +365,13 @@ def read_trainer(private: HevyPrivate, now: datetime) -> tuple[Json, Json, Json]
         "next_workout_index": index_value((program or {}).get("next_workout_index")),
         "template_index_values": [index_value(t.get("index")) for t in templates],
     }
-    return shapes, order, trainer_edits(program, now)
+    shapes["user_key_values"], store = read_store(private, program, str(user.get("username") or ""))
+    return {
+        "hevy_trainer": shapes,
+        "hevy_trainer_order": order,
+        "hevy_trainer_edits": trainer_edits(program, now),
+        "hevy_trainer_key_values": store,
+    }
 
 
 def _body(name: str, steps: Sequence[Exercise], system: str | None) -> Json:
@@ -470,9 +621,7 @@ def read_all_hevy(
         if cookie:
             with tempfile.TemporaryDirectory() as scratch:
                 private = HevyPrivate(parse_cookie(cookie), Store(Path(scratch)), private_session)
-                recorded["hevy_trainer"], recorded["hevy_trainer_order"], recorded["hevy_trainer_edits"] = (
-                    read_trainer(private, utcnow())
-                )
+                recorded |= read_trainer(private, utcnow())
     except ConfigError as e:
         print(f"{e}. Nothing was made in Garmin.", file=out)  # the app's own words, which hold no value
         return None
@@ -482,6 +631,13 @@ def read_all_hevy(
     if "hevy_trainer_edits" in recorded:
         print("Hevy Trainer edits, per template in index order (is each edit already in its exercises?):", file=out)
         for line in edit_lines(recorded["hevy_trainer_edits"]):
+            print(line, file=out)
+        print(file=out)
+        print(
+            "Hevy user_key_values, where a one-off swap may be kept (key names, types and shapes, no values):",
+            file=out,
+        )
+        for line in store_lines(recorded["hevy_trainer_key_values"]):
             print(line, file=out)
         print(file=out)
     return recorded

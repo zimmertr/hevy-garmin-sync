@@ -956,6 +956,8 @@ class FakeHevyPrivateApi:
             "updated_at": "2026-01-15T18:00:00Z",
         }
         self.units: Any = []
+        # Hevy's per-user key and value store; the live check reads it, the app does not. Shape not seen yet.
+        self.key_values: Any = {}
         self.program: dict[str, Any] | None = None
         self.workouts: list[dict[str, Any]] = []
         self.requests: list[tuple[str, dict[str, Any]]] = []
@@ -1025,6 +1027,8 @@ class FakeHevyPrivateApi:
         if (headers or {}).get("Authorization") != f"Bearer {self.access}":
             return FakeResponse(401, {"error": "made up"})
         path = self.requests[-1][0]
+        if path == "user_key_values" and isinstance(self.key_values, FakeResponse):
+            return self.key_values  # a whole reply, such as a refusal
         if path == "user_workouts_paged":
             limit, offset = int((params or {})["limit"]), int((params or {})["offset"])
             if limit not in (1, 3):
@@ -1036,6 +1040,7 @@ class FakeHevyPrivateApi:
             "hevy_trainer/user_preferences": self.trainer,
             "exercise_template_units": self.units,
             "hevy_trainer/v3/program": {"program": self.program, "status": "made up"},
+            "user_key_values": self.key_values,
         }
         return FakeResponse(200, replies[path]) if path in replies else FakeResponse(404, {"error": "no such path"})
 
