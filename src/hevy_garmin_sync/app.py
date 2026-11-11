@@ -176,6 +176,10 @@ class App:
             if plans is not None and self._garmin_backoff.ready():
                 try:
                     counts = self._sync.run(plans, full)
+                except Rejected as e:
+                    # Waiting can't fix a dead token, and an exit is what Kubernetes and Docker show (O-1).
+                    # Garmin's last call has already returned, so no write is cut short (O-3a).
+                    raise ConfigError(_problem("Garmin", LOGIN_FIX, e)) from e
                 except ServiceError as e:
                     full = True  # whatever was half done is finished by a full run (O-1, O-3a)
                     delay = self._garmin_backoff.failed(e)
@@ -211,6 +215,8 @@ class App:
         calls = self._hevy.calls
         try:
             routines = self._routines.plans()
+        except Rejected as e:
+            raise ConfigError(_problem("Hevy", KEY_FIX, e)) from e  # O-1, as at startup
         except ServiceError as e:
             delay = self._hevy_backoff.failed(e)
             log.error("%s. Trying again in %d min.", _problem("Hevy", KEY_FIX, e), delay / 60)
@@ -228,7 +234,8 @@ class App:
         """What Hevy Trainer wants in Garmin now; what it wanted last while it is failing.
 
         Trainer has its own wait after a failure, so routines keep syncing
-        when only Hevy's private API is down or the session was rejected.
+        when only Hevy's private API is down. A rejected session exits, as
+        at startup (O-1).
         """
         if self._trainer is None:
             # HEVY_SESSION is unset: the Trainer workouts the app owns are not wanted (section 6).
@@ -238,6 +245,9 @@ class App:
         calls = self._hevy.calls + self._trainer.private_calls
         try:
             self._trainer_plans = self._trainer.plans()
+        except Rejected as e:
+            # HevyPrivate has already refreshed the session and tried once more, so it is dead (O-1).
+            raise ConfigError(_problem("Hevy Trainer", SESSION_FIX, e)) from e
         except ServiceError as e:
             delay = self._trainer_backoff.failed(e)
             log.error("%s. Trying again in %d min.", _problem("Hevy Trainer", SESSION_FIX, e), delay / 60)

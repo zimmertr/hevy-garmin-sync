@@ -6,7 +6,7 @@ name: release
 # platform, then tags and releases; the chart is pushed under the same version;
 # and only then is Kubernetes-Manifests pointed at it. The module's own deploy
 # bump runs before a chart could exist, so the bump lives here, as in
-# bluebird-helm. Decision records 0002, 0003 and 0004.
+# bluebird-helm. Decision records 0002, 0005 and 0006.
 on:
   push:
     branches: [main]

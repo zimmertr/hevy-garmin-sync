@@ -37,7 +37,7 @@ Both services replace the refresh token every time it is used, so the folder mus
 
 | Value | Default | Does |
 |---|---|---|
-| `image.repository` | `zimmertr/hevy-garmin-sync` | The image |
+| `image.repository` | `ghcr.io/zimmertr/hevy-garmin-sync` | The image |
 | `image.tag` | the chart's `appVersion` | The release the chart was packaged with |
 | `existingSecret` | empty | A Secret you made with `HEVY_API_KEY`, `GARMIN_TOKEN` and, for Hevy Trainer, `HEVY_SESSION`. Empty makes one from `secret` |
 | `secret` | empty | Those keys, for the Secret the chart makes |
