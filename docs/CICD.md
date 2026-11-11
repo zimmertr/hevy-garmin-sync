@@ -41,7 +41,7 @@ Every merge to main is a release (`release.yml`), one at a time. After the test,
 Renovate opens the update PRs, titled `chore(deps): update ...`. `.github/renovate.json` extends zimmertr/yggdrasil's shared preset, which holds the rules every repo of TJ's uses (record [0014](architectural-decision-records/0014-renovate-under-yggdrasils-preset.md)):
 
 - A release waits seven days before Renovate proposes it. yggdrasil's own modules don't wait, and neither does anything whose registry gives no publish date.
-- Everything below a major merges itself once the required checks pass, and that merge is a release. A major waits for TJ.
+- Everything below a major merges itself once the required checks pass, and that merge is a release. A major waits for TJ, and so does a Python minor (3.14 to 3.15), which can break code.
 
 What this repo adds:
 
