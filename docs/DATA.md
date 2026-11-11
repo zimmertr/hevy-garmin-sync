@@ -37,7 +37,7 @@ Every call has a 30 second timeout (O-1a) and a `User-Agent` that names the app 
 - **`/user_workouts_paged`** answered a `limit` of 10 with a 400 on 2026-11-07. The app asks for 3.
 - **The program's `current_week`** is not the week the Hevy app shows ([HEVY_TRAINER_RULES.md](HEVY_TRAINER_RULES.md)).
 - **The program also carries** `next_workout_index`, `program_variety`, `exercises_rotated_at` and `edits` (2026-11-04, first recorded in hevy-trainer-sync). The app reads none of them.
-- **`exercises_rotated_at`** read Thursday 29 October 2026, so exercises do not rotate on a week boundary. The line is undated in hevy-trainer-sync; git dates it 2026-11-04.
+- **`exercises_rotated_at`** read Thursday 29 October 2026, so exercises do not rotate on a week boundary (2026-11-04, first recorded in hevy-trainer-sync).
 - **Not yet seen live:** what the program call answers for an account with no program (the app takes a 404 or a reply without a program as "no program"), and a row of `/exercise_template_units`. That call answered with an empty list on 2026-11-10, for an account that logs no exercise in the other unit; the app logs the shape, without values, the first time.
 - **A Trainer template's `name`** held its key (`upper_2x_a`) on 2026-11-10, not a display name. The app reads a name in a key's form as a key, so the workout is called "Upper".
 - **The first run against a real account** (2026-11-10, from a clone, Hevy Trainer on): two routines and a two-workout program became four Garmin workouts with no failure.
@@ -77,7 +77,7 @@ The app never calls Strava (spec S-1). Garmin's own Strava connection forwards t
 - **Garmin forwards a new activity to Strava** within seconds of the phone sync, and nothing after that. A later change to the activity in Garmin Connect does not reach Strava (2026-11-05, first recorded in hevy-trainer-sync).
 - **Strava shows what Garmin first forwarded.** Its API cannot edit an activity's sets or delete an activity, and has had no delete since 17 January 2017 (2026-11-05, first recorded in hevy-trainer-sync).
 - **Without a planned workout the watch guesses the exercise** for each set, so the name can change from set to set within one exercise (2026-11-05, first recorded in hevy-trainer-sync).
-- **The watch's FIT files store weight in sixteenths of a kilogram.** 25, 45 and 80 lb entered on the watch read 24.9, 45.1 and 80.1 lb on Strava. The line is undated in hevy-trainer-sync; git dates it 2026-11-05.
+- **The watch's FIT files store weight in sixteenths of a kilogram.** 25, 45 and 80 lb entered on the watch read 24.9, 45.1 and 80.1 lb on Strava (2026-11-05, first recorded in hevy-trainer-sync).
 - **Not yet known:** whether the watch records the planned rep target or its own rep count for a set that is not edited on the watch. The question was first recorded in hevy-trainer-sync on 2026-11-05 and is still open.
 
 ## Quirks
