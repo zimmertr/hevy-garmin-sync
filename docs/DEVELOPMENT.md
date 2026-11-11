@@ -19,6 +19,7 @@ CI is the test runner. Branch from the latest `main`, open a draft PR early, pus
 | `make upstream-update` | Not a check: the same, then rewrites the copies that differ |
 | `make live-check` | Not a check: the one run against TJ's own accounts ([below](#the-live-check)) |
 | `make live-cleanup` | Not a check: deletes what `make live-check` made, and its saved Garmin token |
+| `make live-check-hevy` | Not a check: `make live-check`'s Hevy reads alone, with no Garmin sign-in ([below](#the-live-check)) |
 
 ## The live check
 
@@ -30,6 +31,8 @@ CI is the test runner. Branch from the latest `main`, open a draft PR early, pus
 4. Look at the watch, then `make live-cleanup`. It removes those workouts from the calendar, deletes them and the saved token, and touches nothing else. Running it twice is safe.
 
 If `make live-check` stops partway, it says how many workouts it made; `make live-cleanup` removes them. The script's docstring lists what it will never do.
+
+`make live-check-hevy` is step 1 alone: it asks for the same key and cookie, reads Hevy, and writes `live-check/recorded-hevy.json`. It signs in to nothing else, makes nothing, never touches `recorded.json`, and runs even when an earlier `make live-check` wasn't cleaned up. With no routines in the account, the exercise template and its history come from a logged workout instead.
 
 ## Tests
 

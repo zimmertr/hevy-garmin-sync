@@ -311,6 +311,42 @@ def hevy_template(template_id: str, title: str, **fields: Any) -> dict[str, Any]
     } | fields
 
 
+def hevy_workout_event(workout_id: str, template_id: str, title: str) -> dict[str, Any]:
+    """An `updated` workout event, holding a logged workout of one exercise, in the shape Hevy sent on 2026-11-10."""
+    logged_set = {
+        "index": 0,
+        "type": "normal",
+        "weight_kg": 60.0,
+        "reps": 8,
+        "rpe": 8,
+        "distance_meters": None,
+        "duration_seconds": None,
+        "custom_metric": None,
+    }
+    exercise = {
+        "index": 0,
+        "title": title,
+        "notes": None,
+        "exercise_template_id": template_id,
+        "superset_id": None,
+        "sets": [logged_set],
+    }
+    return {
+        "type": "updated",
+        "workout": {
+            "id": workout_id,
+            "title": "Made Up",
+            "routine_id": None,
+            "description": "",
+            "start_time": "2026-01-15T17:00:00+00:00",
+            "end_time": "2026-01-15T18:00:00+00:00",
+            "updated_at": "2026-01-15T18:00:00+00:00",
+            "created_at": "2026-01-15T18:00:00+00:00",
+            "exercises": [exercise],
+        },
+    }
+
+
 class FakeHevyApi:
     """api.hevyapp.com as a `requests.Session`: the public API's lists, paged as Hevy pages them."""
 

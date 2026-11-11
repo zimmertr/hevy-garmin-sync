@@ -1,13 +1,15 @@
 """One run by hand against TJ's own accounts, for #22, #24 and #6. CI never runs it.
 
 `make live-check` runs `record`, and `make live-cleanup` runs `cleanup` once the watch has been
-looked at. Both run in Docker, from a clone, on TJ's machine.
+looked at. `make live-check-hevy` runs `record-hevy`. All run in Docker, from a clone, on TJ's
+machine.
 
 `record`:
 1. Reads Hevy's public API with HEVY_API_KEY, and Hevy's private API when HEVY_SESSION is set
    (a fresh cookie from a private window, never the pod's), and keeps the shape of each reply.
-   For Hevy Trainer it also keeps `next_workout_index` and the templates' `index` values, which
-   the calendar rule reads (spec F-31).
+   The exercise template and its history are read for the first exercise of a routine, else of
+   a logged workout. For Hevy Trainer it also keeps `next_workout_index` and the templates'
+   `index` values, which the calendar rule reads (spec F-31).
 2. Signs in to Garmin as its own session (`login.sign_in`), then creates `HGS check names`, with
    one step for every exercise map row whose category Garmin stored differently on 2026-11-10
    (#22), and `HGS check 1` to `HGS check 6` (#6). It reads the first back and prints, step by
@@ -19,6 +21,9 @@ looked at. Both run in Docker, from a clone, on TJ's machine.
 
 `cleanup` removes those workouts from the calendar and deletes them, then the saved Garmin token.
 It is safe to run again.
+
+`record-hevy` is step 1 alone, written to live-check/recorded-hevy.json: no Garmin sign-in,
+nothing made anywhere, and not held back by an earlier run that wasn't cleaned up.
 
 Safety, enforced in code:
 - Never writes to Hevy: only the read methods of `Hevy` and `HevyPrivate` are called.
@@ -62,6 +67,7 @@ from hevy_garmin_sync.workout import Exercise, Set, Workout
 
 FOLDER = Path(__file__).resolve().parents[1] / "live-check"
 RECORDED = "recorded.json"
+HEVY_RECORDED = "recorded-hevy.json"  # `record-hevy`'s, so it never overwrites what `record` saved
 CREATED = "created.json"
 NAMES_WORKOUT = "HGS check names"
 CALENDAR_WORKOUTS = tuple(f"HGS check {n}" for n in range(1, 7))
@@ -116,17 +122,16 @@ def index_value(value: Any) -> int | str:
 def read_hevy(hevy: Hevy, now: datetime) -> Json:
     folders = hevy.folders()
     routines = hevy.routines()
-    shapes: Json = {"folders": shape(folders), "routines": shape(routines)}
+    events = hevy.workout_events(now - timedelta(days=30))
+    shapes: Json = {"folders": shape(folders), "routines": shape(routines), "workout_events": shape(events)}
+    # A routine's exercise, else a logged workout's, so an account with no routines still records both.
+    lists = [r.get("exercises") for r in routines] + [(e.get("workout") or {}).get("exercises") for e in events]
     template_ids = [
-        str(e["exercise_template_id"])
-        for r in routines
-        for e in r.get("exercises") or []
-        if e.get("exercise_template_id")
+        str(e["exercise_template_id"]) for listed in lists for e in listed or [] if e.get("exercise_template_id")
     ]
     if template_ids:
         shapes["template"] = shape(hevy.template(template_ids[0]))
         shapes["exercise_history"] = shape(hevy.exercise_history(template_ids[0], now - timedelta(days=365), now))
-    shapes["workout_events"] = shape(hevy.workout_events(now - timedelta(days=30)))
     return shapes
 
 
@@ -310,24 +315,8 @@ def record(
     if store.read(CREATED) is not None:
         print("live-check/created.json is from an earlier run: run `make live-cleanup` first.", file=out)
         return 1
-    # Asked for, not put on the command line, so neither lands in the shell's history.
-    api_key = env.get("HEVY_API_KEY", "").strip() or ask("Hevy API key (not shown): ").strip()
-    cookie = env.get("HEVY_SESSION", "").strip() or ask(
-        "Hevy auth2.0-token cookie from a private window, or Enter to skip Hevy Trainer (not shown): "
-    ).strip()
-
-    recorded: Json = {}
-    try:
-        recorded["hevy"] = read_hevy(Hevy(api_key, hevy_session), utcnow())
-        if cookie:
-            with tempfile.TemporaryDirectory() as scratch:
-                private = HevyPrivate(parse_cookie(cookie), Store(Path(scratch)), private_session)
-                recorded["hevy_trainer"], recorded["hevy_trainer_order"] = read_trainer(private)
-    except ConfigError as e:
-        print(f"{e}. Nothing was made in Garmin.", file=out)  # the app's own words, which hold no value
-        return 1
-    except ServiceError as e:
-        print(f"Reading Hevy failed ({type(e).__name__}). Nothing was made in Garmin.", file=out)
+    recorded = read_all_hevy(env, out, ask, hevy_session, private_session, utcnow)
+    if recorded is None:
         return 1
     save(store, RECORDED, recorded)
 
@@ -368,6 +357,56 @@ def record(
         "watch, then run `make live-cleanup`.",
         file=out,
     )
+    return 0
+
+
+def read_all_hevy(
+    env: Mapping[str, str],
+    out: TextIO,
+    ask: Callable[[str], str],
+    hevy_session: requests.Session | None,
+    private_session: requests.Session | None,
+    utcnow: Callable[[], datetime],
+) -> Json | None:
+    """Hevy's shapes, and Hevy Trainer's when a cookie is given; None, said why, when a read fails."""
+    # Asked for, not put on the command line, so neither lands in the shell's history.
+    api_key = env.get("HEVY_API_KEY", "").strip() or ask("Hevy API key (not shown): ").strip()
+    cookie = env.get("HEVY_SESSION", "").strip() or ask(
+        "Hevy auth2.0-token cookie from a private window, or Enter to skip Hevy Trainer (not shown): "
+    ).strip()
+    recorded: Json = {}
+    try:
+        recorded["hevy"] = read_hevy(Hevy(api_key, hevy_session), utcnow())
+        if cookie:
+            with tempfile.TemporaryDirectory() as scratch:
+                private = HevyPrivate(parse_cookie(cookie), Store(Path(scratch)), private_session)
+                recorded["hevy_trainer"], recorded["hevy_trainer_order"] = read_trainer(private)
+    except ConfigError as e:
+        print(f"{e}. Nothing was made in Garmin.", file=out)  # the app's own words, which hold no value
+        return None
+    except ServiceError as e:
+        print(f"Reading Hevy failed ({type(e).__name__}). Nothing was made in Garmin.", file=out)
+        return None
+    return recorded
+
+
+def record_hevy(
+    env: Mapping[str, str],
+    folder: Path,
+    out: TextIO,
+    *,
+    ask: Callable[[str], str] = getpass.getpass,
+    hevy_session: requests.Session | None = None,
+    private_session: requests.Session | None = None,
+    utcnow: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> int:
+    """Hevy's reads alone, into a file of their own: no Garmin sign-in, nothing made anywhere."""
+    recorded = read_all_hevy(env, out, ask, hevy_session, private_session, utcnow)
+    if recorded is None:
+        return 1
+    save(Store(folder), HEVY_RECORDED, recorded)
+    print(f"Saved to live-check/{HEVY_RECORDED}, which holds no values. Paste it into #22:\n", file=out)
+    print(json.dumps(recorded, indent=1, sort_keys=True), file=out)
     return 0
 
 
@@ -421,10 +460,12 @@ def main(
     argv: Sequence[str] | None = None, env: Mapping[str, str] = os.environ, out: TextIO = sys.stdout
 ) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
-    parser.add_argument("command", choices=("record", "cleanup"))
+    parser.add_argument("command", choices=("record", "record-hevy", "cleanup"))
     args = parser.parse_args(argv)
     if args.command == "record":
         return record(env, FOLDER, out)
+    if args.command == "record-hevy":
+        return record_hevy(env, FOLDER, out)
     return cleanup(FOLDER, out)
 
 

@@ -96,6 +96,19 @@ class LiveCheckCase(unittest.TestCase):
         )
         return code, out.getvalue()
 
+    def record_hevy(self, env: dict[str, str] | None = None) -> tuple[int, str]:
+        out = io.StringIO()
+        code = lc.record_hevy(
+            {"HEVY_API_KEY": API_KEY, "HEVY_SESSION": fixtures.HEVY_SESSION_COOKIE} if env is None else env,
+            self.folder,
+            out,
+            ask=self.ask,
+            hevy_session=self.hevy_api,  # type: ignore[arg-type]
+            private_session=self.private_api,  # type: ignore[arg-type]
+            utcnow=lambda: fixtures.NOW.astimezone(UTC),
+        )
+        return code, out.getvalue()
+
     def cleanup(self) -> tuple[int, str]:
         out = io.StringIO()
         code = lc.cleanup(
@@ -350,6 +363,61 @@ class RecordTest(LiveCheckCase):
         self.assertEqual(len(json.loads(self.store.read(lc.CREATED) or "{}")["workouts"]), 8)
 
 
+class RecordHevyTest(LiveCheckCase):
+    def saved_hevy(self) -> dict[str, Any]:
+        recorded: dict[str, Any] = json.loads(self.store.read(lc.HEVY_RECORDED) or "{}")
+        return recorded
+
+    def test_with_no_routines_the_template_comes_from_a_logged_workout(self) -> None:
+        self.hevy_api.routines = []
+        self.hevy_api.events = [fixtures.hevy_workout_event("w-1", "T-BENCH", "Bench Press")]
+        code, out = self.record_hevy()
+        self.assertEqual(code, 0)
+        saved = self.saved_hevy()
+        self.assertEqual(
+            sorted(saved["hevy"]), ["exercise_history", "folders", "routines", "template", "workout_events"]
+        )
+        self.assertEqual(saved["hevy"]["routines"], [])
+        self.assertIn("hevy_trainer", saved)
+        self.assertIn(f"Saved to live-check/{lc.HEVY_RECORDED}", out)
+        self.assertIn(json.dumps(saved, indent=1, sort_keys=True), out)
+
+    def test_it_writes_its_own_file_makes_nothing_and_an_earlier_run_does_not_hold_it_back(self) -> None:
+        self.store.write(lc.RECORDED, "from record\n")
+        self.store.write(lc.CREATED, json.dumps({"workouts": [1]}))
+        code, _ = self.record_hevy()
+        self.assertEqual(code, 0)
+        self.assertEqual(self.store.read(lc.RECORDED), "from record\n")
+        self.assertEqual(json.loads(self.store.read(lc.CREATED) or "{}"), {"workouts": [1]})
+        self.assertEqual(self.garmin_api.calls, [])
+        self.assertEqual(self.tokens, [])
+        self.assertEqual(sorted(p.name for p in self.folder.iterdir()), [lc.CREATED, lc.HEVY_RECORDED, lc.RECORDED])
+
+    def test_enter_at_the_cookie_prompt_reads_hevy_alone(self) -> None:
+        self.answers = [""]
+        code, _ = self.record_hevy(env={"HEVY_API_KEY": API_KEY})
+        self.assertEqual(code, 0)
+        self.assertEqual(len(self.asked), 1)
+        self.assertEqual(self.private_api.requests, [])
+        self.assertNotIn("hevy_trainer", self.saved_hevy())
+
+    def test_a_failed_read_saves_nothing(self) -> None:
+        self.hevy_api.fail(503)
+        code, out = self.record_hevy()
+        self.assertEqual(code, 1)
+        self.assertIn("Reading Hevy failed (Unavailable).", out)
+        self.assertIsNone(self.store.read(lc.HEVY_RECORDED))
+
+    def test_no_value_reaches_the_output_or_the_saved_file(self) -> None:
+        self.hevy_api.events = [fixtures.hevy_workout_event("w-1", "T-BENCH", "Bench Press")]
+        _, out = self.record_hevy()
+        written = self.store.read(lc.HEVY_RECORDED) or ""
+        for secret in SECRETS:
+            with self.subTest(secret=secret):
+                self.assertNotIn(secret, out)
+                self.assertNotIn(secret, written)
+
+
 class CleanupTest(LiveCheckCase):
     def test_it_removes_only_its_workouts_and_entries_then_the_token(self) -> None:
         self.garmin_api.workouts[1] = {"workoutId": 1, "workoutName": "HGS check 1", "description": "someone else's"}
@@ -412,8 +480,8 @@ class ShapeTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def test_each_command_runs_its_function_on_the_folder_in_the_repo(self) -> None:
-        for command in ("record", "cleanup"):
-            with self.subTest(command=command), mock.patch.object(lc, command, return_value=0) as run:
+        for command, function in (("record", "record"), ("record-hevy", "record_hevy"), ("cleanup", "cleanup")):
+            with self.subTest(command=command), mock.patch.object(lc, function, return_value=0) as run:
                 self.assertEqual(lc.main([command], env={}, out=io.StringIO()), 0)
                 self.assertEqual(run.call_args.args[-2], lc.FOLDER)
         self.assertEqual(lc.FOLDER, Path(lc.__file__).resolve().parents[1] / "live-check")
