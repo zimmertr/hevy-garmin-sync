@@ -20,6 +20,7 @@ What you see when it runs, and what to do when it breaks.
 | `Hevy routine folder: id 42, title 'Push Pull Legs'` | At startup, every folder, for `INCLUDE_HEVY_FOLDERS` |
 | `Hevy Trainer: Side Bend (Dumbbell): 40 lbs (up)` | A Trainer prescription, logged when it is first worked out and when it changes |
 | `Hevy Trainer: ...: no prescription (...)` | Trainer gives that exercise no weight, and why |
+| `Trying '<workout>' again, which Garmin refused` | Another try at a workout Garmin refused earlier. If Garmin refuses it again, an ERROR line follows |
 
 ## When it breaks
 
@@ -31,8 +32,9 @@ What you see when it runs, and what to do when it breaks.
 | `Hevy rejected the app's credentials; check HEVY_API_KEY` | Make a new key at https://hevy.com/settings?developer. The key needs Hevy Pro |
 | `Hevy Trainer rejected the app's credentials` | Copy the `auth2.0-token` cookie from hevy.com again, in a private window you then close without logging out, and set `HEVY_SESSION` to it. To sync routines only meanwhile, unset `HEVY_SESSION`, which also takes the Trainer workouts out of Garmin |
 | `... can't be reached or is failing ... Trying again in N min` | Nothing. It retries by itself, waiting longer each time, up to 30 minutes |
+| `... is rate limiting the app and said how long to wait` | Nothing. It waits as long as Hevy or Garmin asked, even past 30 minutes. The line says how long |
 | `Garmin is rate limiting the app` | Nothing. It waits at least 15 minutes |
-| `Garmin refused '<workout>' (N steps)` | Garmin won't take that one workout. The others still sync. It is tried again when the routine changes, at the next start and at midnight. Open an issue with the line |
+| `Garmin refused '<workout>' (N steps): ... It is tried again at 17:45` | Garmin won't take that one workout. The others still sync. It is tried again 5 minutes later, then at gaps that double until midnight, then once a day at midnight; the line says when. A change to the routine is tried at once, and so is a restart. Open an issue with the line |
 | `No exercise map row for Hevy exercise ...` | A built-in Hevy exercise the map doesn't know. It still syncs, under the closest exercise by muscle group. Open an issue so it gets a proper row |
 | `'<folder>' in INCLUDE_HEVY_FOLDERS is gone` | The folder was renamed or deleted in Hevy. Its workouts are kept. Fix the variable and restart |
 | A workout shows the wrong exercise name on the watch | The map has a poor row for it. Open an issue or a PR against `src/hevy_garmin_sync/data/exercise_map.csv` |
