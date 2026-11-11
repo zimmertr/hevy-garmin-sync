@@ -36,12 +36,14 @@ lint-docker:
 	docker run --rm -i $(HADOLINT) < Dockerfile
 
 # The Chart job: lint, render with the defaults and with an existing Secret,
-# then check that all three default resources state their namespace.
+# then check that all three default resources state their namespace and that
+# the container's root filesystem is read-only.
 chart:
 	$(RUN) --entrypoint sh $(HELM_IMAGE) -c 'helm lint charts/hevy-garmin-sync-helm && \
 	  helm template hevy-garmin-sync charts/hevy-garmin-sync-helm >/dev/null && \
 	  helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --set existingSecret=hevy-garmin-sync >/dev/null && \
-	  test "$$(helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --namespace check | grep -c "^  namespace: check$$")" -eq 3'
+	  test "$$(helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --namespace check | grep -c "^  namespace: check$$")" -eq 3 && \
+	  helm template hevy-garmin-sync charts/hevy-garmin-sync-helm | grep -q "^            readOnlyRootFilesystem: true$$"'
 
 build:
 	docker build --build-arg APP_COMMIT=$$(git rev-parse HEAD) -t $(IMAGE) .

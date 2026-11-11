@@ -78,7 +78,7 @@ Built by the release for `linux/amd64` and `linux/arm64`, tagged with the versio
 
 ## The chart
 
-`hevy-garmin-sync-helm`, published with every release to `oci://ghcr.io/zimmertr` under the same version as the image, whose digest it pins (record 0006). One replica with the `Recreate` strategy, so two copies never run at once and fight over the rotating Garmin token (spec D-4). No probes: logs are the only signal (O-2). Values are in [CONFIGURATION.md](CONFIGURATION.md#chart-values).
+`hevy-garmin-sync-helm`, published with every release to `oci://ghcr.io/zimmertr` under the same version as the image, whose digest it pins (record 0006). One replica with the `Recreate` strategy, so two copies never run at once and fight over the rotating Garmin token (spec D-4). The container's root filesystem is read-only, so the data volume is the one place it can write (O-4, record [0008](architectural-decision-records/0008-read-only-root-filesystem-by-default.md)). No probes: logs are the only signal (O-2). Values are in [CONFIGURATION.md](CONFIGURATION.md#chart-values).
 
 ## Where it runs for TJ
 
