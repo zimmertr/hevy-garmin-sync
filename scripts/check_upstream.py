@@ -5,8 +5,10 @@ read Hevy's enum values from `tests/data/hevy_api.json`, so a change upstream th
 still passes CI. This is what notices: `.github/workflows/upstream-check.yml` runs it weekly, and
 `make upstream-check` and `make upstream-update` run it in Docker (#26, record 0010).
 
-Exit codes: 0 when both copies match, 1 on a difference (printed, and written to --report), 2 when
+Exit codes: 0 when both copies match, 3 on a difference (printed, and written to --report), 2 when
 a source could not be fetched or read. With --write, a difference rewrites the copies and exits 0.
+A difference is not 1, since 1 is what Python exits with on a crash, and a bug must never read as
+a change upstream.
 
 Standard library only, so the workflow runs it without installing anything.
 """
@@ -28,7 +30,7 @@ HEVY_URL = "https://api.hevyapp.com/docs/swagger-ui-init.js"
 # Both sources are public. A request names no app, account or person, and carries no token or cookie.
 USER_AGENT = "Mozilla/5.0 (compatible; upstream-check)"
 TIMEOUT_SECONDS = 30
-SAME, DIFFERENT, UNCHECKED = 0, 1, 2
+SAME, UNCHECKED, DIFFERENT = 0, 2, 3
 HTTP_METHODS = frozenset({"get", "put", "post", "delete", "patch", "head", "options", "trace"})
 # The enums the tests read, by where Hevy's spec defines them. Only these are kept: the whole spec's
 # descriptions and examples change often, and a copy of them would open an issue for nothing.
@@ -192,12 +194,14 @@ def dump(copy: Mapping[str, Any]) -> str:
 
 
 def main(argv: Sequence[str] | None = None, opener: Opener = urllib.request.urlopen, data: Path = DATA) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--write", action="store_true", help="rewrite the copies that differ, and exit 0")
     parser.add_argument("--report", type=Path, help="also write the report, in Markdown, to this file")
     args = parser.parse_args(argv)
 
-    sections, changed, failed = [], {}, False
+    sections: list[str] = []
+    changed: dict[Path, dict[str, Any]] = {}
+    failed = False
     for source in SOURCES:
         outcome: Difference | SourceError
         try:

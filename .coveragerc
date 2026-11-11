@@ -2,6 +2,7 @@
 branch = True
 source =
     src/hevy_garmin_sync
+    scripts
 
 [report]
 # No floor: the aim is 100%, and a gap gets a test or a written reason.

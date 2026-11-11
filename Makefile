@@ -66,7 +66,7 @@ lock:
 
 # Not checks: the weekly upstream-check.yml run, here. Both fetch Garmin's
 # exercise list and Hevy's published API spec, which need no sign-in, and
-# compare them with the copies in tests/data. The first exits 1 on a
+# compare them with the copies in tests/data. The first exits 3 on a
 # difference and 2 when a source can't be read; the second rewrites the copies.
 upstream-check:
 	$(RUN) $(PYTHON_IMAGE) python scripts/check_upstream.py
