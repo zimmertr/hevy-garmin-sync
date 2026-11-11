@@ -14,7 +14,7 @@ import logging
 import time
 from collections.abc import Callable
 from datetime import date
-from typing import Any
+from typing import Any, Self
 
 import garminconnect
 import requests
@@ -75,7 +75,7 @@ class Garmin:
         self._last_write = float("-inf")
 
     @classmethod
-    def open(cls, env_token: str | None, store: Store, stopping: Callable[[], bool] = lambda: False) -> Garmin:
+    def open(cls, env_token: str | None, store: Store, stopping: Callable[[], bool] = lambda: False) -> Self:
         """Load the token: the stored copy, unless GARMIN_TOKEN is new (A-4). No network."""
         if env_token and (store.read(TOKENS) is None or not store.seeded_by(TOKENS, env_token)):
             store.write(TOKENS, decode_token(env_token))

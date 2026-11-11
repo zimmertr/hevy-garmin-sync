@@ -215,7 +215,7 @@ class ReadingTest(TrainerCase):
 
     def test_a_saved_edited_or_deleted_workout_has_everything_read_again(self) -> None:
         self.poll()
-        self.public.events = [{"type": "updated", "workout": {"id": "made-up"}}]
+        self.public.events = [fixtures.hevy_workout_event("made-up", "T-SIDE-BEND", "Side Bend (Dumbbell)")]
         self.assertEqual(self.poll(), ["hevy_trainer/v3/program", *INPUTS])
         self.public.events = []
         self.assertEqual(self.poll(), ["hevy_trainer/v3/program"])
@@ -276,7 +276,7 @@ class ReadingTest(TrainerCase):
         self.private.workouts.append(
             logged_workout("t-lower", TUESDAY + timedelta(days=2), {"T-SIDE-BEND": [logged_set(40, 12)] * 3})
         )
-        self.public.events = [{"type": "updated", "workout": {"id": "made-up"}}]
+        self.public.events = [fixtures.hevy_workout_event("made-up", "T-SIDE-BEND", "Side Bend (Dumbbell)")]
         with self.assertLogs(LOGGER, "INFO") as logs:
             self.trainer.plans()
         self.assertEqual(len(logs.output), 1)
@@ -557,7 +557,7 @@ class NewExerciseTest(TrainerCase):
 
     def lifted(self, kilograms: float, reps: int, days_ago: int | None, set_type: str = "normal") -> dict[str, Any]:
         when = None if days_ago is None else (self.now - timedelta(days=days_ago)).astimezone(UTC).isoformat()
-        return {"weight_kg": kilograms, "reps": reps, "set_type": set_type, "workout_start_time": when}
+        return fixtures.hevy_history_set(kilograms, reps, when, set_type)
 
     def test_the_weight_is_a_share_of_the_best_one_rep_max_of_the_last_three_months(self) -> None:
         # 100 kg for 5 is a one-rep max of 100 / 0.89 kg; 80% of that is 198.17 lb, and the bar loads 200.
@@ -586,7 +586,7 @@ class NewExerciseTest(TrainerCase):
         self.trainer.plans()
         self.trainer.plans()
         self.assertEqual(asked(), 1)
-        self.public.events = [{"type": "updated", "workout": {"id": "made-up"}}]
+        self.public.events = [fixtures.hevy_workout_event("made-up", "T-SIDE-BEND", "Side Bend (Dumbbell)")]
         self.trainer.plans()
         self.assertEqual(asked(), 2)
 

@@ -1,8 +1,9 @@
-"""Compares Garmin's exercise list and Hevy's published API spec with the copies in tests/data.
+"""Compares Garmin's exercise list and Hevy's published API spec with the repo's copies of them.
 
-The tests check every exercise map row against `tests/data/garmin_exercises.json` (spec F-51) and
-read Hevy's enum values from `tests/data/hevy_api.json`, so a change upstream that nobody copied
-still passes CI. This is what notices: `.github/workflows/upstream-check.yml` runs it weekly, and
+The tests check every exercise map row against `src/hevy_garmin_sync/data/garmin_exercises.json`
+(spec F-51), which the app also reads to check CUSTOM_EXERCISE_MAP (C-11, #24), and read Hevy's
+enum values from `tests/data/hevy_api.json`, so a change upstream that nobody copied still passes
+CI. This is what notices: `.github/workflows/upstream-check.yml` runs it weekly, and
 `make upstream-check` and `make upstream-update` run it in Docker (#26, record 0010).
 
 Exit codes: 0 when both copies match, 3 on a difference (printed, and written to --report), 2 when
@@ -24,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-DATA = Path(__file__).resolve().parents[1] / "tests" / "data"
+ROOT = Path(__file__).resolve().parents[1]
 GARMIN_URL = "https://connect.garmin.com/web-data/exercises/Exercises.json"
 HEVY_URL = "https://api.hevyapp.com/docs/swagger-ui-init.js"
 # Both sources are public. A request names no app, account or person, and carries no token or cookie.
@@ -60,7 +61,7 @@ class Opener(Protocol):
 class Source:
     title: str
     url: str
-    copy: str
+    copy: str  # from the repo's root
     reduce: Callable[[str], dict[str, Any]]
 
 
@@ -143,8 +144,9 @@ def reduce_hevy(text: str) -> dict[str, Any]:
 
 
 SOURCES = (
-    Source("Garmin's exercise list", GARMIN_URL, "garmin_exercises.json", reduce_garmin),
-    Source("Hevy's API spec", HEVY_URL, "hevy_api.json", reduce_hevy),
+    # In the package, since the app checks CUSTOM_EXERCISE_MAP against it at startup (#24).
+    Source("Garmin's exercise list", GARMIN_URL, "src/hevy_garmin_sync/data/garmin_exercises.json", reduce_garmin),
+    Source("Hevy's API spec", HEVY_URL, "tests/data/hevy_api.json", reduce_hevy),
 )
 
 
@@ -178,7 +180,7 @@ def listed(label: str, items: list[str]) -> list[str]:
 
 
 def section(source: Source, outcome: Difference | SourceError) -> str:
-    lines = [f"## {source.title}", "", f"{source.url} against `tests/data/{source.copy}`.", ""]
+    lines = [f"## {source.title}", "", f"{source.url} against `{source.copy}`.", ""]
     if isinstance(outcome, SourceError):
         lines += [f"Could not check: {outcome}", ""]
     elif outcome:
@@ -193,7 +195,7 @@ def dump(copy: Mapping[str, Any]) -> str:
     return json.dumps(copy, indent=1, sort_keys=True) + "\n"
 
 
-def main(argv: Sequence[str] | None = None, opener: Opener = urllib.request.urlopen, data: Path = DATA) -> int:
+def main(argv: Sequence[str] | None = None, opener: Opener = urllib.request.urlopen, root: Path = ROOT) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--write", action="store_true", help="rewrite the copies that differ, and exit 0")
     parser.add_argument("--report", type=Path, help="also write the report, in Markdown, to this file")
@@ -209,7 +211,7 @@ def main(argv: Sequence[str] | None = None, opener: Opener = urllib.request.urlo
         except SourceError as error:
             outcome, failed = error, True
         else:
-            path = data / source.copy
+            path = root / source.copy
             committed = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
             outcome = compare(committed, fetched)
             if outcome:

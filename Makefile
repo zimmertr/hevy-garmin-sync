@@ -10,7 +10,8 @@ IMAGE        := hevy-garmin-sync:dev
 RUN          := docker run --rm -v "$(CURDIR)":/repo -w /repo
 DEV          := pip install -q --root-user-action=ignore --require-hashes -r requirements-dev.txt
 
-.PHONY: test test-one lint typecheck lint-docker chart build scan lock upstream-check upstream-update
+.PHONY: test test-one lint typecheck lint-docker chart build scan lock upstream-check upstream-update \
+  live-check live-cleanup live-check-hevy
 
 # The suite under coverage, with its line and branch report, as the test job
 # runs it.
@@ -68,10 +69,30 @@ lock:
 
 # Not checks: the weekly upstream-check.yml run, here. Both fetch Garmin's
 # exercise list and Hevy's published API spec, which need no sign-in, and
-# compare them with the copies in tests/data. The first exits 3 on a
+# compare them with the copies in src/hevy_garmin_sync/data and tests/data.
+# The first exits 3 on a
 # difference and 2 when a source can't be read; the second rewrites the copies.
 upstream-check:
 	$(RUN) $(PYTHON_IMAGE) python scripts/check_upstream.py
 
 upstream-update:
 	$(RUN) $(PYTHON_IMAGE) python scripts/check_upstream.py --write
+
+# Not checks: one run by hand against TJ's own Hevy and Garmin accounts
+# (scripts/live_check.py, #22, #24, #6). Interactive, for the Garmin sign-in
+# and for the Hevy key and cookie when they aren't in the environment. The
+# first records the replies' shapes into live-check/ and puts up to eight
+# check workouts on the watch; the second deletes them and the saved token. The
+# third reads Hevy alone, with no Garmin sign-in, into live-check/recorded-hevy.json.
+LIVE := $(RUN) -it -e HEVY_API_KEY -e HEVY_SESSION $(PYTHON_IMAGE) sh -c \
+  'pip install -q --root-user-action=ignore --require-hashes -r requirements.txt && \
+  PYTHONPATH=src python scripts/live_check.py $$0'
+
+live-check:
+	$(LIVE) record
+
+live-cleanup:
+	$(LIVE) cleanup
+
+live-check-hevy:
+	$(LIVE) record-hevy

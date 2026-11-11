@@ -39,12 +39,12 @@ Every merge to main is a release (`release.yml`), one at a time. After the test,
 
 ## The upstream check
 
-`upstream-check.yml` runs every Monday and can be started by hand. It is not a required check, and no yggdrasil module covers it, so it lives here. It runs `scripts/check_upstream.py`, which reads two public files with no sign-in and compares them with their copies in `tests/data`:
+`upstream-check.yml` runs every Monday and can be started by hand. It is not a required check, and no yggdrasil module covers it, so it lives here. It runs `scripts/check_upstream.py`, which reads two public files with no sign-in and compares them with their copies in the repo:
 
 | Source | Copy | Keeps |
 |---|---|---|
-| Garmin's exercise list, `https://connect.garmin.com/web-data/exercises/Exercises.json` | `garmin_exercises.json` | Each category key with its exercise keys (spec F-51) |
-| Hevy's API spec, inside `https://api.hevyapp.com/docs/swagger-ui-init.js` | `hevy_api.json` | Each path with its methods, and the exercise type, equipment, muscle group and set type enums |
+| Garmin's exercise list, `https://connect.garmin.com/web-data/exercises/Exercises.json` | `src/hevy_garmin_sync/data/garmin_exercises.json`, in the package because the app checks `CUSTOM_EXERCISE_MAP` against it | Each category key with its exercise keys (spec F-51, C-11) |
+| Hevy's API spec, inside `https://api.hevyapp.com/docs/swagger-ui-init.js` | `tests/data/hevy_api.json` | Each path with its methods, and the exercise type, equipment, muscle group and set type enums |
 
 1. `Compare` runs the script. The same copies pass and open nothing. A source it can't fetch or read fails the run.
 2. On a difference, `Issue` opens an issue titled "Garmin's exercise list or Hevy's API changed", labelled `P2`, `enhancement` and `ci`, with what was added and removed. While that issue is open, a later run comments on it instead of opening another.

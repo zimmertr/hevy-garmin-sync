@@ -71,6 +71,7 @@ To turn it on, open a private browser window, sign in at hevy.com, and copy the 
 | `HEVY_API_KEY` | required | Your Hevy API key |
 | `GARMIN_TOKEN` | required on the first start | What `login` printed |
 | `INCLUDE_HEVY_FOLDERS` | every routine | Only these routine folders, by id or title, comma-separated |
+| `CUSTOM_EXERCISE_MAP` | by muscle group | The Garmin exercise for your own Hevy exercises, as `title-or-id=CATEGORY/NAME`, comma-separated |
 | `ENABLE_SCHEDULED_WORKOUTS` | `true` | Put every routine, and Hevy Trainer's next workout, on today's Garmin calendar |
 | `HEVY_SESSION` | off | Turns Hevy Trainer on |
 | `HEVY_POLL_INTERVAL_SECONDS` | `60` | How often Hevy is checked |

@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 from urllib.error import HTTPError, URLError
 
+from hevy_garmin_sync import exercises
 from scripts import check_upstream as cu
 from tests import fixtures
 
@@ -137,16 +138,18 @@ class MainTest(unittest.TestCase):
     def setUp(self) -> None:
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
-        self.data = Path(folder.name)
-        self.garmin = self.data / "garmin_exercises.json"
-        self.hevy = self.data / "hevy_api.json"
+        self.root = Path(folder.name)
+        self.garmin = self.root / "src/hevy_garmin_sync/data/garmin_exercises.json"
+        self.hevy = self.root / "tests/data/hevy_api.json"
+        for path in (self.garmin, self.hevy):
+            path.parent.mkdir(parents=True)
         self.garmin.write_text(cu.dump(GARMIN), encoding="utf-8")
         self.hevy.write_text(cu.dump(HEVY), encoding="utf-8")
         self.upstream = fixtures.FakeUpstream()
 
     def run_main(self, *argv: str) -> tuple[int, str]:
         with redirect_stdout(io.StringIO()) as out:
-            code = cu.main(argv, opener=self.upstream, data=self.data)
+            code = cu.main(argv, opener=self.upstream, root=self.root)
         return code, out.getvalue()
 
     def drop_garmin_key(self) -> None:
@@ -160,10 +163,10 @@ class MainTest(unittest.TestCase):
 
     def test_a_key_missing_from_the_copy_exits_3_naming_it_in_the_report(self) -> None:
         self.drop_garmin_key()
-        report = self.data / "report.md"
+        report = self.root / "report.md"
         code, out = self.run_main("--report", str(report))
         self.assertEqual(code, cu.DIFFERENT)
-        self.assertIn("## Garmin's exercise list\n\n", out)
+        self.assertIn(f"## Garmin's exercise list\n\n{cu.GARMIN_URL} against `src/hevy_garmin_sync/data/", out)
         self.assertIn("Added (1):\n- `CORE > PLANK`\n", out)
         self.assertIn("## Hevy's API spec\n\n", out)
         self.assertEqual(report.read_text(encoding="utf-8"), out)
@@ -201,10 +204,13 @@ class MainTest(unittest.TestCase):
 
 class CommittedCopiesTest(unittest.TestCase):
     def test_each_copy_is_in_the_format_the_rewrite_writes(self) -> None:
-        for name in ("garmin_exercises.json", "hevy_api.json"):
-            with self.subTest(copy=name):
-                text = (cu.DATA / name).read_text(encoding="utf-8")
+        for source in cu.SOURCES:
+            with self.subTest(copy=source.copy):
+                text = (cu.ROOT / source.copy).read_text(encoding="utf-8")
                 self.assertEqual(cu.dump(json.loads(text)), text)
+
+    def test_the_garmin_copy_is_the_one_the_app_ships(self) -> None:
+        self.assertEqual((cu.ROOT / cu.SOURCES[0].copy).resolve(), exercises.GARMIN_EXERCISES.resolve())
 
 
 if __name__ == "__main__":
