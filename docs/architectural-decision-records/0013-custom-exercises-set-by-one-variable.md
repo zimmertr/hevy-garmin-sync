@@ -26,12 +26,13 @@ The startup log shows the variable as set with its number of entries, never the 
 ## Evidence
 
 - 2026-11-10, read in this app and in hevy2garmin: this app logged nothing for a custom exercise; hevy2garmin kept a per-user table, and for an exercise with no Garmin match set the step's `stepName` to the Hevy title (`buildStep` in `web/lib/garmin-workout.ts`).
-- No dated measurement of how a Fenix 8 or Strava shows `stepName`. That is #24's watch check, still to run.
+- 2026-11-10, #24's watch check on a Fenix 8: Garmin accepted a step with category `CORE`, a `stepName` and no exercise name, stored `CORE` with no exercise name, and kept no `stepName`. The watch showed "Core". So `stepName` can't carry a Hevy title to the watch, and no fallback uses it. Strava was not checked.
 
 ## Alternatives rejected
 
 - **A CSV file in `DATA_DIR`** (#24, option B): the same format as the shipped tables, but editing a file inside a pod's volume is awkward.
 - **A variable naming a file to mount** (#24, option C): fits a ConfigMap, but adds one more variable and one more chart template.
+- **Send the Hevy title as the step's `stepName`**, as hevy2garmin did: Garmin drops it (2026-11-10, above).
 - **Refuse an entry naming a built-in at startup**: needs Hevy's template list before the first call, and would refuse a custom exercise that shares a built-in's title.
 
 ## Consequences

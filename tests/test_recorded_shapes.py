@@ -1,10 +1,10 @@
-"""The fakes answer in the shapes Hevy and Garmin answered in on 2026-11-10 and 2026-11-11 (spec D-10).
+"""The fakes answer in the shapes Hevy and Garmin answered in (spec D-10).
 
-tests/data/recorded_shapes.json is what `make live-check` and `make live-check-hevy` recorded, trimmed
-to the replies the fakes build: keys and type names, never a value. This runs the live check over the
-fakes and compares what it records with that file, so a builder in tests/fixtures.py that drifts from a
-real reply fails here. A reply still marked "not yet recorded" is skipped; once its shape replaces the
-mark, the same comparison holds its builder to it.
+tests/data/recorded_shapes.json is what the live checks recorded, trimmed to the replies the fakes
+build: keys and type names, never a value. Garmin's and Hevy Trainer's are from `make live-check` on
+2026-11-10, Hevy's public API's from `make live-check-hevy` on 2026-11-11. This runs the live check over
+the fakes and compares what it records with that file, so a builder in tests/fixtures.py that drifts
+from a real reply fails here.
 """
 
 import io
@@ -24,9 +24,11 @@ from scripts import live_check as lc
 from tests import fixtures
 
 SHAPES = Path(__file__).parent / "data" / "recorded_shapes.json"
-NOT_YET = "not yet recorded"
-# The replies not recorded yet: the account read on 2026-11-10 and 2026-11-11 had no folder and no routine (#22).
-WAITING = {"hevy.folders", "hevy.routines"}
+# Fields Hevy sends on some items only: a routine set's `rep_range` comes with a rep range (docs/DATA.md),
+# and the set recorded on 2026-11-11 had none.
+OPTIONAL = {"rep_range"}
+# Hevy sends a whole weight as an int and another as a float, so the two are one type here.
+NUMBER = ("int", "float")  # a tuple, since a shape compared with it may be a dict
 
 
 def drift(recorded: Any, built: Any, path: str = "") -> list[str]:
@@ -45,13 +47,16 @@ def drift(recorded: Any, built: Any, path: str = "") -> list[str]:
             if key not in built:
                 found.append(f"{here}: recorded, missing from the fake")
             elif key not in recorded:
-                found.append(f"{here}: in the fake, not in the recorded reply")
+                if key not in OPTIONAL:
+                    found.append(f"{here}: in the fake, not in the recorded reply")
             else:
                 found += drift(recorded[key], built[key], here)
         return found
     if isinstance(recorded, list) and isinstance(built, list):
         return drift(recorded[0], built[0], f"{path}[0]") if recorded and built else []
-    return [] if recorded == built else [f"{path}: recorded {recorded}, the fake gives {built}"]
+    if recorded == built or (recorded in NUMBER and built in NUMBER):
+        return []
+    return [f"{path}: recorded {recorded}, the fake gives {built}"]
 
 
 def built_shapes() -> dict[str, Any]:
@@ -106,20 +111,11 @@ class RecordedShapesTest(unittest.TestCase):
     def test_every_recorded_reply_is_the_shape_its_fake_answers_in(self) -> None:
         for service, replies in self.recorded.items():
             for name, recorded in replies.items():
-                if recorded == NOT_YET:
-                    continue
                 with self.subTest(reply=f"{service}.{name}"):
-                    self.assertIn(name, self.built[service])
-                    self.assertEqual(drift(recorded, self.built[service][name]), [])
-
-    def test_only_hevys_folders_and_routines_wait_for_a_recording(self) -> None:
-        waiting = {
-            f"{service}.{name}"
-            for service, replies in self.recorded.items()
-            for name, recorded in replies.items()
-            if recorded == NOT_YET
-        }
-        self.assertEqual(waiting, WAITING)
+                    built = self.built[service][name]
+                    # An empty list passes any comparison, so the fake must fill every list Hevy filled.
+                    self.assertEqual(bool(built), bool(recorded))
+                    self.assertEqual(drift(recorded, built), [])
 
     def test_a_recorded_reply_holds_no_value(self) -> None:
         def leaves(node: Any) -> set[str]:
@@ -131,13 +127,20 @@ class RecordedShapesTest(unittest.TestCase):
                 found |= leaves(child)
             return found
 
-        self.assertLessEqual(leaves(self.recorded), {"str", "int", "float", "bool", "NoneType", NOT_YET})
+        self.assertLessEqual(leaves(self.recorded), {"str", "int", "float", "bool", "NoneType"})
 
 
 class DriftTest(unittest.TestCase):
-    def test_it_names_each_difference_and_lets_nulls_and_empty_lists_pass(self) -> None:
-        recorded = {"a": "int", "b": "str", "c": [{"d": "bool"}], "e": "NoneType", "f": [], "<key>": "str"}
-        built = {"a": "str", "c": [{"d": "bool", "x": "int"}], "e": {"g": "int"}, "f": ["int"], "y": "NoneType"}
+    def test_it_names_each_difference_and_lets_nulls_empty_lists_and_numbers_pass(self) -> None:
+        recorded = {"a": "int", "b": "str", "c": [{"d": "bool"}], "e": "NoneType", "f": [], "<key>": "str", "n": "int"}
+        built = {
+            "a": "str",
+            "c": [{"d": "bool", "x": "int", "rep_range": "NoneType"}],
+            "e": {"g": "int"},
+            "f": ["int"],
+            "y": "NoneType",
+            "n": "float",
+        }
         self.assertEqual(
             drift(recorded, built),
             [

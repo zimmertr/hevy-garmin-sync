@@ -550,8 +550,45 @@
     "workout_title": "str"
    }
   ],
-  "folders": "not yet recorded",
-  "routines": "not yet recorded",
+  "folders": [
+   {
+    "created_at": "str",
+    "id": "int",
+    "index": "int",
+    "title": "str",
+    "updated_at": "str"
+   }
+  ],
+  "routines": [
+   {
+    "created_at": "str",
+    "exercises": [
+     {
+      "exercise_template_id": "str",
+      "index": "int",
+      "notes": "NoneType",
+      "rest_seconds": "int",
+      "sets": [
+       {
+        "custom_metric": "NoneType",
+        "distance_meters": "NoneType",
+        "duration_seconds": "NoneType",
+        "index": "int",
+        "reps": "NoneType",
+        "type": "str",
+        "weight_kg": "int"
+       }
+      ],
+      "superset_id": "NoneType",
+      "title": "str"
+     }
+    ],
+    "folder_id": "int",
+    "id": "str",
+    "title": "str",
+    "updated_at": "str"
+   }
+  ],
   "template": {
    "equipment": "str",
    "id": "str",

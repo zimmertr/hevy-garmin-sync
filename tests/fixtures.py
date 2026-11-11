@@ -2,11 +2,9 @@
 
 The fakes answer in the shapes Hevy and Garmin answer in, with every name, id
 and token made up (spec D-10), and each can be told to fail the way the real
-service fails. Garmin's and Hevy Trainer's replies, and Hevy's workout events,
-exercise templates and exercise history, follow the shapes recorded on
-2026-11-10 and 2026-11-11 in tests/data/recorded_shapes.json, which
-tests/test_recorded_shapes.py holds them to. Hevy's folders and routines are
-not recorded yet.
+service fails. Every reply follows the shapes in tests/data/recorded_shapes.json,
+which tests/test_recorded_shapes.py holds them to: Garmin's and Hevy Trainer's
+recorded on 2026-11-10, Hevy's public API's on 2026-11-11.
 """
 
 import io
@@ -521,11 +519,8 @@ def rate_limited(retry_after: str) -> FakeResponse:
 Scripted = BaseException | int | str | FakeResponse | None
 
 
-# NOT YET RECORDED: Hevy's folders and routines (hevy_folder, hevy_routine and the hevy_exercise and hevy_set
-# they hold). The account read on 2026-11-10 and 2026-11-11 had no folder and no routine, so these follow
-# Hevy's published spec and the findings in docs/DATA.md. tests/data/recorded_shapes.json marks the two
-# "not yet recorded"; once their shapes replace that mark, tests/test_recorded_shapes.py holds these builders
-# to them as it holds the rest.
+# Hevy's public replies, in the shapes recorded on 2026-11-11. A set carries `rep_range` only when it has a
+# rep range; the one recorded had none, and tests/test_recorded_shapes.py takes the field as optional.
 def hevy_folder(folder_id: int, title: str) -> dict[str, Any]:
     return {"id": folder_id, "index": 0, "title": title, "updated_at": "", "created_at": ""}
 
