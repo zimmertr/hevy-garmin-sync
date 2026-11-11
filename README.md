@@ -23,7 +23,7 @@ Make one at https://hevy.com/settings?developer. That's `HEVY_API_KEY`.
 ### 2. Sign in to Garmin once
 
 ```sh
-docker run --rm -it zimmertr/hevy-garmin-sync:0.2.0 login
+docker run --rm -it ghcr.io/zimmertr/hevy-garmin-sync:0.3.0 login
 ```
 
 It asks for your Garmin email, password and 2FA code, and prints one long value. That's `GARMIN_TOKEN`. The password is used once and saved nowhere. Run this at home even if you host the app in the cloud: Garmin blocks sign-ins from a lot of cloud IPs. After the first start the app keeps the token current in its data folder, so you only do this again if Garmin signs you out.
@@ -39,7 +39,7 @@ docker compose up -d
 With Helm:
 
 ```sh
-helm install hevy-garmin-sync oci://registry-1.docker.io/zimmertr/hevy-garmin-sync-helm --version 0.2.0 \
+helm install hevy-garmin-sync oci://ghcr.io/zimmertr/hevy-garmin-sync-helm --version 0.3.0 \
   --set secret.HEVY_API_KEY=your-key \
   --set secret.GARMIN_TOKEN=your-token \
   --set env.TZ=America/Los_Angeles

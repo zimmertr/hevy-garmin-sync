@@ -1,5 +1,5 @@
 apiVersion: v2
-# Not the image's name: both live under zimmertr on Docker Hub, and a chart's
+# Not the image's name: both live under ghcr.io/zimmertr, and a chart's
 # name is its OCI path (bluebird#111).
 name: hevy-garmin-sync-helm
 description: Keeps Hevy routines and Hevy Trainer workouts on your Garmin watch as strength workouts.

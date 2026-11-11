@@ -21,4 +21,4 @@ jobs:
       security-events: write # the SARIF upload
     with:
       # The category keeps the Security tab's alert history.
-      images: '[{"image": "zimmertr/hevy-garmin-sync", "category": "trivy-released-image"}]'
+      images: '[{"image": "ghcr.io/zimmertr/hevy-garmin-sync", "category": "trivy-released-image"}]'

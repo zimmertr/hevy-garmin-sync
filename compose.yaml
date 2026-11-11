@@ -4,7 +4,7 @@ services:
   hevy-garmin-sync:
     # Releases are tagged with their version only; there is no `latest`.
     # https://github.com/zimmertr/hevy-garmin-sync/releases has the newest.
-    image: zimmertr/hevy-garmin-sync:0.2.0
+    image: ghcr.io/zimmertr/hevy-garmin-sync:0.3.0
     restart: unless-stopped
     env_file: .env
     # One copy only: two would refresh the same rotating Garmin token and
