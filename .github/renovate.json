@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>zimmertr/yggdrasil//defaults/renovate"
+  ],
+  "pip-compile": {
+    "description": "The two hashed locks. Renovate reads the pip-compile command from each lock's header, bumps the pin in requirements.in or requirements-dev.in, and recompiles every lock that depends on it.",
+    "managerFilePatterns": [
+      "/^requirements(-dev)?\\.txt$/"
+    ]
+  },
+  "pip_requirements": {
+    "description": "Off, because pip-compile already updates the .in files, and this manager would bump a lock's pin without recompiling its hashes.",
+    "enabled": false
+  },
+  "packageRules": [
+    {
+      "description": "compose.yaml runs this repo's own image. A bump there would merge itself, release a new version and be proposed again, so that version moves by hand, with the README's.",
+      "matchPackageNames": [
+        "ghcr.io/zimmertr/hevy-garmin-sync"
+      ],
+      "enabled": false
+    }
+  ]
+}

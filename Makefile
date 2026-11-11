@@ -60,10 +60,11 @@ scan: build
 
 # Not a check: rewrites the two hashed locks (the image's and the tests'), on
 # the image's own Python. pip-compile keeps every pin it already has unless
-# asked; add --upgrade-package NAME to move one. The pip-tools and pip versions
-# are hevy-trainer-sync's, the pair Dependabot also runs.
+# asked; add --upgrade-package NAME to move one. Renovate recompiles both the
+# same way, from the command in each lock's header. pip-tools 7.5.3 wrote
+# --no-index into that header, which Renovate refuses to read; 7.6 doesn't.
 lock:
-	$(RUN) $(PYTHON_IMAGE) sh -c "pip install -q --root-user-action=ignore 'pip<26' pip-tools==7.5.3 && \
+	$(RUN) $(PYTHON_IMAGE) sh -c "pip install -q --root-user-action=ignore pip-tools==7.6.2 && \
 	  pip-compile -q --generate-hashes --allow-unsafe --strip-extras --output-file=requirements.txt requirements.in && \
 	  pip-compile -q --generate-hashes --allow-unsafe --strip-extras --output-file=requirements-dev.txt requirements-dev.in"
 

@@ -5,10 +5,11 @@ pip-compile's lock of them, every indirect package included and every one
 hashed. The image installs that lock with `--require-hashes`.
 `requirements-dev.txt` is the same lock with the test tools on top,
 constrained to the image's, so the suite runs against what ships. `make lock`
-writes both, and Dependabot recompiles them. After hevy-trainer-sync's test of
+writes both, and Renovate recompiles them. After hevy-trainer-sync's test of
 the same name.
 """
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -81,13 +82,29 @@ class LockTest(unittest.TestCase):
                 installs = re.findall(r"pip install [^&'\"\n]*-r requirements[\w-]*\.txt", text)
                 self.assertEqual([i for i in installs if "--require-hashes" not in i], [])
 
-    def test_the_pip_updates_wait_a_cooldown(self) -> None:
-        config = (REPO / ".github" / "dependabot.yml").read_text()
-        pip = re.search(r"- package-ecosystem: pip\n(.*?)(?=\n  - package-ecosystem:|\Z)", config, re.S)
-        assert pip is not None, "dependabot.yml has no pip entry"
-        days = re.search(r"default-days: (\d+)", pip.group(1))
-        assert days is not None, "the pip entry has no cooldown"
-        self.assertGreater(int(days.group(1)), 0)
+    def test_renovate_recompiles_both_locks_under_the_shared_wait(self) -> None:
+        config = json.loads((REPO / ".github" / "renovate.json").read_text())
+        # The seven-day wait is the preset's (zimmertr/yggdrasil record 0056).
+        # A config that stops extending it merges a release the day it ships.
+        self.assertIn("github>zimmertr/yggdrasil//defaults/renovate", config["extends"])
+        self.assertNotIn("minimumReleaseAge", json.dumps(config))
+        patterns = [re.compile(p.strip("/")) for p in config["pip-compile"]["managerFilePatterns"]]
+        for locked in ("requirements.txt", "requirements-dev.txt"):
+            with self.subTest(lock=locked):
+                self.assertTrue(any(p.search(locked) for p in patterns), f"Renovate's pip-compile skips {locked}")
+        # pip_requirements would bump a lock's pin and leave its hashes stale.
+        self.assertIs(config["pip_requirements"]["enabled"], False)
+
+    def test_renovate_can_read_each_locks_header(self) -> None:
+        # Renovate recompiles a lock with the command in its header, and stops
+        # at an option it doesn't know. pip-tools 7.5.3 wrote --no-index there.
+        known = {"--allow-unsafe", "--generate-hashes", "--strip-extras", "--output-file"}
+        for locked in ("requirements.txt", "requirements-dev.txt"):
+            with self.subTest(lock=locked):
+                command = re.search(r"^#    pip-compile (.+)$", (REPO / locked).read_text(), re.M)
+                assert command is not None, f"{locked} has no pip-compile header"
+                options = {word.split("=", 1)[0] for word in command.group(1).split() if word.startswith("-")}
+                self.assertEqual(options - known, set())
 
 
 if __name__ == "__main__":

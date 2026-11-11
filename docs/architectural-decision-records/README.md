@@ -25,7 +25,7 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | Record | Decision | Date | Status |
 |---|---|---|---|
 | [0001](0001-build-to-the-signed-off-spec.md) | Build hevy-garmin-sync to the signed-off spec, one direction only, in one repo with its chart | 2026-11-07 | Accepted |
-| [0002](0002-ci-on-yggdrasil-modules.md) | CI runs on zimmertr/yggdrasil's modules, pinned to the versions a live consumer runs | 2026-11-07 | Accepted. Superseded in part by 0012 |
+| [0002](0002-ci-on-yggdrasil-modules.md) | CI runs on zimmertr/yggdrasil's modules, pinned to the versions a live consumer runs | 2026-11-07 | Accepted. Superseded in part by 0012 and 0014 |
 | [0003](0003-docker-hub-until-yggdrasil-has-ghcr.md) | The image and the chart are published to Docker Hub until yggdrasil adds GHCR | 2026-11-07 | Superseded by 0006 |
 | [0004](0004-bump-a-disabled-folder-until-cutover.md) | Releases bump a disabled Kubernetes-Manifests folder until TJ's cutover | 2026-11-07 | Superseded by 0005 |
 | [0005](0005-releases-deploy-through-the-live-folder.md) | Since the cutover, every release bumps the live Kubernetes-Manifests folder and so deploys | 2026-11-10 | Accepted |
@@ -37,3 +37,4 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0011](0011-retry-refused-workouts-and-honour-retry-after.md) | A refused workout is retried at growing gaps until midnight, then daily, and a rate limit's own wait beats the app's | 2026-11-10 | Accepted |
 | [0012](0012-the-chart-goes-through-yggdrasils-modules.md) | The chart is checked, pushed and deployed by yggdrasil's modules | 2026-11-11 | Accepted. Supersedes 0002 in part |
 | [0013](0013-custom-exercises-set-by-one-variable.md) | A custom exercise's Garmin exercise is logged, and one variable, CUSTOM_EXERCISE_MAP, can set it | 2026-11-10 | Accepted |
+| [0014](0014-renovate-under-yggdrasils-preset.md) | Renovate keeps dependencies current, under yggdrasil's shared preset | 2026-11-11 | Accepted. Supersedes 0002 in part |

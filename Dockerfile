@@ -1,5 +1,5 @@
 # Tag and digest, so an upstream rebuild of 3.14-slim reaches this image as a
-# Dependabot PR rather than silently at the next build.
+# Renovate PR rather than silently at the next build.
 FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 DATA_DIR=/data
