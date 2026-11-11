@@ -280,9 +280,8 @@ def store_key(key: Any, ids: ProgramIds, username: str) -> str:
     name = key if isinstance(key, str) else ""
     if not _STORE_KEY.fullmatch(name):
         return "<key>"
-    for hidden in sorted(ids.templates | ids.exercises | {username}, key=len, reverse=True):
-        if hidden:
-            name = name.replace(hidden, "<id>")
+    for hidden in sorted((ids.templates | ids.exercises | {username}) - {""}, key=len, reverse=True):
+        name = name.replace(hidden, "<id>")
     for run in ids.look_alikes(name):
         name = name.replace(run, "<id>")
     return name
