@@ -364,6 +364,239 @@
     }
    ]
   },
+  "stored_steps": {
+   "group.repeat": {
+    "childStepId": "int",
+    "endCondition": {
+     "conditionTypeId": "int",
+     "conditionTypeKey": "str",
+     "displayOrder": "int",
+     "displayable": "bool"
+    },
+    "endConditionCompare": "NoneType",
+    "endConditionValue": "float",
+    "numberOfIterations": "int",
+    "preferredEndConditionUnit": "NoneType",
+    "skipLastRestStep": "bool",
+    "smartRepeat": "bool",
+    "stepId": "int",
+    "stepOrder": "int",
+    "stepType": {
+     "displayOrder": "int",
+     "stepTypeId": "int",
+     "stepTypeKey": "str"
+    },
+    "type": "str"
+   },
+   "in_group.interval": {
+    "category": "str",
+    "childStepId": "int",
+    "description": "NoneType",
+    "endCondition": {
+     "conditionTypeId": "int",
+     "conditionTypeKey": "str",
+     "displayOrder": "int",
+     "displayable": "bool"
+    },
+    "endConditionCompare": "NoneType",
+    "endConditionValue": "float",
+    "endConditionZone": "NoneType",
+    "equipmentType": {
+     "displayOrder": "int",
+     "equipmentTypeId": "int",
+     "equipmentTypeKey": "NoneType"
+    },
+    "exerciseName": "str",
+    "preferredEndConditionUnit": "NoneType",
+    "providerExerciseSourceId": "NoneType",
+    "secondaryTargetType": "NoneType",
+    "secondaryTargetValueOne": "NoneType",
+    "secondaryTargetValueTwo": "NoneType",
+    "secondaryTargetValueUnit": "NoneType",
+    "secondaryZoneNumber": "NoneType",
+    "stepId": "int",
+    "stepOrder": "int",
+    "stepType": {
+     "displayOrder": "int",
+     "stepTypeId": "int",
+     "stepTypeKey": "str"
+    },
+    "strokeType": {
+     "displayOrder": "int",
+     "strokeTypeId": "int",
+     "strokeTypeKey": "NoneType"
+    },
+    "targetType": {
+     "displayOrder": "int",
+     "workoutTargetTypeId": "int",
+     "workoutTargetTypeKey": "str"
+    },
+    "targetValueOne": "NoneType",
+    "targetValueTwo": "NoneType",
+    "targetValueUnit": "NoneType",
+    "type": "str",
+    "weightUnit": "NoneType",
+    "weightValue": "NoneType",
+    "workoutProvider": "NoneType",
+    "zoneNumber": "NoneType"
+   },
+   "in_group.rest": {
+    "category": "NoneType",
+    "childStepId": "int",
+    "description": "NoneType",
+    "endCondition": {
+     "conditionTypeId": "int",
+     "conditionTypeKey": "str",
+     "displayOrder": "int",
+     "displayable": "bool"
+    },
+    "endConditionCompare": "NoneType",
+    "endConditionValue": "float",
+    "endConditionZone": "NoneType",
+    "equipmentType": {
+     "displayOrder": "int",
+     "equipmentTypeId": "int",
+     "equipmentTypeKey": "NoneType"
+    },
+    "exerciseName": "NoneType",
+    "preferredEndConditionUnit": "NoneType",
+    "providerExerciseSourceId": "NoneType",
+    "secondaryTargetType": "NoneType",
+    "secondaryTargetValueOne": "NoneType",
+    "secondaryTargetValueTwo": "NoneType",
+    "secondaryTargetValueUnit": "NoneType",
+    "secondaryZoneNumber": "NoneType",
+    "stepId": "int",
+    "stepOrder": "int",
+    "stepType": {
+     "displayOrder": "int",
+     "stepTypeId": "int",
+     "stepTypeKey": "str"
+    },
+    "strokeType": {
+     "displayOrder": "int",
+     "strokeTypeId": "int",
+     "strokeTypeKey": "NoneType"
+    },
+    "targetType": {
+     "displayOrder": "int",
+     "workoutTargetTypeId": "int",
+     "workoutTargetTypeKey": "str"
+    },
+    "targetValueOne": "NoneType",
+    "targetValueTwo": "NoneType",
+    "targetValueUnit": "NoneType",
+    "type": "str",
+    "weightUnit": "NoneType",
+    "weightValue": "NoneType",
+    "workoutProvider": "NoneType",
+    "zoneNumber": "NoneType"
+   },
+   "step.interval": {
+    "category": "str",
+    "childStepId": "NoneType",
+    "description": "NoneType",
+    "endCondition": {
+     "conditionTypeId": "int",
+     "conditionTypeKey": "str",
+     "displayOrder": "int",
+     "displayable": "bool"
+    },
+    "endConditionCompare": "NoneType",
+    "endConditionValue": "float",
+    "endConditionZone": "NoneType",
+    "equipmentType": {
+     "displayOrder": "int",
+     "equipmentTypeId": "int",
+     "equipmentTypeKey": "NoneType"
+    },
+    "exerciseName": "str",
+    "preferredEndConditionUnit": "NoneType",
+    "providerExerciseSourceId": "NoneType",
+    "secondaryTargetType": "NoneType",
+    "secondaryTargetValueOne": "NoneType",
+    "secondaryTargetValueTwo": "NoneType",
+    "secondaryTargetValueUnit": "NoneType",
+    "secondaryZoneNumber": "NoneType",
+    "stepId": "int",
+    "stepOrder": "int",
+    "stepType": {
+     "displayOrder": "int",
+     "stepTypeId": "int",
+     "stepTypeKey": "str"
+    },
+    "strokeType": {
+     "displayOrder": "int",
+     "strokeTypeId": "int",
+     "strokeTypeKey": "NoneType"
+    },
+    "targetType": {
+     "displayOrder": "int",
+     "workoutTargetTypeId": "int",
+     "workoutTargetTypeKey": "str"
+    },
+    "targetValueOne": "NoneType",
+    "targetValueTwo": "NoneType",
+    "targetValueUnit": "NoneType",
+    "type": "str",
+    "weightUnit": "NoneType",
+    "weightValue": "NoneType",
+    "workoutProvider": "NoneType",
+    "zoneNumber": "NoneType"
+   },
+   "step.rest": {
+    "category": "NoneType",
+    "childStepId": "NoneType",
+    "description": "NoneType",
+    "endCondition": {
+     "conditionTypeId": "int",
+     "conditionTypeKey": "str",
+     "displayOrder": "int",
+     "displayable": "bool"
+    },
+    "endConditionCompare": "NoneType",
+    "endConditionValue": "NoneType",
+    "endConditionZone": "NoneType",
+    "equipmentType": {
+     "displayOrder": "int",
+     "equipmentTypeId": "int",
+     "equipmentTypeKey": "NoneType"
+    },
+    "exerciseName": "NoneType",
+    "preferredEndConditionUnit": "NoneType",
+    "providerExerciseSourceId": "NoneType",
+    "secondaryTargetType": "NoneType",
+    "secondaryTargetValueOne": "NoneType",
+    "secondaryTargetValueTwo": "NoneType",
+    "secondaryTargetValueUnit": "NoneType",
+    "secondaryZoneNumber": "NoneType",
+    "stepId": "int",
+    "stepOrder": "int",
+    "stepType": {
+     "displayOrder": "int",
+     "stepTypeId": "int",
+     "stepTypeKey": "str"
+    },
+    "strokeType": {
+     "displayOrder": "int",
+     "strokeTypeId": "int",
+     "strokeTypeKey": "NoneType"
+    },
+    "targetType": {
+     "displayOrder": "int",
+     "workoutTargetTypeId": "int",
+     "workoutTargetTypeKey": "str"
+    },
+    "targetValueOne": "NoneType",
+    "targetValueTwo": "NoneType",
+    "targetValueUnit": "NoneType",
+    "type": "str",
+    "weightUnit": "NoneType",
+    "weightValue": "NoneType",
+    "workoutProvider": "NoneType",
+    "zoneNumber": "NoneType"
+   }
+  },
   "stored_workout": {
    "<key>": "NoneType",
    "atpPlanId": "NoneType",
@@ -639,7 +872,13 @@
   ]
  },
  "hevy_trainer": {
-  "exercise_template_units": [],
+  "exercise_template_units": [
+   {
+    "exercise_template_id": "str",
+    "id": "int",
+    "weight_unit": "str"
+   }
+  ],
   "program": {
    "cardio_preference": "str",
    "created_at": "str",
@@ -739,6 +978,9 @@
    ],
    "injuries": [],
    "updated_at": "str"
+  },
+  "user_key_values": {
+   "<key>": "bool"
   },
   "user_preferences": {
    "body_measurement_unit": "str",

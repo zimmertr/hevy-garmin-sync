@@ -2,7 +2,9 @@
 
 tests/data/recorded_shapes.json is what the live checks recorded, trimmed to the replies the fakes
 build: keys and type names, never a value. Garmin's and Hevy Trainer's are from `make live-check` on
-2026-11-10, Hevy's public API's from `make live-check-hevy` on 2026-11-11. This runs the live check over
+2026-11-10, Hevy's public API's from `make live-check-hevy` on 2026-11-11. Garmin's stored repeat group
+and the steps around it (`stored_steps`) and a row of the unit list are from `make live-check` on
+2026-11-11, and `user_key_values` from `make live-check-hevy` that day. This runs the live check over
 the fakes and compares what it records with that file, so a builder in tests/fixtures.py that drifts
 from a real reply fails here.
 """
@@ -70,6 +72,7 @@ def built_shapes() -> dict[str, Any]:
     upper = fixtures.trainer_template("t-upper", "upper_2x_a", [fixtures.trainer_exercise("T-GOBLET")])
     private_api.program = fixtures.trainer_program([fixtures.lower_template(), upper])
     private_api.workouts = [fixtures.logged_lower(fixtures.PROGRAM_START)]
+    private_api.units = [fixtures.hevy_unit_row("T-GOBLET", "kg")]
     garmin_api = fixtures.FakeGarminApi()
     # One of the app's own workouts on today, first, as the live run found: a weighted set, then a rest.
     lifted = workout.Exercise("Made Up", "SQUAT", "GOBLET_SQUAT", (workout.Set(reps=8, weight_kg=20.0),))
