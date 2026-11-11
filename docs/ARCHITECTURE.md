@@ -73,7 +73,7 @@ Two CSV files in `src/hevy_garmin_sync/data/`:
 
 ## The image
 
-Built by the release for `linux/amd64` and `linux/arm64`, tagged with the version only, at `docker.io/zimmertr/hevy-garmin-sync` (record [0003](architectural-decision-records/0003-docker-hub-until-yggdrasil-has-ghcr.md)). It runs as uid and gid 1000, and the only folder it writes is `/data` (`DATA_DIR`, spec C-8). The entry point is `python3 -m hevy_garmin_sync`.
+Built by the release for `linux/amd64` and `linux/arm64`, tagged with the version only, at `ghcr.io/zimmertr/hevy-garmin-sync` (record [0006](architectural-decision-records/0006-ghcr-and-a-digest-pinned-chart.md)). It runs as uid and gid 1000, and the only folder it writes is `/data` (`DATA_DIR`, spec C-8). The entry point is `python3 -m hevy_garmin_sync`.
 
 ## The chart
 
