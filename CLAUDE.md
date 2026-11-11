@@ -1,6 +1,6 @@
 # hevy-garmin-sync
 
-Turns Hevy routines, and optionally Hevy Trainer's workouts, into Garmin Connect strength workouts and sends them to the watch. One Python process in one Docker image, configured by environment variables. The sync itself is built in #1; [`docs/SPEC.md`](docs/SPEC.md) is the signed-off plan and the source of truth for scope and behaviour.
+Turns Hevy routines, and optionally Hevy Trainer's workouts, into Garmin Connect strength workouts and sends them to the watch. One Python process in one Docker image, configured by environment variables. [`docs/SPEC.md`](docs/SPEC.md) is the signed-off plan and the source of truth for scope and behaviour; start with [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for which module does what.
 
 ## Documentation
 
@@ -9,7 +9,8 @@ Prose lives in `docs/`. A change that makes any page untrue updates it in the sa
 | Doc | Holds |
 |---|---|
 | [`docs/SPEC.md`](docs/SPEC.md) | The signed-off spec: every requirement by ID, the open items, the backlog |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The repo's layout, the image, the chart, and the modules the spec plans |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The repo's layout, one run step by step, the modules, the exercise map, the image and the chart |
+| [`docs/HEVY_TRAINER_RULES.md`](docs/HEVY_TRAINER_RULES.md) | Hevy Trainer's rules as findings: the week, weights, rounding, warm-ups, rep ranges, and the cases checked against the Hevy app |
 | [`docs/CICD.md`](docs/CICD.md) | From PR to release, with the diagram, the required checks, the secrets and where the repo's settings live |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every variable and chart value, and where each is set |
 | [`docs/USAGE.md`](docs/USAGE.md) | What TJ sees, and what to do when it breaks |
@@ -26,6 +27,7 @@ Prose lives in `docs/`. A change that makes any page untrue updates it in the sa
 - **Releases bump a disabled Kubernetes-Manifests folder** (`misc/hevy-garmin-sync.disabled`) until TJ's cutover. Record: [0004](docs/architectural-decision-records/0004-bump-a-disabled-folder-until-cutover.md)
 - **The repo is public.** No tokens, ids or personal data in code, fixtures, logs or docs. The Hevy Trainer rules are written down as findings only, not how they were found (spec D-7b).
 - **Live calls need TJ's okay**, each time, and TJ runs any sign-in himself.
+- **Exercise names are data.** A wrong Garmin exercise is fixed in `src/hevy_garmin_sync/data/exercise_map.csv` (or `custom_exercise_map.csv`), never in code, and every row must name a pair in `tests/data/garmin_exercises.json` (spec F-51, F-54).
 
 ## Tests
 

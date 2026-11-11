@@ -1,4 +1,9 @@
 # The image's direct pins. `make lock` compiles requirements.txt from this
 # file, with a hash for every package.
+# Garmin's sign-in, token refresh and workout calls (spec A-2a).
+garminconnect==0.3.20
+# The Hevy clients. garminconnect needs it too; pinned here because the app
+# imports it itself (spec D-2).
+requests==2.34.2
 # python:slim ships no zoneinfo database; TZ needs one.
 tzdata==2026.6

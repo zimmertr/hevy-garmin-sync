@@ -20,6 +20,7 @@ CI is the test runner. Branch from the latest `main`, open a draft PR early, pus
 
 - Every change ships with tests. Coverage aims at 100% of lines and branches, CI reports it, and a gap gets a test or a written reason. A test asserts on behaviour; one that only runs a line is deleted.
 - `unittest` and `unittest.mock`. No test touches the network or a real account.
-- Fakes come from one fixtures module that #1 adds: recorded Hevy and Garmin responses with every name, id, token and email replaced (spec D-10). A fake can fail the way the real service fails.
-- Time is fixed: tests pin the clock and the time zone, and no test spells a calendar date.
+- Fakes come from one module, `tests/fixtures.py`: a fake Hevy public API, a fake Hevy private API and a fake Garmin, answering in the shapes the real services answer in, with every name, id and token made up (spec D-10). Each can be told to fail the way the real service fails. A test never builds its own fake.
+- Time is fixed: tests pin the clock and the time zone. The pinned dates live in `tests/fixtures.py`; a test spells its own only when the date is the point, such as a clock change or the Hevy Trainer cases checked against the app.
+- `tests/test_exercise_data.py` checks both exercise tables against `tests/data/garmin_exercises.json`, the keys of Garmin's own exercise list. A row naming an exercise Garmin doesn't have fails it.
 - A test that reads files fails when it can't find them, instead of skipping.

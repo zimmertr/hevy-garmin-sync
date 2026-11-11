@@ -17,6 +17,8 @@ The direct pins in `requirements.in`, with the license of each; a test holds thi
 
 | Software | Version | License |
 |---|---|---|
+| [garminconnect](https://github.com/cyberjunky/python-garminconnect) | 0.3.20 | MIT License |
+| [requests](https://github.com/psf/requests) | 2.34.2 | Apache License 2.0 |
 | [tzdata](https://github.com/python/tzdata) | 2026.6 | Apache License 2.0 |
 
 From the `python:3.14-slim` base image: Python 3.14 (Python Software Foundation License), pip (MIT License), and Debian 13 (each package's own license; see the SBOM).

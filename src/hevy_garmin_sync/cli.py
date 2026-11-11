@@ -1,10 +1,9 @@
-"""The command line. The foundation only reports its version; the app arrives with #1."""
+"""The command line: no arguments runs the app, `login` signs in to Garmin once (spec A-2)."""
 
 import argparse
-import sys
 from collections.abc import Sequence
 
-from . import __version__
+from . import __version__, app, login
 
 
 def parser() -> argparse.ArgumentParser:
@@ -13,12 +12,13 @@ def parser() -> argparse.ArgumentParser:
         description="Keep Hevy routines and Hevy Trainer workouts on your Garmin watch as strength workouts.",
     )
     p.add_argument("--version", action="version", version=f"hevy-garmin-sync {__version__}")
+    commands = p.add_subparsers(dest="command")
+    commands.add_parser("login", help="sign in to Garmin once and print the value for GARMIN_TOKEN")
     return p
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser().parse_args(argv)
-    # Nothing to run yet: the sync itself is built in #1. Saying so beats
-    # exiting silently, so a deployment of this version explains itself.
-    print(f"hevy-garmin-sync {__version__}: nothing to run yet (zimmertr/hevy-garmin-sync#1)", file=sys.stderr)
-    return 0
+    args = parser().parse_args(argv)
+    if args.command == "login":
+        return login.main()
+    return app.main()
