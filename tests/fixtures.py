@@ -3,8 +3,10 @@
 The fakes answer in the shapes Hevy and Garmin answer in, with every name, id
 and token made up (spec D-10), and each can be told to fail the way the real
 service fails. Garmin's and Hevy Trainer's replies, and Hevy's workout events,
-follow the shapes recorded on 2026-11-10 in tests/data/recorded_shapes.json,
-which tests/test_recorded_shapes.py holds them to.
+exercise templates and exercise history, follow the shapes recorded on
+2026-11-10 and 2026-11-11 in tests/data/recorded_shapes.json, which
+tests/test_recorded_shapes.py holds them to. Hevy's folders and routines are
+not recorded yet.
 """
 
 import io
@@ -83,12 +85,15 @@ class FakeGarminTokens:
 
 
 def _filled(defaults: dict[str, Any], given: dict[str, Any]) -> dict[str, Any]:
-    """`given` over `defaults`, nested dicts merged too, the way Garmin fills in what a body leaves out."""
-    merged = dict(defaults)
+    """`given` over `defaults`, nested dicts merged too, the way Garmin fills in what a body leaves out.
+
+    The given keys keep their order and come first, so a stored body reads as it was sent.
+    """
+    merged: dict[str, Any] = {}
     for key, value in given.items():
         base = defaults.get(key)
         merged[key] = _filled(base, value) if isinstance(base, dict) and isinstance(value, dict) else value
-    return merged
+    return merged | {key: value for key, value in defaults.items() if key not in merged}
 
 
 # Garmin's replies, in the shapes recorded on 2026-11-10 (tests/data/recorded_shapes.json), with every value
@@ -455,7 +460,7 @@ class FakeGarminApi:
 
     def _entry(self, entry: dict[str, Any]) -> dict[str, Any]:
         """A calendar entry as Garmin answers it: with its workout whole, but for the author."""
-        found = self.workouts.get((entry.get("workout") or {}).get("workoutId"))
+        found = self.workouts.get((entry.get("workout") or {}).get("workoutId"))  # type: ignore[arg-type]
         return _GARMIN_ENTRY | entry | ({"workout": found | {"author": None}} if found else {})
 
     def get_scheduled_workouts_by_period(self, start: str, end: str) -> list[dict[str, Any]]:
@@ -516,10 +521,11 @@ def rate_limited(retry_after: str) -> FakeResponse:
 Scripted = BaseException | int | str | FakeResponse | None
 
 
-# NOT YET RECORDED: Hevy's folders, routines, exercise templates and exercise history. The account read on
-# 2026-11-10 had no routines, so these builders follow Hevy's published spec. tests/data/recorded_shapes.json
-# marks the four "not yet recorded"; once their shapes replace that mark, tests/test_recorded_shapes.py holds
-# these builders to them as it holds the rest.
+# NOT YET RECORDED: Hevy's folders and routines (hevy_folder, hevy_routine and the hevy_exercise and hevy_set
+# they hold). The account read on 2026-11-10 and 2026-11-11 had no folder and no routine, so these follow
+# Hevy's published spec and the findings in docs/DATA.md. tests/data/recorded_shapes.json marks the two
+# "not yet recorded"; once their shapes replace that mark, tests/test_recorded_shapes.py holds these builders
+# to them as it holds the rest.
 def hevy_folder(folder_id: int, title: str) -> dict[str, Any]:
     return {"id": folder_id, "index": 0, "title": title, "updated_at": "", "created_at": ""}
 
@@ -565,6 +571,7 @@ def hevy_routine(
 
 
 def hevy_template(template_id: str, title: str, **fields: Any) -> dict[str, Any]:
+    """An exercise template, in the shape Hevy sent on 2026-11-11."""
     return {
         "id": template_id,
         "title": title,
@@ -573,14 +580,28 @@ def hevy_template(template_id: str, title: str, **fields: Any) -> dict[str, Any]
         "secondary_muscle_groups": [],
         "equipment": "barbell",
         "is_custom": False,
+        "thumbnail_url": "made-up",
     } | fields
 
 
 def hevy_history_set(
-    kilograms: float, reps: int, workout_start: str | None, set_type: str = "normal"
+    kilograms: float, reps: int, workout_start: str | None, set_type: str = "normal", template_id: str = "T-BENCH"
 ) -> dict[str, Any]:
-    """One set of the public exercise history: the four fields the app reads. Its full shape is not recorded yet."""
-    return {"weight_kg": kilograms, "reps": reps, "set_type": set_type, "workout_start_time": workout_start}
+    """One set of an exercise's history, in the shape Hevy sent on 2026-11-11. The app reads the first four."""
+    return {
+        "weight_kg": float(kilograms),
+        "reps": reps,
+        "set_type": set_type,
+        "workout_start_time": workout_start,
+        "workout_end_time": workout_start,
+        "workout_id": "made-up",
+        "workout_title": "Made Up",
+        "exercise_template_id": template_id,
+        "rpe": 8,
+        "distance_meters": None,
+        "duration_seconds": None,
+        "custom_metric": None,
+    }
 
 
 def hevy_workout_event(workout_id: str, template_id: str, title: str) -> dict[str, Any]:

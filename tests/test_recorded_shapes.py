@@ -1,10 +1,10 @@
-"""The fakes answer in the shapes Hevy and Garmin answered in on 2026-11-10 (spec D-10).
+"""The fakes answer in the shapes Hevy and Garmin answered in on 2026-11-10 and 2026-11-11 (spec D-10).
 
-tests/data/recorded_shapes.json is what `make live-check` recorded, trimmed to the replies the fakes
-build: keys and type names, never a value. This runs the same live check over the fakes and compares
-what it records with that file, so a builder in tests/fixtures.py that drifts from a real reply fails
-here. A reply still marked "not yet recorded" is skipped; recording it later is a change to the file
-alone, and this then holds its builder to it.
+tests/data/recorded_shapes.json is what `make live-check` and `make live-check-hevy` recorded, trimmed
+to the replies the fakes build: keys and type names, never a value. This runs the live check over the
+fakes and compares what it records with that file, so a builder in tests/fixtures.py that drifts from a
+real reply fails here. A reply still marked "not yet recorded" is skipped; once its shape replaces the
+mark, the same comparison holds its builder to it.
 """
 
 import io
@@ -25,8 +25,8 @@ from tests import fixtures
 
 SHAPES = Path(__file__).parent / "data" / "recorded_shapes.json"
 NOT_YET = "not yet recorded"
-# The only replies that may still wait: Hevy's for an account with routines. The one read had none (#22).
-MAY_WAIT = {"hevy.folders", "hevy.routines", "hevy.template", "hevy.exercise_history"}
+# The replies not recorded yet: the account read on 2026-11-10 and 2026-11-11 had no folder and no routine (#22).
+WAITING = {"hevy.folders", "hevy.routines"}
 
 
 def drift(recorded: Any, built: Any, path: str = "") -> list[str]:
@@ -112,14 +112,14 @@ class RecordedShapesTest(unittest.TestCase):
                     self.assertIn(name, self.built[service])
                     self.assertEqual(drift(recorded, self.built[service][name]), [])
 
-    def test_only_hevys_routine_replies_may_wait_for_a_recording(self) -> None:
+    def test_only_hevys_folders_and_routines_wait_for_a_recording(self) -> None:
         waiting = {
             f"{service}.{name}"
             for service, replies in self.recorded.items()
             for name, recorded in replies.items()
             if recorded == NOT_YET
         }
-        self.assertLessEqual(waiting, MAY_WAIT)
+        self.assertEqual(waiting, WAITING)
 
     def test_a_recorded_reply_holds_no_value(self) -> None:
         def leaves(node: Any) -> set[str]:

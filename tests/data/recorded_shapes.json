@@ -534,10 +534,36 @@
   }
  },
  "hevy": {
-  "exercise_history": "not yet recorded",
+  "exercise_history": [
+   {
+    "custom_metric": "NoneType",
+    "distance_meters": "NoneType",
+    "duration_seconds": "NoneType",
+    "exercise_template_id": "str",
+    "reps": "int",
+    "rpe": "int",
+    "set_type": "str",
+    "weight_kg": "float",
+    "workout_end_time": "str",
+    "workout_id": "str",
+    "workout_start_time": "str",
+    "workout_title": "str"
+   }
+  ],
   "folders": "not yet recorded",
   "routines": "not yet recorded",
-  "template": "not yet recorded",
+  "template": {
+   "equipment": "str",
+   "id": "str",
+   "is_custom": "bool",
+   "primary_muscle_group": "str",
+   "secondary_muscle_groups": [
+    "str"
+   ],
+   "thumbnail_url": "str",
+   "title": "str",
+   "type": "str"
+  },
   "workout_events": [
    {
     "type": "str",
