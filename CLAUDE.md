@@ -27,7 +27,7 @@ Prose lives in `docs/`. A change that makes any page untrue updates it in the sa
 - **Every release deploys to TJ's cluster.** The release bumps the chart version in Kubernetes-Manifests `misc/hevy-garmin-sync`, and Argo CD rolls the pod. Record: [0005](docs/architectural-decision-records/0005-releases-deploy-through-the-live-folder.md)
 - **The repo is public.** No tokens, ids or personal data in code, fixtures, logs or docs. The Hevy Trainer rules are written down as findings only, not how they were found (spec D-7b).
 - **Live calls need TJ's okay**, each time, and TJ runs any sign-in himself.
-- **Exercise names are data.** A wrong Garmin exercise is fixed in `src/hevy_garmin_sync/data/exercise_map.csv` (or `custom_exercise_map.csv`), never in code, and every row must name a pair in `tests/data/garmin_exercises.json` (spec F-51, F-54).
+- **Exercise names are data.** A wrong Garmin exercise is fixed in `src/hevy_garmin_sync/data/exercise_map.csv` (or `custom_exercise_map.csv`), never in code, and every row must name a pair in `src/hevy_garmin_sync/data/garmin_exercises.json` (spec F-51, F-54). A user's own exercise is set with `CUSTOM_EXERCISE_MAP` instead (C-11). Record: [0012](docs/architectural-decision-records/0012-custom-exercises-set-by-one-variable.md)
 
 ## Tests
 

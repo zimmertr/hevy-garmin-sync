@@ -7,9 +7,9 @@ Where each part of the app lives. The behaviour is specified in [SPEC.md](SPEC.m
 | Path | Holds |
 |---|---|
 | `src/hevy_garmin_sync/` | The Python package ([the modules](#the-modules)) |
-| `src/hevy_garmin_sync/data/` | The two exercise tables the app ships ([the exercise map](#the-exercise-map)) |
-| `tests/` | `unittest` suites, one fixtures module with every fake, and the copies of Garmin's exercise list and Hevy's API spec in `tests/data` |
-| `scripts/` | `check_upstream.py`, the weekly upstream check: compares those copies with their source ([CICD.md](CICD.md#the-upstream-check)). Not in the image |
+| `src/hevy_garmin_sync/data/` | The two exercise tables the app ships, and the keys of Garmin's exercise list ([the exercise map](#the-exercise-map)) |
+| `tests/` | `unittest` suites, one fixtures module with every fake, and the copy of Hevy's API spec in `tests/data` |
+| `scripts/` | `check_upstream.py`, the weekly upstream check: compares the copies of Garmin's list and Hevy's spec with their source ([CICD.md](CICD.md#the-upstream-check)). Not in the image |
 | `charts/hevy-garmin-sync-helm/` | The Helm chart: one Deployment, its PersistentVolumeClaim and Secret |
 | `compose.yaml` | The same container for Docker Compose |
 | `Dockerfile` | The image: `python:3.14-slim`, the hashed lock, the package, `/data`, user 1000 |
@@ -43,7 +43,7 @@ A failing service gets its own wait, one minute doubling to thirty (O-1). A rate
 |---|---|
 | `cli.py` | The command line: no command runs the app, `login` signs in to Garmin |
 | `app.py` | The loop: startup checks, polling, midnight, the waits after a failure, stopping |
-| `config.py` | Reads and checks the environment variables |
+| `config.py` | Reads and checks the environment variables, including each `CUSTOM_EXERCISE_MAP` pair against Garmin's list |
 | `logs.py` | Text or JSON log lines |
 | `store.py` | The data folder: whole-file writes that survive a kill, and which variable a stored token came from |
 | `hevy.py` | Hevy's public API: folders, routines, exercise templates, workout events, exercise history |
@@ -51,7 +51,7 @@ A failing service gets its own wait, one minute doubling to thirty (O-1). A rate
 | `routines.py` | Which routines sync, what each is called, and each routine as a planned workout |
 | `trainer.py` | Trainer's program as planned workouts, and what is read when |
 | `trainer_rules.py` | Trainer's arithmetic: the week, the next weight, warm-ups, rep ranges ([HEVY_TRAINER_RULES.md](HEVY_TRAINER_RULES.md)). No I/O |
-| `exercises.py` | The Garmin exercise for each Hevy exercise |
+| `exercises.py` | The Garmin exercise for each Hevy exercise, and the log line that names it for a custom one |
 | `workout.py` | A planned workout as Garmin's workout JSON, its version hash, and the description that marks it as the app's. No I/O |
 | `garmin.py` | Garmin Connect through python-garminconnect: workouts, the calendar, Send to Device, saving the rotated token |
 | `sync.py` | Makes Garmin match the plan: what to create, update, delete, schedule and send |
@@ -70,7 +70,9 @@ Two CSV files in `src/hevy_garmin_sync/data/`:
 - `exercise_map.csv`: one row per built-in Hevy exercise, by Hevy's exercise template id, naming a Garmin category and exercise.
 - `custom_exercise_map.csv`: for a user's own exercises, and for a built-in the first table has no row for, by Hevy's primary muscle group and equipment.
 
-`tests/data/garmin_exercises.json` holds the keys of Garmin Connect's own exercise list, and a test fails when a row names a pair that is not in it (F-51). A fix is a one-line PR (F-54).
+A user's own exercise can instead be set in `CUSTOM_EXERCISE_MAP`, which wins over `custom_exercise_map.csv` and never applies to a built-in (C-11, F-54). `exercises.py` logs which Garmin exercise each custom exercise got.
+
+`src/hevy_garmin_sync/data/garmin_exercises.json` holds the keys of Garmin Connect's own exercise list. A test fails when a table row names a pair that is not in it, and `config.py` refuses a `CUSTOM_EXERCISE_MAP` pair that is not in it at startup, which is why it ships in the image (F-51). A fix to a table is a one-line PR (F-54).
 
 ## The image
 

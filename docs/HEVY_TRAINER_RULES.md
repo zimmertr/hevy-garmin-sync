@@ -140,6 +140,7 @@ An exercise with no previous session in its template (after a rotation, say) sta
 | 2026-11-06, 2026-11-07 | Side Bend (Dumbbell), last session at 35 lb with every set at the top of its range | 40 lb | 40 lb |
 | 2026-11-06, 2026-11-07 | Lying Leg Raise, logged by reps, every set at the top of its range | The next rep range up, 15-20 | The next rung of the ladder |
 | 2026-11-06, 2026-11-07 | Goblet Squat, two warm-ups, last session at 80 lb inside its rep range | 80 lb, warm-ups 30 and 50 lb | 80 lb, warm-ups 30 and 50 lb |
+| 2026-11-10 | The 14 exercises of both workouts of a two-workout program, as the running app worked them out | 12 weights with their warm-ups, one rep range, and one exercise with no weight | The same on all 14. TJ: "These look correct" (#22) |
 
 On 2026-11-10 the first run against a real account gave the same weight and warm-ups as hevy-trainer-sync, the tool these rules were first written for, on all 12 weighted exercises of a two-workout program, and the same rep range on the one logged by reps.
 

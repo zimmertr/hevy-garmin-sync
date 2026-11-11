@@ -36,6 +36,26 @@ class FindTest(unittest.TestCase):
                 GarminExercise("TOTAL_BODY", "TOTAL_BODY"),
             )
 
+    def test_a_built_in_the_map_lacks_falls_back_and_asks_once_to_be_reported(self) -> None:
+        added = fixtures.hevy_template("T-ADDED", "Zottman Curl", primary_muscle_group="biceps", equipment="dumbbell")
+        with self.assertLogs("hevy_garmin_sync.exercises", "WARNING") as logs:
+            found = self.map.find("T-ADDED", "Zottman Curl", lambda: added)
+        self.assertEqual(found, GarminExercise("CURL", "DUMBBELL_BICEPS_CURL"))
+        self.assertIn("'Zottman Curl'", logs.output[0])
+        self.assertIn("report it", logs.output[0])
+        with self.assertNoLogs("hevy_garmin_sync.exercises"):
+            self.map.find("T-ADDED", "Zottman Curl", lambda: added)
+
+    def test_an_exercise_hevy_knows_nothing_about_gets_the_catch_all(self) -> None:
+        with self.assertLogs("hevy_garmin_sync.exercises", "WARNING"):
+            self.assertEqual(self.find("T-GONE", None), GarminExercise("TOTAL_BODY", "TOTAL_BODY"))
+
+    def test_a_fallback_table_with_no_catch_all_is_an_error(self) -> None:
+        broken = ExerciseMap({}, {("biceps", "*"): GarminExercise("CURL", "CURL")})
+        custom = fixtures.hevy_template("T-MINE", "My Press", is_custom=True)
+        with self.assertRaises(LookupError):
+            broken.find("T-MINE", "My Press", lambda: custom)
+
 
 class PickTest(unittest.TestCase):
     """A custom exercise's Garmin exercise is logged, and CUSTOM_EXERCISE_MAP can set it (#24, C-11, F-53)."""
@@ -117,26 +137,6 @@ class PickTest(unittest.TestCase):
         loaded = ExerciseMap.load(overrides={"My Cable Raise": self.raise_})
         with self.assertLogs("hevy_garmin_sync.exercises", "INFO"):
             self.assertEqual(loaded.find("no-such-id", "My Cable Raise", lambda: self.custom), self.raise_)
-
-    def test_a_built_in_the_map_lacks_falls_back_and_asks_once_to_be_reported(self) -> None:
-        added = fixtures.hevy_template("T-ADDED", "Zottman Curl", primary_muscle_group="biceps", equipment="dumbbell")
-        with self.assertLogs("hevy_garmin_sync.exercises", "WARNING") as logs:
-            found = self.map.find("T-ADDED", "Zottman Curl", lambda: added)
-        self.assertEqual(found, GarminExercise("CURL", "DUMBBELL_BICEPS_CURL"))
-        self.assertIn("'Zottman Curl'", logs.output[0])
-        self.assertIn("report it", logs.output[0])
-        with self.assertNoLogs("hevy_garmin_sync.exercises"):
-            self.map.find("T-ADDED", "Zottman Curl", lambda: added)
-
-    def test_an_exercise_hevy_knows_nothing_about_gets_the_catch_all(self) -> None:
-        with self.assertLogs("hevy_garmin_sync.exercises", "WARNING"):
-            self.assertEqual(self.find("T-GONE", None), GarminExercise("TOTAL_BODY", "TOTAL_BODY"))
-
-    def test_a_fallback_table_with_no_catch_all_is_an_error(self) -> None:
-        broken = ExerciseMap({}, {("biceps", "*"): GarminExercise("CURL", "CURL")})
-        custom = fixtures.hevy_template("T-MINE", "My Press", is_custom=True)
-        with self.assertRaises(LookupError):
-            broken.find("T-MINE", "My Press", lambda: custom)
 
 
 class LoadTest(unittest.TestCase):

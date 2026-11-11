@@ -74,7 +74,7 @@ Garmin's unofficial web API, through [python-garminconnect](https://github.com/c
 - **The settings reply has a `timeZone` field** (`America/Los_Angeles` style), and the workout list carries each workout's `description` (2026-11-10).
 - **A workout updated in place and sent again** is one copy on the watch, with the new name and weights (2026-11-10, spec U-24).
 - **A workout deleted in Garmin Connect stays in the watch's saved list** until it is removed on the watch (2026-11-10, spec F-14).
-- **Garmin's exercise list** is published at https://connect.garmin.com/web-data/exercises/Exercises.json: 47 categories and 1,536 exercises on 2026-11-10. `tests/data/garmin_exercises.json` holds its keys. The first weekly comparison, on 2026-11-10, found it the same as the copy (#26).
+- **Garmin's exercise list** is published at https://connect.garmin.com/web-data/exercises/Exercises.json: 47 categories and 1,536 exercises on 2026-11-10. `src/hevy_garmin_sync/data/garmin_exercises.json` holds its keys (in `tests/data` until #24 moved it into the package). The first weekly comparison, on 2026-11-10, found it the same as the copy (#26).
 
 ## Strava
 
