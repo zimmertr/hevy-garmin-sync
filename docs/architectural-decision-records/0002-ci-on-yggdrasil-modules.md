@@ -1,6 +1,6 @@
 # 0002. CI runs on zimmertr/yggdrasil's modules, pinned to the versions a live consumer runs
 
-- Status: Accepted
+- Status: Accepted. Superseded in part by 0012
 - Date: 2026-11-07
 - Decider: TJ ("For CI, for example, we shouldn't be writing anything from scratch. But instead using the modules defined in yggdrasil.")
 - Issues and PRs: #1
