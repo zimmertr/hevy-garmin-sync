@@ -31,3 +31,4 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0005](0005-releases-deploy-through-the-live-folder.md) | Since the cutover, every release bumps the live Kubernetes-Manifests folder and so deploys | 2026-11-10 | Accepted |
 | [0006](0006-ghcr-and-a-digest-pinned-chart.md) | The image and the chart are in GHCR, and the chart pins the image's digest | 2026-11-10 | Accepted |
 | [0007](0007-exit-on-a-credential-rejected-while-running.md) | A credential rejected while running exits the app at once, as at startup | 2026-11-10 | Accepted |
+| [0010](0010-a-weekly-check-of-the-upstream-copies.md) | A weekly check compares Garmin's exercise list and Hevy's API spec with their copies, and on a difference opens one issue and one PR | 2026-11-10 | Accepted |

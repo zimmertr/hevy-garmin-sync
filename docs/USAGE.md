@@ -49,3 +49,5 @@ What you see when it runs, and what to do when it breaks.
 | `Publish OCI chart` failed | Re-run the failed jobs; a chart already pushed is skipped |
 | `Bump Kubernetes-Manifests` failed on its `yq` step | The file or the chart entry is missing in Kubernetes-Manifests; restore it, then re-run the failed job |
 | The weekly image scan failed | Same as a release scan: ship a fix in the next release |
+| An issue "Garmin's exercise list or Hevy's API changed", and a PR `test(upstream): update the copies of Garmin's exercise list and Hevy's API` | The weekly upstream check found a difference. Read the issue for what changed. In the PR, fix any map row its tests flag, add the change, dated, to `docs/DATA.md`, then merge it. The next Monday run force-pushes the PR's branch, so merge before then or keep your fixes in a PR of your own |
+| The weekly upstream check failed with no issue | It couldn't fetch or read Garmin's list or Hevy's spec. The run's log says which. Re-run it; if it keeps failing, the source has moved or changed shape, and `scripts/check_upstream.py` needs a fix |

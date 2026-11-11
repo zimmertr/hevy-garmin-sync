@@ -78,7 +78,8 @@ class HevyTest(unittest.TestCase):
                 cu.spec_from_script(text)
 
     def test_a_spec_without_paths_is_a_source_error(self) -> None:
-        for paths in (None, [], {}):
+        no_paths: tuple[object, ...] = (None, [], {})
+        for paths in no_paths:
             spec = fixtures.hevy_spec()
             if paths is None:
                 del spec["paths"]
