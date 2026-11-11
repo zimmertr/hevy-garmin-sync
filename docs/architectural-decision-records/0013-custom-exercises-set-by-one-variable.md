@@ -1,4 +1,4 @@
-# 0012. A custom exercise's Garmin exercise is logged, and one variable, CUSTOM_EXERCISE_MAP, can set it
+# 0013. A custom exercise's Garmin exercise is logged, and one variable, CUSTOM_EXERCISE_MAP, can set it
 
 - Status: Accepted
 - Date: 2026-11-10

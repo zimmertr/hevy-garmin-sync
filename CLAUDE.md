@@ -22,12 +22,12 @@ Prose lives in `docs/`. A change that makes any page untrue updates it in the sa
 ## Rules
 
 - **Build to the spec.** Every requirement has an ID in `docs/SPEC.md`; cite it in code, tests and PRs, and update the spec in the same PR when a decision changes. One direction only: Hevy is read, Garmin is written, Strava is never called. Record: [0001](docs/architectural-decision-records/0001-build-to-the-signed-off-spec.md)
-- **CI runs on yggdrasil's modules.** Never write a check from scratch that a zimmertr/yggdrasil module covers; a check two repos need belongs in yggdrasil. Record: [0002](docs/architectural-decision-records/0002-ci-on-yggdrasil-modules.md)
+- **CI runs on yggdrasil's modules.** Never write a check from scratch that a zimmertr/yggdrasil module covers; a check two repos need belongs in yggdrasil. Record: [0002](docs/architectural-decision-records/0002-ci-on-yggdrasil-modules.md) The chart's check, push and Kubernetes-Manifests bump are yggdrasil's too. Record: [0012](docs/architectural-decision-records/0012-the-chart-goes-through-yggdrasils-modules.md)
 - **The image and the chart are in GHCR**, under `ghcr.io/zimmertr`, pushed with each job's own token, and the chart pins the image's digest. The chart is `hevy-garmin-sync-helm`, never the image's name. Record: [0006](docs/architectural-decision-records/0006-ghcr-and-a-digest-pinned-chart.md)
 - **Every release deploys to TJ's cluster.** The release bumps the chart version in Kubernetes-Manifests `misc/hevy-garmin-sync`, and Argo CD rolls the pod. Record: [0005](docs/architectural-decision-records/0005-releases-deploy-through-the-live-folder.md)
 - **The repo is public.** No tokens, ids or personal data in code, fixtures, logs or docs. The Hevy Trainer rules are written down as findings only, not how they were found (spec D-7b).
 - **Live calls need TJ's okay**, each time, and TJ runs any sign-in himself.
-- **Exercise names are data.** A wrong Garmin exercise is fixed in `src/hevy_garmin_sync/data/exercise_map.csv` (or `custom_exercise_map.csv`), never in code, and every row must name a pair in `src/hevy_garmin_sync/data/garmin_exercises.json` (spec F-51, F-54). A user's own exercise is set with `CUSTOM_EXERCISE_MAP` instead (C-11). Record: [0012](docs/architectural-decision-records/0012-custom-exercises-set-by-one-variable.md)
+- **Exercise names are data.** A wrong Garmin exercise is fixed in `src/hevy_garmin_sync/data/exercise_map.csv` (or `custom_exercise_map.csv`), never in code, and every row must name a pair in `src/hevy_garmin_sync/data/garmin_exercises.json` (spec F-51, F-54). A user's own exercise is set with `CUSTOM_EXERCISE_MAP` instead (C-11). Record: [0013](docs/architectural-decision-records/0013-custom-exercises-set-by-one-variable.md)
 
 ## Tests
 
@@ -38,7 +38,7 @@ Every change ships with tests. Coverage aims at 100% of lines and branches; CI r
 File issues with the `create-issue` skill from zimmertr/ai-config: the two-sentence summary, the six sections, the hemingway and humanizer passes, one priority, one type, the area labels and the session label. The skill reads the four things below from this section.
 
 - **The reader**: a lifter who uses Hevy and a Garmin watch and doesn't read code.
-- **The gates**: `test` (aim 100% coverage), `Python Lint` (ruff and mypy), `Chart`, `Lint / actionlint`, `Lint / zizmor`, `Lint / semgrep`, `PR Title / PR Title`, and `Docker Build / Docker Build` (the image built, scanned by Trivy and smoke-tested).
+- **The gates**: `test` (aim 100% coverage), `Python Lint` (ruff and mypy), `Chart / Chart`, `Lint / actionlint`, `Lint / zizmor`, `Lint / semgrep`, `PR Title / PR Title`, and `Docker Build / Docker Build` (the image built, scanned by Trivy and smoke-tested).
 - **The constraints**: never write to Hevy; only touch Garmin workouts the app owns; no tokens, ids or personal data in the repo; nothing Docker-specific; the spec (`docs/SPEC.md`, issue #1) is the source of truth.
 - **The areas**: `hevy`, `trainer`, `garmin`, `watch`, `calendar`, `exercise-map`, `config`, `ci`, `docs`, `helm`.
 

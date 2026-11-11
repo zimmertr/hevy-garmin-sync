@@ -4,7 +4,7 @@
 PYTHON_IMAGE := python:3.14-slim
 TRIVY_IMAGE  := aquasec/trivy:0.68.1
 HADOLINT     := hadolint/hadolint:v2.12.0
-# The Helm version pr.yml and release.yml install; move them together.
+# The Helm version yggdrasil's chart and release modules install.
 HELM_IMAGE   := alpine/helm:4.3.0
 IMAGE        := hevy-garmin-sync:dev
 RUN          := docker run --rm -v "$(CURDIR)":/repo -w /repo

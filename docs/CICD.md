@@ -8,8 +8,8 @@ flowchart LR
   checks -->|squash merge| main["main"]
   main --> test["test<br/>(the squash commit)"]
   test --> release["yggdrasil release module<br/>version, image amd64+arm64,<br/>scan, tag, GitHub release"]
-  release --> chart["Publish OCI chart<br/>(same version)"]
-  chart --> bump["Bump Kubernetes-Manifests<br/>self-merging PR"]
+  release --> chart["Push Chart<br/>(same version)"]
+  chart --> bump["Deploy Bump<br/>self-merging PR in<br/>Kubernetes-Manifests"]
 ```
 
 ## PR checks
@@ -18,7 +18,7 @@ flowchart LR
 |---|---|---|
 | `test.yml` | `test` | The suite under coverage, with the line and branch table in the run summary |
 | `pr.yml` | `Python Lint` | ruff and mypy, from the hashed dev lock |
-| `pr.yml` | `Chart` | `helm lint`, and the chart rendered with the defaults and with an existing Secret |
+| `pr.yml` | `Chart / Chart` | yggdrasil's chart module: `helm lint`, the chart rendered with the defaults, then this repo's renders: with an existing Secret, with a namespace, with a digest, and the read-only root filesystem |
 | `pr.yml` | `Docker Build / Docker Build` | yggdrasil's docker-build module: hadolint, the amd64 image built, a Trivy table in a sticky comment, the smoke test, and a failure on any fixable Critical or High |
 | `lint.yml` | `Lint / actionlint`, `Lint / zizmor`, `Lint / semgrep` | yggdrasil's lint module over the workflows and the Dockerfile |
 | `pr-title.yml` | `PR Title / PR Title` | yggdrasil's pr-title module: the title must be `type(scope): summary` |
@@ -28,12 +28,12 @@ The default-branch ruleset requires every check above except the auto-merge one.
 
 ## The release
 
-Every merge to main is a release (`release.yml`), one at a time:
+Every merge to main is a release (`release.yml`), one at a time. After the test, every step is a job of yggdrasil's release module (record [0012](architectural-decision-records/0012-the-chart-goes-through-yggdrasils-modules.md)):
 
 1. `test` runs again on the squash commit.
-2. yggdrasil's release module reads the version from the squash commit's title with GitVersion (`feat` a minor, `!` a major, anything else a patch; the first release is 0.1.0), builds and pushes `ghcr.io/zimmertr/hevy-garmin-sync:<version>` for amd64 and arm64 with an SBOM and provenance, scans each platform with Trivy, then tags `v<version>` and publishes the GitHub release. A fixable Critical or High stops the tag and release.
-3. `Publish OCI chart` writes the image's digest into `values.yaml`, packages `charts/hevy-garmin-sync-helm` with that version as both `version` and `appVersion`, and pushes it to `oci://ghcr.io/zimmertr`. A re-run finds it there and skips. Record: [0006](architectural-decision-records/0006-ghcr-and-a-digest-pinned-chart.md)
-4. `Bump Kubernetes-Manifests` sets the chart version in `misc/hevy-garmin-sync/kustomization.yml` through a PR on the fixed branch `chore/hevy-garmin-sync-chart`, and arms auto-merge. When that PR merges, Argo CD rolls the pod to the new release.
+2. The module reads the version from the squash commit's title with GitVersion (`feat` a minor, `!` a major, anything else a patch; the first release is 0.1.0), builds and pushes `ghcr.io/zimmertr/hevy-garmin-sync:<version>` for amd64 and arm64 with an SBOM and provenance, scans each platform with Trivy, then tags `v<version>` and publishes the GitHub release. A fixable Critical or High stops the tag and release.
+3. `Release / Push Chart (charts/hevy-garmin-sync-helm)` writes the image's digest into `values.yaml`, packages the chart with that version as both `version` and `appVersion`, and pushes it to `oci://ghcr.io/zimmertr`. A version already there is skipped. Record: [0006](architectural-decision-records/0006-ghcr-and-a-digest-pinned-chart.md)
+4. `Release / Deploy Bump (zimmertr/Kubernetes-Manifests)` sets the chart version in `misc/hevy-garmin-sync/kustomization.yml` through a PR on the fixed branch `chore/hevy-garmin-sync-chart`, and arms auto-merge. When that PR merges, Argo CD rolls the pod to the new release.
 
 `image-scan.yml` re-scans the latest release every Monday and sends the findings to the Security tab. Its first run fails until a release exists.
 
@@ -59,7 +59,7 @@ After a failure, re-run the failed jobs only. Never re-run an old release after 
 | Secret | Store | Used by |
 |---|---|---|
 | `GITHUB_TOKEN` | Given to each run | The image push and the chart push, to GHCR (`packages: write`); the upstream check's issue (`issues: write`) |
-| `GH_PAT` | Actions | The Kubernetes-Manifests bump, and the upstream check's push and PR here (contents and pull-requests write on both repos) |
+| `GH_PAT` | Actions | The Kubernetes-Manifests bump, as the release module's `deploy-token`, and the upstream check's push and PR here (contents and pull-requests write on both repos) |
 | `AUTO_MERGE_PAT` | Dependabot | The auto-merge module's `merge-token`; a merge made with `GITHUB_TOKEN` would not start the release |
 
 ## Repo settings
