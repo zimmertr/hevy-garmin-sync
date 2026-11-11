@@ -36,7 +36,7 @@ class SyncCase(unittest.TestCase):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
         self.api = fixtures.FakeGarminApi()
-        clock = fixtures.FakeClock()
+        self.pacing = clock = fixtures.FakeClock()
         self.garmin = garmin.Garmin(self.api, Store(Path(folder.name)), sleep=clock.sleep, clock=clock)  # type: ignore[arg-type]
         self.time = fixtures.NOW
         self.sync = self.new_sync()
@@ -446,11 +446,10 @@ class CalendarTest(SyncCase):
         self.assertEqual((counts.unscheduled, counts.scheduled, counts.created), (1, 0, 1))
         self.assertEqual(len(self.api.pushed), 2)
 
-    def test_a_workout_held_off_the_calendar_loses_its_entry_at_the_next_full_run_only(self) -> None:
+    def test_a_full_run_leaves_a_workout_held_off_the_calendar_off_it(self) -> None:
         self.run_full(self.push, self.pull)
-        off = frozenset({"r-pull"})
-        self.assertFalse(self.run_poll(self.push, self.pull, off_calendar=off).any())
-        counts = self.run_full(self.push, self.pull, off_calendar=off)
+        self.sync = self.new_sync()
+        counts = self.run_full(self.push, self.pull, off_calendar=frozenset({"r-pull"}))
         self.assertEqual((counts.unscheduled, counts.scheduled), (1, 0))
         self.assertEqual(self.days(), {"Hevy: Push": [fixtures.TODAY.isoformat()]})
         self.assertEqual(self.names(), ["Hevy: Pull", "Hevy: Push"])
@@ -475,6 +474,100 @@ class CalendarTest(SyncCase):
         self.api.calls.clear()
         self.run_poll(self.push)
         self.assertEqual(self.api.calls, ["delete_workout"])
+
+
+class MoveTest(SyncCase):
+    """Between full runs, a workout moves on or off today in the poll that sees it change (F-31, #25)."""
+
+    TODAY = fixtures.TODAY.isoformat()
+    PUSH, PULL = frozenset({"r-push"}), frozenset({"r-pull"})
+
+    def test_a_workout_that_leaves_the_calendar_loses_its_entry_on_that_poll(self) -> None:
+        self.run_full(self.push, self.pull)
+        self.api.calls.clear()
+        counts = self.run_poll(self.push, self.pull, off_calendar=self.PULL)
+        self.assertEqual(self.api.calls, ["unschedule_workout"])
+        self.assertEqual((counts.unscheduled, counts.scheduled), (1, 0))
+        self.assertEqual(self.days(), {"Hevy: Push": [self.TODAY]})
+        self.assertEqual(self.names(), ["Hevy: Pull", "Hevy: Push"])
+
+    def test_when_the_next_workout_changes_the_old_entry_goes_then_the_new_one_comes_a_second_apart(self) -> None:
+        self.api.workouts[1] = {"workoutId": 1, "workoutName": "Tempo Run", "description": "from a running app"}
+        self.api.schedule_workout(1, self.TODAY)
+        self.run_full(self.push, self.pull, off_calendar=self.PULL)
+        self.api.calls.clear()
+        self.pacing.sleeps.clear()
+        counts = self.run_poll(self.push, self.pull, off_calendar=self.PUSH)
+        self.assertEqual(self.api.calls, ["unschedule_workout", "schedule_workout"])
+        self.assertEqual((counts.unscheduled, counts.scheduled), (1, 1))
+        self.assertEqual(self.days(), {"Hevy: Pull": [self.TODAY], "Tempo Run": [self.TODAY]})
+        self.assertEqual(self.pacing.sleeps, [1.0, 1.0])
+
+    def test_a_poll_where_nothing_moved_makes_no_garmin_call(self) -> None:
+        self.run_full(self.push, self.pull, off_calendar=self.PULL)
+        self.api.calls.clear()
+        self.assertFalse(self.run_poll(self.push, self.pull, off_calendar=self.PULL).any())
+        self.assertEqual(self.api.calls, [])
+
+    def test_with_the_calendar_off_nothing_moves(self) -> None:
+        self.sync = self.new_sync(scheduled=False)
+        self.run_full(self.push, self.pull)
+        self.api.calls.clear()
+        self.run_poll(self.push, self.pull, off_calendar=self.PUSH)
+        self.run_poll(self.push, self.pull, off_calendar=self.PULL)
+        self.assertEqual((self.api.calls, self.days()), ([], {}))
+
+    def test_an_entry_garmin_gave_no_id_for_stays_until_the_next_full_run(self) -> None:
+        self.run_full(self.push)
+        self.api.bare_schedule_reply = True
+        self.run_poll(self.push, self.pull)
+        self.api.calls.clear()
+        self.assertFalse(self.run_poll(self.push, self.pull, off_calendar=self.PULL).any())
+        self.assertEqual(self.api.calls, [])
+        self.run_full(self.push, self.pull, off_calendar=self.PULL)
+        self.assertEqual(self.days(), {"Hevy: Push": [self.TODAY]})
+
+    def test_a_workout_created_on_the_poll_is_scheduled_once_or_not_at_all(self) -> None:
+        self.run_full(self.push)
+        self.api.calls.clear()
+        self.run_poll(self.push, self.pull, off_calendar=self.PULL)
+        self.assertEqual(self.writes(), ["upload_workout", "push_workout_to_device"])
+        self.api.calls.clear()
+        self.run_poll(self.push, self.pull, off_calendar=self.PUSH)
+        self.assertEqual(sorted(self.writes()), ["schedule_workout", "unschedule_workout"])
+        legs = routine("r-legs", "Hevy: Legs")
+        self.api.calls.clear()
+        self.run_poll(self.push, self.pull, legs, off_calendar=self.PUSH)
+        self.assertEqual(self.writes().count("schedule_workout"), 1)
+        self.assertEqual(self.days(), {"Hevy: Pull": [self.TODAY], "Hevy: Legs": [self.TODAY]})
+
+    def test_a_held_kind_keeps_the_entries_of_workouts_it_does_not_list(self) -> None:
+        self.run_full(self.push, self.pull)
+        self.api.calls.clear()
+        self.run_poll(self.push, hold=True, off_calendar=self.PULL)
+        self.run_poll(hold=True, off_calendar=self.PUSH | self.PULL)
+        self.assertEqual(self.api.calls, [])
+        self.assertEqual(self.days(), {"Hevy: Push": [self.TODAY], "Hevy: Pull": [self.TODAY]})
+
+    def test_a_poll_after_a_restart_moves_from_what_the_full_run_found(self) -> None:
+        self.run_full(self.push, self.pull)
+        self.sync = self.new_sync()
+        self.run_full(self.push, self.pull, off_calendar=self.PULL)
+        self.api.calls.clear()
+        self.run_poll(self.push, self.pull, off_calendar=self.PULL)
+        self.assertEqual(self.api.calls, [])
+        self.run_poll(self.push, self.pull)
+        self.assertEqual(self.api.calls, ["schedule_workout"])
+        self.assertEqual(self.days(), {"Hevy: Push": [self.TODAY], "Hevy: Pull": [self.TODAY]})
+
+    def test_a_garmin_failure_mid_move_is_put_right_by_the_next_full_run(self) -> None:
+        self.run_full(self.push, self.pull, off_calendar=self.PULL)
+        self.api.fail("schedule_workout", fixtures.garmin_error(503))
+        with self.assertRaises(errors.Unavailable):
+            self.run_poll(self.push, self.pull, off_calendar=self.PUSH)
+        self.assertEqual(self.days(), {})
+        self.run_full(self.push, self.pull, off_calendar=self.PUSH)
+        self.assertEqual(self.days(), {"Hevy: Pull": [self.TODAY]})
 
 
 class CountsTest(unittest.TestCase):

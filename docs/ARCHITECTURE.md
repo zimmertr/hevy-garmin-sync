@@ -8,11 +8,12 @@ Where each part of the app lives. The behaviour is specified in [SPEC.md](SPEC.m
 |---|---|
 | `src/hevy_garmin_sync/` | The Python package ([the modules](#the-modules)) |
 | `src/hevy_garmin_sync/data/` | The two exercise tables the app ships ([the exercise map](#the-exercise-map)) |
-| `tests/` | `unittest` suites, one fixtures module with every fake, and Garmin's exercise list for the data test |
+| `tests/` | `unittest` suites, one fixtures module with every fake, and the copies of Garmin's exercise list and Hevy's API spec in `tests/data` |
+| `scripts/` | `check_upstream.py`, the weekly upstream check: compares those copies with their source ([CICD.md](CICD.md#the-upstream-check)). Not in the image |
 | `charts/hevy-garmin-sync-helm/` | The Helm chart: one Deployment, its PersistentVolumeClaim and Secret |
 | `compose.yaml` | The same container for Docker Compose |
 | `Dockerfile` | The image: `python:3.14-slim`, the hashed lock, the package, `/data`, user 1000 |
-| `.github/workflows/` | Callers of zimmertr/yggdrasil's modules, plus the chart's release jobs ([CICD.md](CICD.md)) |
+| `.github/workflows/` | Callers of zimmertr/yggdrasil's modules, plus the chart's release jobs and the upstream check ([CICD.md](CICD.md)) |
 | `docs/` | This set. [SPEC.md](SPEC.md) is the plan |
 
 ## The process
@@ -30,7 +31,7 @@ One long-running process and one thread (spec F-1). Nothing listens on a port (F
 1. **Start.** Read the environment. Anything wrong exits with a message naming the variable. Load the Garmin token, and the Hevy session if `HEVY_SESSION` is set, from `DATA_DIR`, seeding each from its variable when the variable is new (A-4).
 2. **Check.** One call to each service. A rejected key, token or session exits with the fix. An outage is waited out.
 3. **Full run.** Read every routine (and the Trainer program), read Garmin's workout list and the calendar, then create, update and delete until Garmin matches. Put each workout on today.
-4. **Poll.** Every `HEVY_POLL_INTERVAL_SECONDS`, read Hevy again. Garmin is called only for what changed (F-4a).
+4. **Poll.** Every `HEVY_POLL_INTERVAL_SECONDS`, read Hevy again. Garmin is called only for what changed (F-4a). When Hevy Trainer's next workout changes, its calendar entry moves to it in the same poll (F-31).
 5. **Midnight.** At local midnight, a full run again: yesterday's calendar entries go and today's are added.
 6. **Stop.** SIGTERM or SIGINT lets the write in progress finish and starts no new one.
 
@@ -77,7 +78,7 @@ Built by the release for `linux/amd64` and `linux/arm64`, tagged with the versio
 
 ## The chart
 
-`hevy-garmin-sync-helm`, published with every release to `oci://ghcr.io/zimmertr` under the same version as the image, whose digest it pins (record 0006). One replica with the `Recreate` strategy, so two copies never run at once and fight over the rotating Garmin token (spec D-4). No probes: logs are the only signal (O-2). Values are in [CONFIGURATION.md](CONFIGURATION.md#chart-values).
+`hevy-garmin-sync-helm`, published with every release to `oci://ghcr.io/zimmertr` under the same version as the image, whose digest it pins (record 0006). One replica with the `Recreate` strategy, so two copies never run at once and fight over the rotating Garmin token (spec D-4). The container's root filesystem is read-only, so the data volume is the one place it can write (O-4, record [0008](architectural-decision-records/0008-read-only-root-filesystem-by-default.md)). No probes: logs are the only signal (O-2). Values are in [CONFIGURATION.md](CONFIGURATION.md#chart-values).
 
 ## Where it runs for TJ
 

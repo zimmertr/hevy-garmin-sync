@@ -26,6 +26,7 @@ Every call has a 30 second timeout (O-1a) and a `User-Agent` that names the app 
 - **Hevy publishes no rate limit** for the public API. Its docs ask that a job running hourly or daily not send its requests at minute :00. The app polls every minute, which that request does not speak to (read 2026-11-05, first recorded in hevy-trainer-sync).
 - **Not yet seen:** a 429 from either Hevy API, or a `Retry-After` header on one. hevy-trainer-sync's records say it never got a 429 (2026-11-10). When one comes with the header, the app waits as long as it asks ([#27](https://github.com/zimmertr/hevy-garmin-sync/issues/27)).
 - **Hevy has one webhook, for saved workouts.** It is set up in the "Webhooks" section of the developer settings page (https://hevy.com/settings?developer): "Subscribe to our webhook and get notified when you save a new workout." Hevy sends a POST with `{"workoutId": "<id>"}` to a URL the user gives, with an authorization header the user gives, and expects a 200 within 5 seconds. The section says nothing about routines. Hevy's published API spec has no webhook path (14 paths), so the page is the only place to set it up (2026-11-10). The app has no receiver: routines have no feed, and a receiver needs a listening port, which spec F-2 rules out.
+- **Hevy's published spec** is not served as a file of its own: it sits inside https://api.hevyapp.com/docs/swagger-ui-init.js, as the `swaggerDoc` object of the script's options. The enums are schemas of their own: `CustomExerciseType` (8 exercise types), `EquipmentCategory` (9), `MuscleGroup` (20) and the `type` of `PostRoutinesRequestSet` (4 set types). `tests/data/hevy_api.json` keeps those and the 14 paths with their methods (2026-11-10, #26).
 - **Routine page size** is at most 10; exercise templates take 100 (Hevy's OpenAPI spec, 2026-11-10).
 - **A routine's superset field** is `superset_id`, and a set has no RPE field (OpenAPI spec, 2026-11-10).
 - **Hevy's exercise list** held 451 built-in exercises on 2026-11-10. The map's ids and titles were checked against it that day: one row was missing (a second `Sled Push` id) and three had no title. Four rows are ids Hevy no longer lists; they stay, since a row nothing asks for costs nothing.
@@ -37,11 +38,12 @@ Every call has a 30 second timeout (O-1a) and a `User-Agent` that names the app 
 - **Not yet known:** whether the session's refresh token has an absolute lifetime. The question was first recorded in hevy-trainer-sync on 2026-11-04 and is still open.
 - **`/user_workouts_paged`** answered a `limit` of 10 with a 400 on 2026-11-07. The app asks for 3.
 - **The program's `current_week`** is not the week the Hevy app shows ([HEVY_TRAINER_RULES.md](HEVY_TRAINER_RULES.md)).
-- **The program also carries** `next_workout_index`, `program_variety`, `exercises_rotated_at` and `edits` (2026-11-04, first recorded in hevy-trainer-sync). The app reads none of them.
+- **The program also carries** `next_workout_index`, `program_variety`, `exercises_rotated_at` and `edits` (2026-11-04, first recorded in hevy-trainer-sync). The app reads `next_workout_index` (below) and none of the other three.
 - **`exercises_rotated_at`** read Thursday 29 October 2026, so exercises do not rotate on a week boundary (2026-11-04, first recorded in hevy-trainer-sync).
 - **Not yet seen live:** what the program call answers for an account with no program (the app takes a 404 or a reply without a program as "no program"), and a row of `/exercise_template_units`. That call answered with an empty list on 2026-11-10, for an account that logs no exercise in the other unit; the app logs the shape, without values, the first time.
 - **A Trainer template's `name`** held its key (`upper_2x_a`) on 2026-11-10, not a display name. The app reads a name in a key's form as a key, so the workout is called "Upper".
 - **The first run against a real account** (2026-11-10, from a clone, Hevy Trainer on): two routines and a two-workout program became four Garmin workouts with no failure.
+- **The program's `next_workout_index`** is the workout the Hevy app would start next, counted in the templates' `index` order. hevy-trainer-sync put that one workout on today from 2026-11-04 to 2026-11-10, and this app does the same since #25 (spec F-33). Not yet seen live, as of 2026-11-10: how it moves after a logged session, after a reorder in the Hevy app, and across a week change. A value that is missing, not an integer or out of range is logged as a WARNING, and the app falls back to keeping the week's logged workouts off the calendar.
 
 ## Garmin Connect
 
@@ -57,7 +59,7 @@ Garmin's unofficial web API, through [python-garminconnect](https://github.com/c
 | Create or update a workout Garmin refused | 5 minutes after the refusal, then at gaps that double until local midnight, then once a day; and at every full run (spec F-16) |
 | Send to Device, three calls | After each create and update |
 | The calendar, 31 days back through today | Every full run |
-| Schedule or unschedule a workout | Every full run, and when a workout is created or deleted |
+| Schedule or unschedule a workout | Every full run, when a workout is created or deleted, and when Hevy Trainer's next workout changes |
 
 ### Findings
 
@@ -66,12 +68,13 @@ Garmin's unofficial web API, through [python-garminconnect](https://github.com/c
 - **python-garminconnect 0.3.20 passes Garmin's reply on for most 429s**, so the app can read `Retry-After` (O-1, [#27](https://github.com/zimmertr/hevy-garmin-sync/issues/27)). A 429 on a read becomes `GarminConnectTooManyRequestsError`, raised from the library's `GarminConnectConnectionError` that holds the `requests` reply. A 429 on a write (create, update, delete, schedule, unschedule, and the message that sends a workout to the watch, whose two lookups are reads) is that `GarminConnectConnectionError` itself, with the reply on `.response`. A 429 on the token exchange carries no reply, so there the app waits its own 15 minutes (read in the library's source, 2026-11-10).
 - **Not yet seen:** a 429 from Garmin, or a `Retry-After` header on one (2026-11-10).
 - **Not yet seen:** Garmin refusing one of the app's workouts (2026-11-10). A refused workout is tried again on growing gaps (spec F-16).
+- **Nothing writes outside `/data`.** On 2026-11-10 the image ran with a read-only root filesystem and no network, with made-up credentials. The app wrote its token to `/data` and waited out Hevy. Garmin's client, run on that token, failed on name resolution only. A sign-in tried all five of python-garminconnect's strategies, curl_cffi's included, and none touched a file. `login` saves no file at all: the app gives the library no token store. So neither the chart nor `compose.yaml` mounts a `/tmp` (spec O-4).
 - **Weights go in the user's own unit.** A weight sent in kilograms to a pounds account showed as 0.0 lbs on a Fenix 8 (2026-11-07, spec F-21a). With Garmin Connect set to metric the app sent 20 and 22.5 kilograms. The watch, still set to pounds, showed 44.1 and 49.6 lbs, and 20 and 22.5 kg once the watch itself was set to kilograms (2026-11-10, [#5](https://github.com/zimmertr/hevy-garmin-sync/issues/5)). So the unit to send is Garmin Connect's, and the watch's weight unit is a separate setting on the watch.
 - **Garmin takes every exercise category the tables use** in a strength workout: one workout holding all 42 was accepted (2026-11-10). For `BATTLE_ROPE` and `HYPEREXTENSION` the exercise Garmin stored differed from the one sent. What it stored is not known yet.
 - **The settings reply has a `timeZone` field** (`America/Los_Angeles` style), and the workout list carries each workout's `description` (2026-11-10).
 - **A workout updated in place and sent again** is one copy on the watch, with the new name and weights (2026-11-10, spec U-24).
 - **A workout deleted in Garmin Connect stays in the watch's saved list** until it is removed on the watch (2026-11-10, spec F-14).
-- **Garmin's exercise list** is published at https://connect.garmin.com/web-data/exercises/Exercises.json: 47 categories and 1,536 exercises on 2026-11-10. `tests/data/garmin_exercises.json` holds its keys.
+- **Garmin's exercise list** is published at https://connect.garmin.com/web-data/exercises/Exercises.json: 47 categories and 1,536 exercises on 2026-11-10. `tests/data/garmin_exercises.json` holds its keys. The first weekly comparison, on 2026-11-10, found it the same as the copy (#26).
 
 ## Strava
 

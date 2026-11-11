@@ -2,7 +2,9 @@
 
 `tests/data/garmin_exercises.json` holds the category and exercise keys of
 Garmin Connect's own list, https://connect.garmin.com/web-data/exercises/Exercises.json,
-as read on 2026-11-10.
+and `tests/data/hevy_api.json` the enums of Hevy's published API spec. Both are
+compared with their source every week, and rewritten by `make upstream-update`
+(scripts/check_upstream.py, #26).
 """
 
 import json
@@ -11,33 +13,12 @@ from pathlib import Path
 
 from hevy_garmin_sync import exercises
 
-GARMIN: dict[str, list[str]] = json.loads(
-    (Path(__file__).parent / "data" / "garmin_exercises.json").read_text(encoding="utf-8")
-)
-# The values Hevy's public API gives an exercise template (its OpenAPI spec, 2026-11-10).
-MUSCLE_GROUPS = {
-    "abdominals",
-    "shoulders",
-    "biceps",
-    "triceps",
-    "forearms",
-    "quadriceps",
-    "hamstrings",
-    "calves",
-    "glutes",
-    "abductors",
-    "adductors",
-    "lats",
-    "upper_back",
-    "traps",
-    "lower_back",
-    "chest",
-    "cardio",
-    "neck",
-    "full_body",
-    "other",
-}
-EQUIPMENT = {"none", "barbell", "dumbbell", "kettlebell", "machine", "plate", "resistance_band", "suspension", "other"}
+DATA = Path(__file__).parent / "data"
+GARMIN: dict[str, list[str]] = json.loads((DATA / "garmin_exercises.json").read_text(encoding="utf-8"))
+HEVY_ENUMS: dict[str, list[str]] = json.loads((DATA / "hevy_api.json").read_text(encoding="utf-8"))["enums"]
+# The values Hevy's public API gives an exercise template.
+MUSCLE_GROUPS = set(HEVY_ENUMS["muscle_group"])
+EQUIPMENT = set(HEVY_ENUMS["equipment"])
 
 
 class ExerciseDataTest(unittest.TestCase):

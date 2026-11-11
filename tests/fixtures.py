@@ -5,11 +5,13 @@ and token made up (spec D-10), and each can be told to fail the way the real
 service fails.
 """
 
+import io
 import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
+from urllib.request import Request
 from zoneinfo import ZoneInfo
 
 import garminconnect
@@ -17,6 +19,7 @@ import requests
 from requests.structures import CaseInsensitiveDict
 
 from hevy_garmin_sync.exercises import ExerciseMap, GarminExercise
+from scripts.check_upstream import GARMIN_URL, HEVY_URL
 
 ZONE = ZoneInfo("America/Los_Angeles")
 # A winter afternoon, so the zone's abbreviation is PST.
@@ -392,6 +395,8 @@ def trainer_program(templates: list[dict[str, Any]], **fields: Any) -> dict[str,
         "created_at": PROGRAM_START.astimezone(UTC).isoformat().replace("+00:00", "Z"),
         "current_week": 5,  # not the week the Hevy app shows; the app counts from `created_at`
         "deloads_enabled": False,
+        # The workout the Hevy app would start next, counted in `index` order (spec F-31).
+        "next_workout_index": 0,
         "templates": [t | {"index": i} for i, t in enumerate(templates)],
     } | fields
 
@@ -577,3 +582,85 @@ def exercise_map() -> ExerciseMap:
             ("*", "*"): GarminExercise("TOTAL_BODY", "TOTAL_BODY"),
         },
     )
+
+
+def garmin_exercise_list() -> dict[str, Any]:
+    """A few entries of Garmin's Exercises.json, in its shape: categories, each with its exercises."""
+    return {
+        "categories": {
+            "CORE": {"exercises": {"PLANK": {"primaryMuscles": ["ABS"]}, "CRUNCH": {"primaryMuscles": ["ABS"]}}},
+            "BENCH_PRESS": {
+                "exercises": {
+                    "DUMBBELL_BENCH_PRESS": {"primaryMuscles": ["CHEST"]},
+                    "BARBELL_BENCH_PRESS": {"primaryMuscles": ["CHEST"], "secondaryMuscles": ["TRICEPS"]},
+                }
+            },
+        }
+    }
+
+
+def hevy_spec() -> dict[str, Any]:
+    """A cut of Hevy's OpenAPI document: two paths, the four enums the copy keeps and one it doesn't."""
+    return {
+        "openapi": "3.0.0",
+        "info": {"title": "Hevy API", "version": "0.0.1", "description": "Made up."},
+        "paths": {
+            "/v1/workouts/events": {"get": {"summary": "Made up."}},
+            "/v1/routines": {
+                "parameters": [{"name": "page", "in": "query", "schema": {"type": "integer"}}],
+                "post": {"summary": "Made up."},
+                "get": {"summary": "Made up."},
+            },
+        },
+        "components": {
+            "schemas": {
+                "CustomExerciseType": {"type": "string", "enum": ["weight_reps", "reps_only"]},
+                "EquipmentCategory": {"type": "string", "enum": ["none", "barbell"]},
+                "MuscleGroup": {"type": "string", "enum": ["chest", "abdominals"]},
+                "PostRoutinesRequestSet": {
+                    "type": "object",
+                    "properties": {"type": {"type": "string", "enum": ["warmup", "normal"]}},
+                },
+                "UserInfo": {"type": "object", "properties": {"weight_unit": {"type": "string", "enum": ["kg"]}}},
+            }
+        },
+    }
+
+
+def hevy_docs_script(spec: dict[str, Any] | None = None) -> str:
+    """Hevy's swagger-ui-init.js as swagger-ui-express writes it: the spec inside `var options`, between code."""
+    options = json.dumps({"swaggerDoc": hevy_spec() if spec is None else spec, "customOptions": {}}, indent=2)
+    return (
+        "\nwindow.onload = function() {\n"
+        "  var url = window.location.search.match(/url=([^&]+)/);\n"
+        f"  var options = {options};\n"
+        "  var spec1 = options.swaggerDoc\n"
+        "  var ui = SwaggerUIBundle({ spec: spec1, dom_id: '#swagger-ui' })\n"
+        "  window.ui = ui\n"
+        "}\n"
+    )
+
+
+class FakeUpstream:
+    """urllib's `urlopen` over Garmin's exercise list and Hevy's docs script, the two public files
+    scripts/check_upstream.py reads."""
+
+    def __init__(self) -> None:
+        self.bodies: dict[str, bytes] = {
+            GARMIN_URL: json.dumps(garmin_exercise_list()).encode(),
+            HEVY_URL: hevy_docs_script().encode(),
+        }
+        self.requests: list[Request] = []
+        self.timeouts: list[float] = []
+        self._failures: dict[str, BaseException] = {}
+
+    def fail(self, url: str, error: BaseException) -> None:
+        """Make every request for `url` raise this."""
+        self._failures[url] = error
+
+    def __call__(self, url: Request, *, timeout: float) -> io.BytesIO:
+        self.requests.append(url)
+        self.timeouts.append(timeout)
+        if url.full_url in self._failures:
+            raise self._failures[url.full_url]
+        return io.BytesIO(self.bodies[url.full_url])

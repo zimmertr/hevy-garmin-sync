@@ -8,9 +8,9 @@ I plan my lifting in Hevy and record it on a Garmin watch. Garmin forwards the w
 
 ## How It Works
 
-It runs as one container. Every minute it checks Hevy for changes, and when a routine changes it updates the matching Garmin workout and sends it to the watch, which picks it up on its next sync with your phone. Every workout also sits on today's Garmin calendar, so the watch offers them when you start a strength activity. It reads Hevy and writes Garmin, nothing else: it never writes to Hevy and never touches Strava. [docs/SPEC.md](docs/SPEC.md) has the full design.
+It runs as one container. Every minute it checks Hevy for changes, and when a routine changes it updates the matching Garmin workout and sends it to the watch, which picks it up on its next sync with your phone. Every routine also sits on today's Garmin calendar, so the watch offers them when you start a strength activity. It reads Hevy and writes Garmin, nothing else: it never writes to Hevy and never touches Strava. [docs/SPEC.md](docs/SPEC.md) has the full design.
 
-What it doesn't do: it doesn't copy finished workouts from Hevy to Garmin, it doesn't touch Garmin workouts it didn't make, and it doesn't pick which workout is next.
+What it doesn't do: it doesn't copy finished workouts from Hevy to Garmin, it doesn't touch Garmin workouts it didn't make, and it doesn't pick which routine is next (for Hevy Trainer, today's calendar gets just the workout Hevy says is next).
 
 ## Quick Start
 
@@ -71,7 +71,7 @@ To turn it on, open a private browser window, sign in at hevy.com, and copy the 
 | `HEVY_API_KEY` | required | Your Hevy API key |
 | `GARMIN_TOKEN` | required on the first start | What `login` printed |
 | `INCLUDE_HEVY_FOLDERS` | every routine | Only these routine folders, by id or title, comma-separated |
-| `ENABLE_SCHEDULED_WORKOUTS` | `true` | Put every workout on today's Garmin calendar |
+| `ENABLE_SCHEDULED_WORKOUTS` | `true` | Put every routine, and Hevy Trainer's next workout, on today's Garmin calendar |
 | `HEVY_SESSION` | off | Turns Hevy Trainer on |
 | `HEVY_POLL_INTERVAL_SECONDS` | `60` | How often Hevy is checked |
 | `TZ` | your Garmin profile's time zone | Decides when "today" starts |

@@ -405,8 +405,8 @@ class TrainerTest(AppCase):
         self.hevy_api.templates += fixtures.trainer_exercise_templates()
         self.private_api = fixtures.FakeHevyPrivateApi()
         upper = fixtures.trainer_template("t-upper", "upper_2x_a", [fixtures.trainer_exercise("T-SIDE-BEND")])
-        self.private_api.program = fixtures.trainer_program([fixtures.lower_template(), upper])
-        # Lower was logged on the Tuesday of this week; Upper has not been done yet.
+        # Lower was logged on the Tuesday of this week, so Hevy says Upper is next.
+        self.private_api.program = fixtures.trainer_program([fixtures.lower_template(), upper], next_workout_index=1)
         self.private_api.workouts = [fixtures.logged_lower(fixtures.PROGRAM_WEEK_8 - timedelta(days=3))]
         self.hevy_private = HevyPrivate(
             fixtures.HEVY_SESSION_TOKENS,
@@ -425,16 +425,29 @@ class TrainerTest(AppCase):
         self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push", self.LOWER, self.UPPER])
         self.assertIn("Sync: created 4, updated 0, deleted 0, scheduled 3", "\n".join(logs.output))
 
-    def test_a_trainer_workout_done_this_week_is_in_garmin_but_not_on_the_calendar(self) -> None:
+    def test_only_the_trainer_workout_hevy_says_is_next_is_on_the_calendar_and_both_are_in_garmin(self) -> None:
         self.run_app()
         self.assertEqual(self.on_the_calendar(), ["Hevy/PPL: Pull", "Hevy/PPL: Push", self.UPPER])
+        self.assertIn(self.LOWER, self.names())
 
-    def test_on_the_first_weekday_the_names_move_to_the_new_week_and_every_workout_is_on_the_calendar(self) -> None:
+    def test_when_hevys_next_workout_changes_the_calendar_follows_on_that_poll(self) -> None:
+        def reorder() -> None:
+            assert self.private_api.program is not None
+            self.private_api.program["next_workout_index"] = 0
+            self.garmin_api.calls.clear()
+
+        self.run_app(reorder)
+        self.assertEqual(self.garmin_api.calls, ["unschedule_workout", "schedule_workout"])
+        self.assertEqual(self.on_the_calendar(), ["Hevy/PPL: Pull", "Hevy/PPL: Push", self.LOWER])
+        self.assertEqual(self.days(), {fixtures.PROGRAM_WEEK_8.date().isoformat()})
+        self.assertEqual(len(self.garmin_api.pushed), 4)
+
+    def test_on_the_first_weekday_the_names_move_to_the_new_week_and_the_next_workout_is_on_the_new_day(self) -> None:
         self.utc = datetime(2026, 11, 9, 7, 59, 30, tzinfo=UTC)  # 23:59:30 on Sunday in Los Angeles
         self.run_app(None)
         lower, upper = "Hevy/Trainer: Lower (C2-W3)", "Hevy/Trainer: Upper (C2-W3)"
         self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push", lower, upper])
-        self.assertEqual(self.on_the_calendar(), self.names())
+        self.assertEqual(self.on_the_calendar(), ["Hevy/PPL: Pull", "Hevy/PPL: Push", upper])
         self.assertEqual(self.days(), {"2026-11-09"})
 
     def test_a_logged_workout_changes_the_weights_in_garmin_on_the_next_poll(self) -> None:

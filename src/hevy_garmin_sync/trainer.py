@@ -1,10 +1,11 @@
-"""Hevy Trainer's program as planned workouts, with the weights the Hevy app would show (spec section 6, F-33).
+"""Hevy Trainer's program as planned workouts, with the weights the Hevy app would show (spec section 6, F-31, F-33).
 
 The program comes from Hevy's private API without weights; trainer_rules.py
 works them out from the user's logged workouts and preferences. What is read
 when (F-4): the program and the public workout events on every poll; the
 preferences and the logged workouts at startup, at local midnight, and after a
-workout was saved, edited or deleted.
+workout was saved, edited or deleted. Only the workout the program says is next
+goes on today's calendar (F-31, #25).
 """
 
 import logging
@@ -101,6 +102,7 @@ class Trainer:
         self._best: dict[str, float | None] = {}
         self._said: dict[str, str] = {}
         self._no_program_said = False
+        self._no_next_said = False
 
     @property
     def private_calls(self) -> int:
@@ -161,7 +163,7 @@ class Trainer:
                 key=lambda session: session[0],
             )
             if any(started.astimezone(zone).date() >= this_week for started, _ in sessions):
-                done.add(template_id)  # logged this week: off the calendar until the week turns (F-33)
+                done.add(template_id)  # logged this week: the calendar rule when Hevy names no next workout (F-33)
             history = [logged for started, logged in sessions if not rules.is_deload_week(week_of(started), deloads)]
             exercises = tuple(
                 self._exercise(template_id, planned, history, deload, now)
@@ -170,7 +172,34 @@ class Trainer:
             workouts.append(
                 Workout(TRAINER, template_id, f"Hevy/Trainer: {template_name(template)} {label}", exercises)
             )
-        return Plans(TRAINER, workouts, off_calendar=frozenset(done))
+        return Plans(TRAINER, workouts, off_calendar=self._off_calendar(program, templates, workouts, done))
+
+    def _off_calendar(
+        self, program: Json, templates: list[Json], workouts: list[Workout], done: set[str]
+    ) -> frozenset[str]:
+        """Every workout but the one Hevy would start next (F-31, #25).
+
+        `next_workout_index` counts the templates in their `index` order. When
+        it names no workout, the week's logged workouts are off instead (F-33),
+        so the calendar still shows what is left to do.
+        """
+        if not workouts:
+            return frozenset()
+        index = program.get("next_workout_index")
+        chosen = ""
+        if isinstance(index, int) and not isinstance(index, bool) and 0 <= index < len(templates):
+            chosen = str(templates[index].get("id") or "")
+        if not chosen:
+            if not self._no_next_said:
+                self._no_next_said = True
+                log.warning(
+                    "Hevy's program names no next workout (next_workout_index %r), so every Hevy Trainer "
+                    "workout not logged this week stays on today's calendar",
+                    index,
+                )
+            return frozenset(done)
+        self._no_next_said = False
+        return frozenset(w.source_id for w in workouts if w.source_id != chosen)
 
     def _read_inputs(self, program_created: datetime) -> None:
         self._user = self._private.user_preferences()

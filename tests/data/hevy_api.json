@@ -1,0 +1,105 @@
+{
+ "enums": {
+  "equipment": [
+   "barbell",
+   "dumbbell",
+   "kettlebell",
+   "machine",
+   "none",
+   "other",
+   "plate",
+   "resistance_band",
+   "suspension"
+  ],
+  "exercise_template_type": [
+   "bodyweight_assisted_reps",
+   "bodyweight_reps",
+   "distance_duration",
+   "duration",
+   "reps_only",
+   "short_distance_weight",
+   "weight_duration",
+   "weight_reps"
+  ],
+  "muscle_group": [
+   "abdominals",
+   "abductors",
+   "adductors",
+   "biceps",
+   "calves",
+   "cardio",
+   "chest",
+   "forearms",
+   "full_body",
+   "glutes",
+   "hamstrings",
+   "lats",
+   "lower_back",
+   "neck",
+   "other",
+   "quadriceps",
+   "shoulders",
+   "traps",
+   "triceps",
+   "upper_back"
+  ],
+  "set_type": [
+   "dropset",
+   "failure",
+   "normal",
+   "warmup"
+  ]
+ },
+ "paths": {
+  "/v1/body_measurements": [
+   "get",
+   "post"
+  ],
+  "/v1/body_measurements/{date}": [
+   "get",
+   "put"
+  ],
+  "/v1/exercise_history/{exerciseTemplateId}": [
+   "get"
+  ],
+  "/v1/exercise_templates": [
+   "get",
+   "post"
+  ],
+  "/v1/exercise_templates/{exerciseTemplateId}": [
+   "get"
+  ],
+  "/v1/routine_folders": [
+   "get",
+   "post"
+  ],
+  "/v1/routine_folders/{folderId}": [
+   "get"
+  ],
+  "/v1/routines": [
+   "get",
+   "post"
+  ],
+  "/v1/routines/{routineId}": [
+   "get",
+   "put"
+  ],
+  "/v1/user/info": [
+   "get"
+  ],
+  "/v1/workouts": [
+   "get",
+   "post"
+  ],
+  "/v1/workouts/count": [
+   "get"
+  ],
+  "/v1/workouts/events": [
+   "get"
+  ],
+  "/v1/workouts/{workoutId}": [
+   "get",
+   "put"
+  ]
+ }
+}

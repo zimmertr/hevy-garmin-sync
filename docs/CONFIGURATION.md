@@ -9,7 +9,7 @@ Every setting, and where it is set. The app reads environment variables only (sp
 | `HEVY_API_KEY` | required | The Hevy public API key, from https://hevy.com/settings?developer. Needs Hevy Pro (C-1) |
 | `GARMIN_TOKEN` | required on the first start | The value the `login` command prints. Later starts use the copy in `DATA_DIR`, which the app keeps current as Garmin rotates it. Set a new value to replace that copy (C-2, A-4) |
 | `INCLUDE_HEVY_FOLDERS` | unset: every routine | Comma-separated routine folder ids or titles. An id is tried before a title. Routines outside these folders, and routines in no folder, are left out. A name that matches no folder exits at startup, after the folder list is logged. Does not apply to Hevy Trainer (C-3) |
-| `ENABLE_SCHEDULED_WORKOUTS` | `true` | `true` puts every workout on today's Garmin calendar. `false` keeps the app off the calendar and removes the entries it made (C-4) |
+| `ENABLE_SCHEDULED_WORKOUTS` | `true` | `true` puts every routine, and Hevy Trainer's next workout, on today's Garmin calendar. `false` keeps the app off the calendar and removes the entries it made (C-4) |
 | `HEVY_SESSION` | unset: Hevy Trainer off | The `auth2.0-token` cookie from hevy.com. Setting it turns Hevy Trainer on. Unsetting it turns Trainer off, removes its Garmin workouts and deletes the stored session (C-5) |
 | `HEVY_POLL_INTERVAL_SECONDS` | `60` | How often Hevy is read. A whole number, 10 or more (C-6) |
 | `TZ` | the Garmin profile's time zone | Decides "today", midnight, and the start of Trainer's week. A name such as `America/Los_Angeles`. If it is unset and Garmin gives none, UTC with a warning (C-7) |
@@ -47,10 +47,10 @@ Both services replace the refresh token every time it is used, so the folder mus
 | `persistence.existingClaim` | empty | A claim you made instead of a new one |
 | `resources`, `nodeSelector`, `tolerations` | empty | As usual for a pod |
 | `podSecurityContext` | uid and gid 1000, `fsGroup` 1000, non-root | Makes the volume writable by the image's user |
-| `securityContext` | no privilege escalation, all capabilities dropped | The container's |
+| `securityContext` | no privilege escalation, all capabilities dropped, read-only root filesystem | The container's. The app writes only to `/data` (spec O-4) |
 
 The chart sets `DATA_DIR` to `/data` itself.
 
 ## Compose
 
-`compose.yaml` runs the same image with a named volume on `/data` and reads the variables from a `.env` file beside it. `.env` is ignored by git.
+`compose.yaml` runs the same image with a named volume on `/data` and a read-only root filesystem, and reads the variables from a `.env` file beside it. `.env` is ignored by git.

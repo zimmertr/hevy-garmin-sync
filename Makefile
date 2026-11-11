@@ -10,7 +10,7 @@ IMAGE        := hevy-garmin-sync:dev
 RUN          := docker run --rm -v "$(CURDIR)":/repo -w /repo
 DEV          := pip install -q --root-user-action=ignore --require-hashes -r requirements-dev.txt
 
-.PHONY: test test-one lint typecheck lint-docker chart build scan lock
+.PHONY: test test-one lint typecheck lint-docker chart build scan lock upstream-check upstream-update
 
 # The suite under coverage, with its line and branch report, as the test job
 # runs it.
@@ -36,12 +36,14 @@ lint-docker:
 	docker run --rm -i $(HADOLINT) < Dockerfile
 
 # The Chart job: lint, render with the defaults and with an existing Secret,
-# then check that all three default resources state their namespace.
+# then check that all three default resources state their namespace and that
+# the container's root filesystem is read-only.
 chart:
 	$(RUN) --entrypoint sh $(HELM_IMAGE) -c 'helm lint charts/hevy-garmin-sync-helm && \
 	  helm template hevy-garmin-sync charts/hevy-garmin-sync-helm >/dev/null && \
 	  helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --set existingSecret=hevy-garmin-sync >/dev/null && \
-	  test "$$(helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --namespace check | grep -c "^  namespace: check$$")" -eq 3'
+	  test "$$(helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --namespace check | grep -c "^  namespace: check$$")" -eq 3 && \
+	  helm template hevy-garmin-sync charts/hevy-garmin-sync-helm | grep -q "^            readOnlyRootFilesystem: true$$"'
 
 build:
 	docker build --build-arg APP_COMMIT=$$(git rev-parse HEAD) -t $(IMAGE) .
@@ -63,3 +65,13 @@ lock:
 	$(RUN) $(PYTHON_IMAGE) sh -c "pip install -q --root-user-action=ignore 'pip<26' pip-tools==7.5.3 && \
 	  pip-compile -q --generate-hashes --allow-unsafe --strip-extras --output-file=requirements.txt requirements.in && \
 	  pip-compile -q --generate-hashes --allow-unsafe --strip-extras --output-file=requirements-dev.txt requirements-dev.in"
+
+# Not checks: the weekly upstream-check.yml run, here. Both fetch Garmin's
+# exercise list and Hevy's published API spec, which need no sign-in, and
+# compare them with the copies in tests/data. The first exits 3 on a
+# difference and 2 when a source can't be read; the second rewrites the copies.
+upstream-check:
+	$(RUN) $(PYTHON_IMAGE) python scripts/check_upstream.py
+
+upstream-update:
+	$(RUN) $(PYTHON_IMAGE) python scripts/check_upstream.py --write

@@ -37,14 +37,29 @@ Every merge to main is a release (`release.yml`), one at a time:
 
 `image-scan.yml` re-scans the latest release every Monday and sends the findings to the Security tab. Its first run fails until a release exists.
 
+## The upstream check
+
+`upstream-check.yml` runs every Monday and can be started by hand. It is not a required check, and no yggdrasil module covers it, so it lives here. It runs `scripts/check_upstream.py`, which reads two public files with no sign-in and compares them with their copies in `tests/data`:
+
+| Source | Copy | Keeps |
+|---|---|---|
+| Garmin's exercise list, `https://connect.garmin.com/web-data/exercises/Exercises.json` | `garmin_exercises.json` | Each category key with its exercise keys (spec F-51) |
+| Hevy's API spec, inside `https://api.hevyapp.com/docs/swagger-ui-init.js` | `hevy_api.json` | Each path with its methods, and the exercise type, equipment, muscle group and set type enums |
+
+1. `Compare` runs the script. The same copies pass and open nothing. A source it can't fetch or read fails the run.
+2. On a difference, `Issue` opens an issue titled "Garmin's exercise list or Hevy's API changed", labelled `P2`, `enhancement` and `ci`, with what was added and removed. While that issue is open, a later run comments on it instead of opening another.
+3. `PR` reads the sources again, rewrites the copies and opens a PR from the fixed branch `chore/upstream-copies`, or force-pushes the one already open. Its title is `test(upstream): update the copies of Garmin's exercise list and Hevy's API`, and it closes the issue. It uses `GH_PAT`, because a PR opened with `GITHUB_TOKEN` starts no workflows and its required checks would never report. When this job fails, the issue stays and the run fails.
+
+Record: [0010](architectural-decision-records/0010-a-weekly-check-of-the-upstream-copies.md)
+
 After a failure, re-run the failed jobs only. Never re-run an old release after a newer one shipped.
 
 ## Secrets
 
 | Secret | Store | Used by |
 |---|---|---|
-| `GITHUB_TOKEN` | Given to each run | The image push and the chart push, to GHCR (`packages: write`) |
-| `GH_PAT` | Actions | The Kubernetes-Manifests bump (contents and pull-requests write there) |
+| `GITHUB_TOKEN` | Given to each run | The image push and the chart push, to GHCR (`packages: write`); the upstream check's issue (`issues: write`) |
+| `GH_PAT` | Actions | The Kubernetes-Manifests bump, and the upstream check's push and PR here (contents and pull-requests write on both repos) |
 | `AUTO_MERGE_PAT` | Dependabot | The auto-merge module's `merge-token`; a merge made with `GITHUB_TOKEN` would not start the release |
 
 ## Repo settings
