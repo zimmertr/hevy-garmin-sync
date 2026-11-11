@@ -1,8 +1,10 @@
 name: Upstream Check
 
-# The tests check every exercise map row against tests/data/garmin_exercises.json
-# and read Hevy's enums from tests/data/hevy_api.json, so a change upstream that
-# nobody copied still passes CI. Every week this compares both copies with their
+# The tests check every exercise map row against
+# src/hevy_garmin_sync/data/garmin_exercises.json, which the app also reads to
+# check CUSTOM_EXERCISE_MAP (#24), and read Hevy's enums from
+# tests/data/hevy_api.json, so a change upstream that nobody copied still
+# passes CI. Every week this compares both copies with their
 # source (scripts/check_upstream.py). On a difference it opens one issue, or
 # comments on the one still open, and opens or updates one PR that rewrites the
 # copies, so the PR's tests show any map row the change broke. A source it can't
@@ -85,7 +87,7 @@ jobs:
         run: |
           body="$RUNNER_TEMP/body.md"
           {
-            echo "The weekly upstream check found a source that no longer matches its copy in \`tests/data\`: $RUN"
+            echo "The weekly upstream check found a source that no longer matches its copy in the repo: $RUN"
             echo
             printf '%s\n' "$REPORT"
             echo "The same run opens or updates a PR from the \`chore/upstream-copies\` branch that rewrites the copies. Its tests show any exercise map row the change broke."
@@ -133,12 +135,12 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           branch: chore/upstream-copies
           add-paths: |
-            tests/data/garmin_exercises.json
+            src/hevy_garmin_sync/data/garmin_exercises.json
             tests/data/hevy_api.json
           commit-message: ${{ env.TITLE }}
           title: ${{ env.TITLE }}
           body: |
-            The weekly upstream check rewrote the copies in `tests/data`: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            The weekly upstream check rewrote the copies that no longer match their source (Garmin's in `src/hevy_garmin_sync/data`, Hevy's in `tests/data`): ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
             ${{ needs.check.outputs.report }}
             Before merging:

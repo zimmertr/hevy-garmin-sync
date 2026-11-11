@@ -1,10 +1,12 @@
 """Environment variables become the configuration, and a bad one names itself and the fix (spec section 11)."""
 
+import re
 import unittest
 from pathlib import Path
 
 from hevy_garmin_sync import config
 from hevy_garmin_sync.errors import ConfigError
+from hevy_garmin_sync.exercises import GarminExercise
 
 REQUIRED = {"HEVY_API_KEY": "made-up-key"}
 
@@ -76,6 +78,7 @@ class ConfigTest(unittest.TestCase):
                 "HEVY_API_KEY",
                 "GARMIN_TOKEN",
                 "INCLUDE_HEVY_FOLDERS",
+                "CUSTOM_EXERCISE_MAP",
                 "ENABLE_SCHEDULED_WORKOUTS",
                 "HEVY_SESSION",
                 "HEVY_POLL_INTERVAL_SECONDS",
@@ -94,8 +97,62 @@ class ConfigTest(unittest.TestCase):
         summary = config.load(REQUIRED).summary()
         self.assertIn("unset", summary["GARMIN_TOKEN"])
         self.assertIn("all routines", summary["INCLUDE_HEVY_FOLDERS"])
+        self.assertIn("by muscle group and equipment", summary["CUSTOM_EXERCISE_MAP"])
         self.assertIn("Trainer off", summary["HEVY_SESSION"])
         self.assertIn("Garmin profile", summary["TZ"])
+
+
+class CustomExerciseMapTest(unittest.TestCase):
+    """CUSTOM_EXERCISE_MAP: title-or-id=CATEGORY/NAME, comma-separated, each pair one Garmin has (C-11, #24)."""
+
+    def load(self, value: str) -> dict[str, GarminExercise]:
+        return dict(config.load(REQUIRED | {"CUSTOM_EXERCISE_MAP": value}).custom_exercises)
+
+    def test_unset_or_empty_is_no_entries(self) -> None:
+        self.assertEqual(config.load(REQUIRED).custom_exercises, {})
+        self.assertEqual(self.load(" , "), {})
+
+    def test_each_entry_is_trimmed_and_split_on_its_last_equals_sign(self) -> None:
+        loaded = self.load(
+            " My Cable Raise = LATERAL_RAISE / CABLE_FRONT_RAISE ,, a1b2c3d4=CURL/CURL, Reps=Max=PLANK/PLANK "
+        )
+        self.assertEqual(
+            loaded,
+            {
+                "My Cable Raise": GarminExercise("LATERAL_RAISE", "CABLE_FRONT_RAISE"),
+                "a1b2c3d4": GarminExercise("CURL", "CURL"),
+                "Reps=Max": GarminExercise("PLANK", "PLANK"),
+            },
+        )
+
+    def test_an_entry_not_in_the_form_exits_naming_it(self) -> None:
+        for entry in ("My Raise", "=CURL/CURL", "My Raise=", "My Raise=CURL", "My Raise=CURL/", "My Raise=/CURL"):
+            with (
+                self.subTest(entry=entry),
+                self.assertRaisesRegex(ConfigError, f"^CUSTOM_EXERCISE_MAP entry '{re.escape(entry)}' is not"),
+            ):
+                self.load(f"Fine=CURL/CURL,{entry}")
+        with self.assertRaisesRegex(ConfigError, "is not title-or-id=CATEGORY/NAME"):
+            self.load("My Raise=CURL/CURL/CURL")
+
+    def test_a_pair_garmin_does_not_have_exits_naming_the_pair(self) -> None:
+        for pair in ("CURL/NO_SUCH_CURL", "NO_SUCH_CATEGORY/CURL", "curl/curl"):
+            with (
+                self.subTest(pair=pair),
+                self.assertRaisesRegex(ConfigError, f"^CUSTOM_EXERCISE_MAP names {pair}, which Garmin doesn't have"),
+            ):
+                self.load(f"My Raise={pair}")
+
+    def test_an_exercise_named_twice_exits(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "^CUSTOM_EXERCISE_MAP names 'My Raise' twice"):
+            self.load("My Raise=CURL/CURL, My Raise =PLANK/PLANK")
+
+    def test_the_summary_counts_the_entries_and_never_shows_one(self) -> None:
+        one = config.load(REQUIRED | {"CUSTOM_EXERCISE_MAP": "My Raise=CURL/CURL"}).summary()
+        two = config.load(REQUIRED | {"CUSTOM_EXERCISE_MAP": "My Raise=CURL/CURL,My Hold=PLANK/PLANK"}).summary()
+        self.assertEqual(one["CUSTOM_EXERCISE_MAP"], "set (1 entry)")
+        self.assertEqual(two["CUSTOM_EXERCISE_MAP"], "set (2 entries)")
+        self.assertNotIn("My Raise", " ".join(two.values()))
 
 
 if __name__ == "__main__":

@@ -311,4 +311,5 @@ def main(env: Mapping[str, str] = os.environ, err: TextIO = sys.stderr) -> int:
         store.remove(SESSION)
         store.remove(f"{SESSION}.seed")
     hevy = Hevy(config.hevy_api_key)
-    return App(config, hevy, garmin, ExerciseMap.load(), hevy_private=hevy_private, wait=stop.wait).run()
+    exercises = ExerciseMap.load(overrides=config.custom_exercises)
+    return App(config, hevy, garmin, exercises, hevy_private=hevy_private, wait=stop.wait).run()

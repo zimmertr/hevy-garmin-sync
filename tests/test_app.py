@@ -1,6 +1,7 @@
 """The process: startup checks, the poll loop, midnight, and what happens when a service fails (spec F-1, O-1)."""
 
 import io
+import json
 import signal
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ import garminconnect
 import requests
 
 from hevy_garmin_sync import app, config, errors, garmin, hevy
+from hevy_garmin_sync.exercises import GarminExercise
 from hevy_garmin_sync.hevy_private import SESSION, HevyPrivate
 from hevy_garmin_sync.store import Store
 from tests import fixtures
@@ -67,11 +69,12 @@ class AppCase(unittest.TestCase):
 
     def run_app(self, *steps: Step, **env: str) -> int:
         self.steps = list(steps)
+        loaded = config.load(self.env | env)
         return app.App(
-            config.load(self.env | env),
+            loaded,
             hevy.Hevy("made-up-key", self.hevy_api),  # type: ignore[arg-type]
             self.garmin,
-            fixtures.exercise_map(),
+            fixtures.exercise_map(loaded.custom_exercises),
             hevy_private=self.hevy_private,
             wait=self.wait,
             clock=lambda: self.clock,
@@ -119,6 +122,29 @@ class StartupTest(AppCase):
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(INCLUDE_HEVY_FOLDERS="Legs"), 1)
         self.assertIn("INCLUDE_HEVY_FOLDERS names no Hevy folder: Legs", logs.output[0])
+
+    def test_custom_exercise_map_sets_a_custom_exercise_and_rewrites_its_workout_once(self) -> None:
+        self.hevy_api.templates.append(
+            fixtures.hevy_template(
+                "T-MINE", "My Cable Raise", is_custom=True, primary_muscle_group="shoulders", equipment="cable"
+            )
+        )
+        self.hevy_api.routines = [
+            hevy_routine("r-arms", "Arms", 42, [hevy_exercise("T-MINE", "My Cable Raise", [hevy_set(reps=12)])])
+        ]
+        override = "My Cable Raise=LATERAL_RAISE/CABLE_FRONT_RAISE"
+        runs = []
+        for env in ({}, {"CUSTOM_EXERCISE_MAP": override}, {"CUSTOM_EXERCISE_MAP": override}):
+            with self.assertLogs(LOGGER, "INFO") as logs:
+                self.run_app(**env)
+            (stored,) = self.garmin_api.workouts.values()
+            runs.append((json.dumps(stored), "\n".join(logs.output)))
+        self.assertIn('"exerciseName": "TOTAL_BODY"', runs[0][0])
+        self.assertIn("is Garmin's TOTAL_BODY / TOTAL_BODY, by muscle group and equipment", runs[0][1])
+        self.assertIn('"category": "LATERAL_RAISE", "exerciseName": "CABLE_FRONT_RAISE"', runs[1][0])
+        self.assertIn("is Garmin's LATERAL_RAISE / CABLE_FRONT_RAISE, from CUSTOM_EXERCISE_MAP", runs[1][1])
+        self.assertIn("Sync: created 0, updated 1,", runs[1][1])
+        self.assertIn("Sync: created 0, updated 0,", runs[2][1])
 
     def test_an_outage_at_startup_is_waited_out_not_exited_on(self) -> None:
         self.hevy_api.fail(requests.ConnectionError("down"), 503)
@@ -619,6 +645,30 @@ class MainTest(unittest.TestCase):
         self.assertIn("hevy-garmin-sync ", logs.output[0])
         self.assertIn("HEVY_API_KEY: set", logs.output[1])
         self.assertNotIn("made-up-key", "\n".join(logs.output))
+
+    def test_custom_exercise_map_reaches_the_map_and_only_its_count_is_logged(self) -> None:
+        env = self.env | {
+            "GARMIN_TOKEN": garmin.encode_token(fixtures.GARMIN_TOKENS),
+            "CUSTOM_EXERCISE_MAP": "My Cable Raise=LATERAL_RAISE/CABLE_FRONT_RAISE",
+        }
+        with (
+            mock.patch.object(app.App, "run", return_value=0),
+            mock.patch("hevy_garmin_sync.exercises.ExerciseMap.load", return_value=fixtures.exercise_map()) as load,
+            self.assertLogs(LOGGER, "INFO") as logs,
+        ):
+            self.assertEqual(app.main(env, self.err), 0)
+        wanted = {"My Cable Raise": GarminExercise("LATERAL_RAISE", "CABLE_FRONT_RAISE")}
+        load.assert_called_once_with(overrides=wanted)
+        self.assertIn("CUSTOM_EXERCISE_MAP: set (1 entry)", "\n".join(logs.output))
+        self.assertNotIn("My Cable Raise", "\n".join(logs.output))
+
+    def test_a_custom_exercise_map_pair_garmin_lacks_exits_one_before_any_sign_in(self) -> None:
+        env = self.env | {"CUSTOM_EXERCISE_MAP": "My Cable Raise=LATERAL_RAISE/CABLE_SIDE_RAISE"}
+        self.assertEqual(app.main(env, self.err), 1)
+        self.assertIn(
+            "hevy-garmin-sync: CUSTOM_EXERCISE_MAP names LATERAL_RAISE/CABLE_SIDE_RAISE, which Garmin doesn't have",
+            self.err.getvalue(),
+        )
 
     def test_with_hevy_session_set_the_session_is_stored_for_hevy_trainer(self) -> None:
         env = self.env | {

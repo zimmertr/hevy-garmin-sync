@@ -7,6 +7,7 @@ service fails.
 
 import io
 import json
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -561,8 +562,8 @@ class FakeHevyPrivateApi:
         return FakeResponse(200, replies[path]) if path in replies else FakeResponse(404, {"error": "no such path"})
 
 
-def exercise_map() -> ExerciseMap:
-    """A small map: a few built-ins by id, and the fallback rows for everything else."""
+def exercise_map(overrides: Mapping[str, GarminExercise] | None = None) -> ExerciseMap:
+    """A small map: a few built-ins by id, the fallback rows for everything else, and CUSTOM_EXERCISE_MAP's entries."""
     return ExerciseMap(
         {
             "T-BENCH": GarminExercise("BENCH_PRESS", "BARBELL_BENCH_PRESS"),
@@ -581,6 +582,7 @@ def exercise_map() -> ExerciseMap:
             ("biceps", "*"): GarminExercise("CURL", "CURL"),
             ("*", "*"): GarminExercise("TOTAL_BODY", "TOTAL_BODY"),
         },
+        overrides,
     )
 
 

@@ -1,10 +1,11 @@
 """The two tables the app ships: every row names an exercise Garmin has (spec F-51).
 
-`tests/data/garmin_exercises.json` holds the category and exercise keys of
-Garmin Connect's own list, https://connect.garmin.com/web-data/exercises/Exercises.json,
-and `tests/data/hevy_api.json` the enums of Hevy's published API spec. Both are
-compared with their source every week, and rewritten by `make upstream-update`
-(scripts/check_upstream.py, #26).
+`src/hevy_garmin_sync/data/garmin_exercises.json` holds the category and
+exercise keys of Garmin Connect's own list,
+https://connect.garmin.com/web-data/exercises/Exercises.json; the app ships it
+to check CUSTOM_EXERCISE_MAP (C-11, #24). `tests/data/hevy_api.json` holds the
+enums of Hevy's published API spec. Both are compared with their source every
+week, and rewritten by `make upstream-update` (scripts/check_upstream.py, #26).
 """
 
 import json
@@ -14,7 +15,7 @@ from pathlib import Path
 from hevy_garmin_sync import exercises
 
 DATA = Path(__file__).parent / "data"
-GARMIN: dict[str, list[str]] = json.loads((DATA / "garmin_exercises.json").read_text(encoding="utf-8"))
+GARMIN = exercises.garmin_exercises()
 HEVY_ENUMS: dict[str, list[str]] = json.loads((DATA / "hevy_api.json").read_text(encoding="utf-8"))["enums"]
 # The values Hevy's public API gives an exercise template.
 MUSCLE_GROUPS = set(HEVY_ENUMS["muscle_group"])
@@ -54,6 +55,11 @@ class ExerciseDataTest(unittest.TestCase):
     def test_the_fallback_table_catches_everything(self) -> None:
         rows = exercises.rows(exercises.DATA / "custom_exercise_map.csv")
         self.assertIn((exercises.ANY, exercises.ANY), {(row["primary_muscle_group"], row["equipment"]) for row in rows})
+
+    def test_the_garmin_list_ships_in_the_package_with_every_category(self) -> None:
+        self.assertEqual(exercises.GARMIN_EXERCISES.parent, exercises.DATA)
+        self.assertGreater(len(GARMIN), 40)
+        self.assertIn("CABLE_FRONT_RAISE", GARMIN["LATERAL_RAISE"])
 
     def test_the_tables_load(self) -> None:
         loaded = exercises.ExerciseMap.load()
