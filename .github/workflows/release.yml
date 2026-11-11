@@ -30,20 +30,19 @@ jobs:
   release:
     name: Release
     needs: test
-    uses: zimmertr/yggdrasil/.github/workflows/release.yml@d8443185af7a5e3b4b197b8ee167533d79c816c5 # v0.14.0
+    uses: zimmertr/yggdrasil/.github/workflows/release.yml@667ac9372b2be9ed09b67c2da14f6fbd93e2b1b3 # v1.0.0
     permissions:
       contents: write # the tag and release
+      packages: write # the image, pushed to ghcr.io/zimmertr/hevy-garmin-sync
     with:
       # Both platforms: users run it on amd64 and arm64 machines (spec D-3).
       images: '[{"image": "zimmertr/hevy-garmin-sync", "platforms": "linux/amd64,linux/arm64"}]'
-    secrets:
-      dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
-      dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
   # The chart for the tag on this commit, from bluebird-helm's chart job. The
-  # chart's name is not the image's: both live under zimmertr on Docker Hub, and
-  # the chart name is its OCI path (bluebird#111). A re-run finds the chart on
-  # Docker Hub and skips the push, so re-running a failed release finishes it.
+  # chart's name is not the image's: both live under ghcr.io/zimmertr, and the
+  # chart name is its OCI path (bluebird#111). A re-run finds the chart in GHCR
+  # and skips the push, so re-running a failed release finishes it. The chart
+  # pins the image's digest, since a GHCR tag can be moved (record 0006).
   chart:
     name: Publish OCI chart
     needs: release
@@ -52,6 +51,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      packages: write # the chart push to GHCR
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -77,23 +77,37 @@ jobs:
         env:
           VER: ${{ steps.version.outputs.version }}
         run: |
-          if helm show chart oci://registry-1.docker.io/zimmertr/hevy-garmin-sync-helm --version "$VER" >/dev/null 2>&1; then
+          if helm show chart oci://ghcr.io/zimmertr/hevy-garmin-sync-helm --version "$VER" >/dev/null 2>&1; then
             echo "pushed=true" >> "$GITHUB_OUTPUT"
-            echo "Chart ${VER} is already on Docker Hub."
+            echo "Chart ${VER} is already in GHCR."
           else
             echo "pushed=false" >> "$GITHUB_OUTPUT"
           fi
+      # The image the release module just pushed, by digest, written into the
+      # chart's values so an install runs those bytes.
+      - id: digest
+        if: steps.exists.outputs.pushed == 'false'
+        env:
+          IMAGE: ghcr.io/zimmertr/hevy-garmin-sync:${{ steps.version.outputs.version }}
+        run: |
+          DIGEST=$(docker buildx imagetools inspect "$IMAGE" --format '{{.Manifest.Digest}}')
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+      - if: steps.exists.outputs.pushed == 'false'
+        uses: mikefarah/yq@a4330671f17776618660a419ab2531e4f4dc48b6 # v4.54.2
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+        with:
+          cmd: yq -i '.image.digest = strenv(DIGEST)' charts/hevy-garmin-sync-helm/values.yaml
       # The chart and the image share this repo and its version, so the
       # chart's appVersion, its default image tag, is the release just made.
       - if: steps.exists.outputs.pushed == 'false'
         env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           VER: ${{ steps.version.outputs.version }}
         run: |
-          echo "$DOCKERHUB_TOKEN" | helm registry login registry-1.docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
+          echo "$GH_TOKEN" | helm registry login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           helm package charts/hevy-garmin-sync-helm --version "$VER" --app-version "$VER"
-          helm push "hevy-garmin-sync-helm-${VER}.tgz" oci://registry-1.docker.io/zimmertr
+          helm push "hevy-garmin-sync-helm-${VER}.tgz" oci://ghcr.io/zimmertr
           echo "Pushed chart ${VER}." >> "$GITHUB_STEP_SUMMARY"
 
   # Points Kubernetes-Manifests at the chart through a self-merging PR, because

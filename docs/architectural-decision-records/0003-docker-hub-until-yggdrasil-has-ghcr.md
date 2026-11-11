@@ -1,6 +1,6 @@
 # 0003. The image and the chart are published to Docker Hub until yggdrasil adds GHCR
 
-- Status: Accepted
+- Status: Superseded by [0006](0006-ghcr-and-a-digest-pinned-chart.md)
 - Date: 2026-11-07
 - Decider: TJ ("Docker Hub for now")
 - Issues and PRs: #1, zimmertr/yggdrasil#9

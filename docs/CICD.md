@@ -31,19 +31,19 @@ The default-branch ruleset requires every check above except the auto-merge one.
 Every merge to main is a release (`release.yml`), one at a time:
 
 1. `test` runs again on the squash commit.
-2. yggdrasil's release module reads the version from the squash commit's title with GitVersion (`feat` a minor, `!` a major, anything else a patch; the first release is 0.1.0), builds and pushes `zimmertr/hevy-garmin-sync:<version>` for amd64 and arm64 with an SBOM and provenance, scans each platform with Trivy, then tags `v<version>` and publishes the GitHub release. A fixable Critical or High stops the tag and release.
-3. `Publish OCI chart` packages `charts/hevy-garmin-sync-helm` with that version as both `version` and `appVersion` and pushes it to `oci://registry-1.docker.io/zimmertr`. A re-run finds it there and skips.
+2. yggdrasil's release module reads the version from the squash commit's title with GitVersion (`feat` a minor, `!` a major, anything else a patch; the first release is 0.1.0), builds and pushes `ghcr.io/zimmertr/hevy-garmin-sync:<version>` for amd64 and arm64 with an SBOM and provenance, scans each platform with Trivy, then tags `v<version>` and publishes the GitHub release. A fixable Critical or High stops the tag and release.
+3. `Publish OCI chart` writes the image's digest into `values.yaml`, packages `charts/hevy-garmin-sync-helm` with that version as both `version` and `appVersion`, and pushes it to `oci://ghcr.io/zimmertr`. A re-run finds it there and skips. Record: [0006](architectural-decision-records/0006-ghcr-and-a-digest-pinned-chart.md)
 4. `Bump Kubernetes-Manifests` sets the chart version in `misc/hevy-garmin-sync/kustomization.yml` through a PR on the fixed branch `chore/hevy-garmin-sync-chart`, and arms auto-merge. When that PR merges, Argo CD rolls the pod to the new release.
 
 `image-scan.yml` re-scans the latest release every Monday and sends the findings to the Security tab. Its first run fails until a release exists.
 
-After a failure, re-run the failed jobs only: once Docker Hub's immutable tags are on for the repo (set in its web UI), a build that already pushed fails on them. Never re-run an old release after a newer one shipped.
+After a failure, re-run the failed jobs only. Never re-run an old release after a newer one shipped.
 
 ## Secrets
 
 | Secret | Store | Used by |
 |---|---|---|
-| `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | Actions | The release module's image push, and the chart push |
+| `GITHUB_TOKEN` | Given to each run | The image push and the chart push, to GHCR (`packages: write`) |
 | `GH_PAT` | Actions | The Kubernetes-Manifests bump (contents and pull-requests write there) |
 | `AUTO_MERGE_PAT` | Dependabot | The auto-merge module's `merge-token`; a merge made with `GITHUB_TOKEN` would not start the release |
 

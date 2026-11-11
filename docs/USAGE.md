@@ -39,7 +39,7 @@ What you see when it runs, and what to do when it breaks.
 
 ## After a merge
 
-- A GitHub release `v<version>`, an image `zimmertr/hevy-garmin-sync:<version>` and a chart `hevy-garmin-sync-helm` `<version>` on Docker Hub.
+- A GitHub release `v<version>`, an image `ghcr.io/zimmertr/hevy-garmin-sync:<version>` and a chart `ghcr.io/zimmertr/hevy-garmin-sync-helm` `<version>` that pins the image's digest.
 - A PR in Kubernetes-Manifests titled `chore(hevy-garmin-sync): bump chart to <version>`, which merges itself. When it merges, Argo CD replaces the pod with the new release.
 
 | You see | Do |

@@ -59,6 +59,8 @@ jobs:
       # adds none to a chart's output. The default render has three resources.
       - run: |
           test "$(helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --namespace check | grep -c '^  namespace: check$')" -eq 3
+      # The release writes the digest; it must render as image@digest.
+      - run: helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --set image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 | grep -q 'ghcr.io/zimmertr/hevy-garmin-sync@sha256:0'
 
   # yggdrasil's docker-build module: hadolint, the linux/amd64 image built but
   # not pushed, a Trivy table in a sticky comment, the smoke test, then a

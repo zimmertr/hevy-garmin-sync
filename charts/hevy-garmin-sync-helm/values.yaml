@@ -1,7 +1,10 @@
 image:
-  repository: zimmertr/hevy-garmin-sync
+  repository: ghcr.io/zimmertr/hevy-garmin-sync
   # Empty uses the chart's appVersion, the release it was packaged with.
   tag: ""
+  # The release writes the image's digest here when it packages the chart, so
+  # an install runs the bytes the release scanned. Set, it wins over tag.
+  digest: ""
   pullPolicy: IfNotPresent
 
 # A Secret you made yourself holding HEVY_API_KEY and GARMIN_TOKEN (and

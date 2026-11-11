@@ -23,7 +23,7 @@ Prose lives in `docs/`. A change that makes any page untrue updates it in the sa
 
 - **Build to the spec.** Every requirement has an ID in `docs/SPEC.md`; cite it in code, tests and PRs, and update the spec in the same PR when a decision changes. One direction only: Hevy is read, Garmin is written, Strava is never called. Record: [0001](docs/architectural-decision-records/0001-build-to-the-signed-off-spec.md)
 - **CI runs on yggdrasil's modules.** Never write a check from scratch that a zimmertr/yggdrasil module covers; a check two repos need belongs in yggdrasil. Record: [0002](docs/architectural-decision-records/0002-ci-on-yggdrasil-modules.md)
-- **The image and the chart are on Docker Hub** until zimmertr/yggdrasil#9 adds GHCR. The chart is `hevy-garmin-sync-helm`, never the image's name. Record: [0003](docs/architectural-decision-records/0003-docker-hub-until-yggdrasil-has-ghcr.md)
+- **The image and the chart are in GHCR**, under `ghcr.io/zimmertr`, pushed with each job's own token, and the chart pins the image's digest. The chart is `hevy-garmin-sync-helm`, never the image's name. Record: [0006](docs/architectural-decision-records/0006-ghcr-and-a-digest-pinned-chart.md)
 - **Every release deploys to TJ's cluster.** The release bumps the chart version in Kubernetes-Manifests `misc/hevy-garmin-sync`, and Argo CD rolls the pod. Record: [0005](docs/architectural-decision-records/0005-releases-deploy-through-the-live-folder.md)
 - **The repo is public.** No tokens, ids or personal data in code, fixtures, logs or docs. The Hevy Trainer rules are written down as findings only, not how they were found (spec D-7b).
 - **Live calls need TJ's okay**, each time, and TJ runs any sign-in himself.
