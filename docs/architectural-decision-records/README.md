@@ -30,3 +30,4 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0004](0004-bump-a-disabled-folder-until-cutover.md) | Releases bump a disabled Kubernetes-Manifests folder until TJ's cutover | 2026-11-07 | Superseded by 0005 |
 | [0005](0005-releases-deploy-through-the-live-folder.md) | Since the cutover, every release bumps the live Kubernetes-Manifests folder and so deploys | 2026-11-10 | Accepted |
 | [0006](0006-ghcr-and-a-digest-pinned-chart.md) | The image and the chart are in GHCR, and the chart pins the image's digest | 2026-11-10 | Accepted |
+| [0009](0009-only-the-next-trainer-workout-on-today.md) | Only the Hevy Trainer workout Hevy says is next is on today, and the calendar follows it within a poll | 2026-11-10 | Accepted |

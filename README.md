@@ -10,7 +10,7 @@ I plan my lifting in Hevy and record it on a Garmin watch. Garmin forwards the w
 
 It runs as one container. Every minute it checks Hevy for changes, and when a routine changes it updates the matching Garmin workout and sends it to the watch, which picks it up on its next sync with your phone. Every workout also sits on today's Garmin calendar, so the watch offers them when you start a strength activity. It reads Hevy and writes Garmin, nothing else: it never writes to Hevy and never touches Strava. [docs/SPEC.md](docs/SPEC.md) has the full design.
 
-What it doesn't do: it doesn't copy finished workouts from Hevy to Garmin, it doesn't touch Garmin workouts it didn't make, and it doesn't pick which workout is next.
+What it doesn't do: it doesn't copy finished workouts from Hevy to Garmin, it doesn't touch Garmin workouts it didn't make, and it doesn't pick which routine is next (for Hevy Trainer, today's calendar gets just the workout Hevy says is next).
 
 ## Quick Start
 

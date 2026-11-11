@@ -8,7 +8,7 @@ The rules match Hevy app 3.2.5. Nothing checks for a newer app that changes them
 
 | From | Call | For |
 |---|---|---|
-| Hevy's private API | `GET /hevy_trainer/v3/program` | The program: its `created_at`, `deloads_enabled`, and each template's exercises with `set_count`, `warmup_set_count`, `rep_range` and `rest_seconds` |
+| Hevy's private API | `GET /hevy_trainer/v3/program` | The program: its `created_at`, `deloads_enabled`, `next_workout_index`, and each template's exercises with `set_count`, `warmup_set_count`, `rep_range` and `rest_seconds`. `next_workout_index` is the workout the Hevy app would start next, counted in the templates' `index` order; only that one goes on today's calendar |
 | Hevy's private API | `GET /v2/user_preferences` | `username`, `weight_unit`, `first_weekday` |
 | Hevy's private API | `GET /hevy_trainer/user_preferences` | `availableWeights`: the dumbbells, bars and plates the user owns |
 | Hevy's private API | `GET /exercise_template_units` | The exercises the user logs in the other unit |
