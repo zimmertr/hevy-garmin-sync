@@ -34,9 +34,11 @@ class FetchTest(unittest.TestCase):
         self.assertEqual(upstream.timeouts, [30])
 
     def test_a_source_that_cannot_be_reached_is_a_source_error(self) -> None:
+        unavailable = HTTPError(cu.HEVY_URL, 503, "Service Unavailable", Message(), io.BytesIO())
+        self.addCleanup(unavailable.close)
         for error in (
             URLError("Name or service not known"),
-            HTTPError(cu.HEVY_URL, 503, "Service Unavailable", Message(), None),
+            unavailable,
             TimeoutError("timed out"),
             http.client.IncompleteRead(b"{"),
         ):
