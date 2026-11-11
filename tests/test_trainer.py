@@ -74,6 +74,12 @@ class NameTest(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertEqual(trainer.template_name({"name": None, "key": key}), name)
 
+    def test_a_name_that_is_itself_a_key_is_read_as_one(self) -> None:
+        # What Hevy sent on 2026-11-10: the key in both fields.
+        self.assertEqual(trainer.template_name({"name": "upper_2x_a", "key": "upper_2x_a"}), "Upper")
+        self.assertEqual(trainer.template_name({"name": "full_body_3x_b"}), "Full Body")
+        self.assertEqual(trainer.template_name({"name": "Push 2x", "key": "push_2x_a"}), "Push 2x")
+
     def test_a_key_with_no_words_is_used_as_it_is(self) -> None:
         self.assertEqual(trainer.template_name({"key": "3x_a"}), "3x_a")
         self.assertEqual(trainer.template_name({}), "Workout")

@@ -38,15 +38,20 @@ _DIRECTIONS = {
 
 
 def template_name(template: Json) -> str:
-    """The template's name; from its key when Hevy sends none ('full_body_3x_b' is 'Full Body')."""
-    if template.get("name"):
-        return str(template["name"])
+    """The template's name; from its key when Hevy sends none ('full_body_3x_b' is 'Full Body').
+
+    Hevy sent the key as the name too on 2026-11-10 ('upper_2x_a'), so a name in a key's form is
+    read as a key.
+    """
+    name, key = str(template.get("name") or ""), str(template.get("key") or "")
+    if name and not any(_FREQUENCY.match(token) for token in name.split("_")):
+        return name
     words = []
-    for token in str(template.get("key") or "").split("_"):
+    for token in (key or name).split("_"):
         if _FREQUENCY.match(token):
             break
         words.append(token.capitalize())
-    return " ".join(words) or str(template.get("key") or "Workout")
+    return " ".join(words) or key or name or "Workout"
 
 
 def shape(value: Any) -> Any:
