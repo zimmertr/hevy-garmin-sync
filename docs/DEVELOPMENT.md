@@ -11,7 +11,7 @@ CI is the test runner. Branch from the latest `main`, open a draft PR early, pus
 | `make lint` | ruff |
 | `make typecheck` | mypy, strict |
 | `make lint-docker` | hadolint on the Dockerfile |
-| `make chart` | `helm lint` and two renders, as the `Chart` job does |
+| `make chart` | `helm lint` and two renders, as the `Chart / Chart` check does |
 | `make build` | The image, tagged `hevy-garmin-sync:dev` |
 | `make scan` | The release scan's rules against that build |
 | `make lock` | Not a check: recompiles `requirements.txt` and `requirements-dev.txt` from the `.in` files, hashed. A pin change ships with its lock in the same PR |

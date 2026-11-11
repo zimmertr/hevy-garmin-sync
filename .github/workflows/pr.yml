@@ -37,41 +37,36 @@ jobs:
       - run: ruff check .
       - run: mypy
 
-  # bluebird-helm's chart check, trimmed to what this chart has: lint, then a
-  # render with the defaults and one with an existing Secret.
+  # yggdrasil's chart module: `helm lint`, a render with the defaults, then the
+  # renders below, on the Helm version the release packages with (record 0012).
   chart:
     name: Chart
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
-        with:
-          # Exact: with no version the action installs whatever Helm is
-          # newest on the day. Dependabot does not read this input.
-          version: v4.3.0
-      - run: helm lint charts/hevy-garmin-sync-helm
-      - run: helm template hevy-garmin-sync charts/hevy-garmin-sync-helm >/dev/null
-      - run: helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --set existingSecret=hevy-garmin-sync >/dev/null
-      # Every resource states its namespace: kustomize 5.8, which Argo CD runs,
-      # adds none to a chart's output. The default render has three resources.
-      - run: |
-          test "$(helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --namespace check | grep -c '^  namespace: check$')" -eq 3
-      # The release writes the digest; it must render as image@digest.
-      - run: helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --set image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 | grep -q 'ghcr.io/zimmertr/hevy-garmin-sync@sha256:0'
-      # The container's filesystem is read-only unless a user turns it off
-      # (spec O-4, record 0008).
-      - run: |
-          helm template hevy-garmin-sync charts/hevy-garmin-sync-helm | grep -q '^            readOnlyRootFilesystem: true$'
+    uses: zimmertr/yggdrasil/.github/workflows/chart.yml@c0b955a587646b10ae5275d6e495f045c6116e66 # v1.1.0
+    permissions:
+      contents: read
+    with:
+      chart: charts/hevy-garmin-sync-helm
+      # Each grep reads the whole render: the module runs this with pipefail,
+      # and `grep -q` would close the pipe on Helm at its first match.
+      test: |
+        # With an existing Secret.
+        helm template hevy-garmin-sync "$CHART" --set existingSecret=hevy-garmin-sync >/dev/null
+        # Every resource states its namespace: kustomize 5.8, which Argo CD
+        # runs, adds none to a chart's output. The default render has three
+        # resources.
+        test "$(helm template hevy-garmin-sync "$CHART" --namespace check | grep -c '^  namespace: check$')" -eq 3
+        # The release writes the digest; it must render as image@digest.
+        helm template hevy-garmin-sync "$CHART" --set image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 | grep 'ghcr.io/zimmertr/hevy-garmin-sync@sha256:0' >/dev/null
+        # The container's filesystem is read-only unless a user turns it off
+        # (spec O-4, record 0008).
+        helm template hevy-garmin-sync "$CHART" | grep '^            readOnlyRootFilesystem: true$' >/dev/null
 
   # yggdrasil's docker-build module: hadolint, the linux/amd64 image built but
   # not pushed, a Trivy table in a sticky comment, the smoke test, then a
   # failure on any fixable Critical or High, as the release would refuse.
   docker-build:
     name: Docker Build
-    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@667ac9372b2be9ed09b67c2da14f6fbd93e2b1b3 # v1.0.0
+    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@c0b955a587646b10ae5275d6e495f045c6116e66 # v1.1.0
     permissions:
       contents: read
       pull-requests: write # the sticky scan comment
