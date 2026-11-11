@@ -2,7 +2,7 @@
 
 
 class ConfigError(Exception):
-    """Bad or missing configuration: the app exits at startup, naming the variable and the fix."""
+    """Bad or missing configuration, or a credential a service rejected: the app exits 1, naming the fix (O-1)."""
 
 
 class Stopped(Exception):
@@ -14,7 +14,7 @@ class ServiceError(Exception):
 
 
 class Rejected(ServiceError):
-    """The service refused the credentials (401, 403). Fixed by the user, not by waiting."""
+    """The service refused the credentials (401, 403). Fixed by the user, not by waiting, so the app exits (O-1)."""
 
 
 class RateLimited(ServiceError):
