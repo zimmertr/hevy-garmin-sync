@@ -20,6 +20,7 @@ CI is the test runner. Branch from the latest `main`, open a draft PR early, pus
 | `make live-check` | Not a check: the one run against TJ's own accounts ([below](#the-live-check)) |
 | `make live-cleanup` | Not a check: deletes what `make live-check` made, and its saved Garmin token |
 | `make live-check-hevy` | Not a check: `make live-check`'s Hevy reads alone, with no Garmin sign-in ([below](#the-live-check)) |
+| `make live-check-notes` | Not a check: one workout on the watch whose notes hold last time's numbers, with no Hevy read ([below](#the-live-check)) |
 
 ## The live check
 
@@ -35,6 +36,14 @@ CI is the test runner. Branch from the latest `main`, open a draft PR early, pus
 If `make live-check` stops partway, it says how many check workouts it left; `make live-cleanup` removes them, a step probe included. The script's docstring lists what it will never do.
 
 `make live-check-hevy` is the Hevy part of steps 1 and 2 alone: it asks for the same key and cookie, reads Hevy, prints the same Trainer edit lines, and writes `live-check/recorded-hevy.json`. It signs in to nothing else, makes nothing, never touches `recorded.json`, and runs even when an earlier `make live-check` wasn't cleaned up. With no routines in the account, the exercise template and its history come from a logged workout instead.
+
+`make live-check-notes` is for [#3](https://github.com/zimmertr/hevy-garmin-sync/issues/3), last time's numbers in a set's note. It asks for the Garmin sign-in only, reads nothing from Hevy, and makes `HGS check notes`: three exercises whose notes hold made-up numbers in three forms.
+
+1. Curl, two matching sets: `Prev: 45x12, 45x12, 45x10`. The sets must stay one repeat group, so the watch counts SET 1/2 and 2/2.
+2. Squat, one set with a rep range: the app's own `4-6 reps`, then on a new line `Prev: 65 lb x 6 @ 7, 65 lb x 6 @ 7.5, 65 lb x 5 @ 8`.
+3. Row, one set: `Prev: W 20x8, W 40x6, 65x6 @7, 65x6 @7.5, 65x5 @8`, the longest a note is likely to get.
+
+It puts the workout on today, sends it to the watch and prints the three notes. Start it on the watch, photograph each note, and discard the activity. Then `make live-cleanup`, as after `make live-check`. It won't run while an earlier run's `live-check/created.json` is there.
 
 ## Tests
 

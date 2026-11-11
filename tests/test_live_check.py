@@ -1,4 +1,4 @@
-"""scripts/live_check.py: the one run by hand for #22, #24 and #6, over the fakes, never the network."""
+"""scripts/live_check.py: the one run by hand for #22, #24, #6 and #3, over the fakes, never the network."""
 
 import io
 import json
@@ -114,6 +114,17 @@ class LiveCheckCase(unittest.TestCase):
             ask=self.ask,
             hevy_session=self.hevy_api,  # type: ignore[arg-type]
             private_session=self.private_api,  # type: ignore[arg-type]
+            utcnow=lambda: fixtures.NOW.astimezone(UTC),
+        )
+        return code, out.getvalue()
+
+    def check_notes(self, sign_in: Any = lambda: TOKEN) -> tuple[int, str]:
+        out = io.StringIO()
+        code = lc.check_notes(
+            self.folder,
+            out,
+            sign_in=sign_in,
+            open_garmin=self.open_garmin,
             utcnow=lambda: fixtures.NOW.astimezone(UTC),
         )
         return code, out.getvalue()
@@ -492,6 +503,82 @@ class RecordHevyTest(LiveCheckCase):
                 self.assertNotIn(secret, written)
 
 
+class NotesTest(LiveCheckCase):
+    def test_it_puts_the_notes_workout_on_today_and_sends_it_without_reading_hevy(self) -> None:
+        code, out = self.check_notes()
+        self.assertEqual(code, 0)
+        self.assertEqual(self.names(), [lc.NOTES_WORKOUT])
+        ((notes_id, stored),) = self.garmin_api.workouts.items()
+        self.assertEqual([e["calendarDate"] for e in self.garmin_api.entries.values()], [fixtures.TODAY.isoformat()])
+        self.assertEqual(self.garmin_api.pushed, [notes_id])
+        self.assertEqual(json.loads(self.store.read(lc.CREATED) or "{}"), {"workouts": [notes_id]})
+        self.assertEqual((self.hevy_api.requests, self.private_api.requests), ([], []))
+        self.assertEqual(self.tokens, [TOKEN])
+        self.assertIsNone(workout.owner(stored["description"]))
+        self.assertIn(f"{lc.NOTES_WORKOUT} is on today's calendar and on its way to the watch", out)
+        self.assertIn("1. Curl: Prev: 45x12, 45x12, 45x10\n", out)
+        self.assertIn("2. Squat: 4-6 reps (new line) Prev: 65 lb x 6 @ 7, 65 lb x 6 @ 7.5, 65 lb x 5 @ 8\n", out)
+        self.assertIn("3. Row: Prev: W 20x8, W 40x6, 65x6 @7, 65x6 @7.5, 65x5 @8\n", out)
+
+    def test_each_exercise_carries_its_line_and_the_matching_sets_stay_one_group(self) -> None:
+        body = lc.notes_body("statute_us")
+        steps = body["workoutSegments"][0]["workoutSteps"]
+        self.assertEqual([s["type"] for s in steps], ["RepeatGroupDTO"] + ["ExecutableStepDTO"] * 4)
+        self.assertEqual(steps[0]["numberOfIterations"], 2)
+        found = list(lc.sets(body))
+        self.assertEqual([s["exerciseName"] for s in found], ["CURL", "SQUAT", "ROW"])
+        self.assertEqual(
+            [s["description"] for s in found],
+            [
+                "Prev: 45x12, 45x12, 45x10",
+                # The app's own note first (F-30), then the line, so a line break is on the watch too.
+                "4-6 reps\nPrev: 65 lb x 6 @ 7, 65 lb x 6 @ 7.5, 65 lb x 5 @ 8",
+                "Prev: W 20x8, W 40x6, 65x6 @7, 65x6 @7.5, 65x5 @8",
+            ],
+        )
+        # Whole pounds, the weights the notes name.
+        self.assertEqual([s["weightValue"] for s in found], [45.0, 65.0, 65.0])
+
+    def test_an_earlier_run_not_cleaned_up_stops_it_before_the_sign_in(self) -> None:
+        self.store.write(lc.CREATED, json.dumps({"workouts": [1]}))
+        code, out = self.check_notes(sign_in=lambda: self.fail("it signed in"))
+        self.assertEqual(code, 1)
+        self.assertIn("run `make live-cleanup` first", out)
+        self.assertEqual(self.garmin_api.calls, [])
+
+    def test_a_refused_sign_in_makes_nothing(self) -> None:
+        def refused() -> str:
+            raise garminconnect.GarminConnectAuthenticationError("Wrong password.")
+
+        code, out = self.check_notes(sign_in=refused)
+        self.assertEqual(code, 1)
+        self.assertIn("The Garmin sign-in failed (GarminConnectAuthenticationError). Nothing was made", out)
+        self.assertEqual(self.garmin_api.workouts, {})
+        self.assertIsNone(self.store.read(lc.CREATED))
+
+    def test_a_garmin_failure_partway_leaves_the_id_for_cleanup(self) -> None:
+        self.garmin_api.fail("schedule_workout", fixtures.garmin_error(500))
+        code, out = self.check_notes()
+        self.assertEqual(code, 1)
+        self.assertIn("Garmin failed partway (Unavailable). 1 check workouts are left in Garmin", out)
+        self.assertEqual(self.cleanup()[0], 0)
+        self.assertEqual(self.names(), [])
+
+    def test_a_watch_that_takes_none_is_noted_and_the_workout_stays_on_today(self) -> None:
+        self.garmin_api.fail("push_workout_to_device", fixtures.garmin_error(400))
+        code, out = self.check_notes()
+        self.assertEqual(code, 0)
+        self.assertIn(f"{lc.NOTES_WORKOUT} is on today's calendar but was not sent to a watch", out)
+        self.assertEqual(len(self.garmin_api.entries), 1)
+
+    def test_cleanup_removes_it_and_its_calendar_entry(self) -> None:
+        self.check_notes()
+        code, out = self.cleanup()
+        self.assertEqual(code, 0)
+        self.assertEqual((self.names(), self.garmin_api.entries), ([], {}))
+        self.assertIn("Removed 1 calendar entries and 1 check workouts", out)
+
+
 class TrainerEditsTest(LiveCheckCase):
     def test_each_edit_says_whether_it_is_already_in_its_template_and_nothing_personal_shows(self) -> None:
         applied = {"type": "swap", "from_exercise_template_id": "T-OLD", "to_exercise_template_id": "T-GOBLET"}
@@ -678,7 +765,7 @@ class CleanupTest(LiveCheckCase):
         self.cleanup()
         self.assertEqual(self.cleanup(), (0, "Nothing to clean up.\n"))
 
-    def test_with_no_id_file_it_goes_by_the_two_names_alone(self) -> None:
+    def test_with_no_id_file_it_goes_by_the_names_alone(self) -> None:
         self.garmin_api.fail("upload_workout", fixtures.garmin_error(500))
         self.record()
         self.store.remove(lc.CREATED)
@@ -722,7 +809,8 @@ class ShapeTest(unittest.TestCase):
 
 class MainTest(unittest.TestCase):
     def test_each_command_runs_its_function_on_the_folder_in_the_repo(self) -> None:
-        for command, function in (("record", "record"), ("record-hevy", "record_hevy"), ("cleanup", "cleanup")):
+        commands = {"record": "record", "record-hevy": "record_hevy", "notes": "check_notes", "cleanup": "cleanup"}
+        for command, function in commands.items():
             with self.subTest(command=command), mock.patch.object(lc, function, return_value=0) as run:
                 self.assertEqual(lc.main([command], env={}, out=io.StringIO()), 0)
                 self.assertEqual(run.call_args.args[-2], lc.FOLDER)
