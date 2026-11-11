@@ -31,3 +31,4 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0005](0005-releases-deploy-through-the-live-folder.md) | Since the cutover, every release bumps the live Kubernetes-Manifests folder and so deploys | 2026-11-10 | Accepted |
 | [0006](0006-ghcr-and-a-digest-pinned-chart.md) | The image and the chart are in GHCR, and the chart pins the image's digest | 2026-11-10 | Accepted |
 | [0007](0007-exit-on-a-credential-rejected-while-running.md) | A credential rejected while running exits the app at once, as at startup | 2026-11-10 | Accepted |
+| [0008](0008-read-only-root-filesystem-by-default.md) | The container runs with a read-only root filesystem by default, in the chart and in compose.yaml | 2026-11-10 | Accepted |

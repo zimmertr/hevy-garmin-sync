@@ -61,6 +61,10 @@ jobs:
           test "$(helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --namespace check | grep -c '^  namespace: check$')" -eq 3
       # The release writes the digest; it must render as image@digest.
       - run: helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --set image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 | grep -q 'ghcr.io/zimmertr/hevy-garmin-sync@sha256:0'
+      # The container's filesystem is read-only unless a user turns it off
+      # (spec O-4, record 0008).
+      - run: |
+          helm template hevy-garmin-sync charts/hevy-garmin-sync-helm | grep -q '^            readOnlyRootFilesystem: true$'
 
   # yggdrasil's docker-build module: hadolint, the linux/amd64 image built but
   # not pushed, a Trivy table in a sticky comment, the smoke test, then a
@@ -78,10 +82,12 @@ jobs:
       # own Python, the zoneinfo data is there for TZ, Garmin's client and
       # its compiled sign-in dependency import, the two exercise tables are
       # in the image and load, it runs as the unprivileged user the chart
-      # expects, and it ships its license.
+      # expects, it starts with the read-only root filesystem the chart and
+      # compose.yaml give it, and it ships its license.
       smoke-test: |
         docker run --rm "$IMAGE" --help
         docker run --rm "$IMAGE" --version
+        docker run --rm --read-only "$IMAGE" --version
         docker run --rm --entrypoint python3 "$IMAGE" -c 'import zoneinfo; zoneinfo.ZoneInfo("America/Los_Angeles")'
         docker run --rm --entrypoint python3 "$IMAGE" -c 'import garminconnect, curl_cffi'
         docker run --rm --entrypoint python3 "$IMAGE" -c 'from hevy_garmin_sync.exercises import ExerciseMap; ExerciseMap.load()'

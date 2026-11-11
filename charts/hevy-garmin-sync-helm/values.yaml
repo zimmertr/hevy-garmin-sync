@@ -41,6 +41,9 @@ securityContext:
   allowPrivilegeEscalation: false
   capabilities:
     drop: ["ALL"]
+  # The app writes only to the data volume (spec O-4), so a write anywhere
+  # else fails at once instead of going unnoticed. Nothing needs /tmp.
+  readOnlyRootFilesystem: true
 
 nodeSelector: {}
 tolerations: []
