@@ -23,6 +23,7 @@ from requests.structures import CaseInsensitiveDict
 
 from hevy_garmin_sync.exercises import ExerciseMap, GarminExercise
 from hevy_garmin_sync.trainer_rules import DEFAULT_WEIGHTS
+from hevy_garmin_sync.workout import step_count
 from scripts.check_upstream import GARMIN_URL, HEVY_URL
 
 ZONE = ZoneInfo("America/Los_Angeles")
@@ -337,9 +338,9 @@ class FakeGarminApi:
             ("HYPEREXTENSION", "HYPEREXTENSION"): "",
             ("BATTLE_ROPE", "BATTLE_ROPE"): "",
         }
-        # Raised for a workout holding a step with a `stepName` and no exercise, should Garmin refuse one.
-        # On 2026-11-10 it took one, and kept no `stepName` (#24).
-        self.no_exercise_error: BaseException | None = None
+        # A workout of more steps than this is refused with `too_many_steps`, should Garmin cap them.
+        self.max_steps: int | None = None
+        self.too_many_steps: BaseException = garmin_error(400, "made up: the workout has too many steps")
         self._failures: dict[str, list[BaseException]] = {}
         self._rotate_on: set[str] = set()
         self._next_id = 1000
@@ -393,8 +394,8 @@ class FakeGarminApi:
 
     def upload_workout(self, body: dict[str, Any]) -> dict[str, Any]:
         self._enter("upload_workout")
-        if self.no_exercise_error and '"stepName"' in json.dumps(body) and '"exerciseName"' not in json.dumps(body):
-            raise self.no_exercise_error
+        if self.max_steps is not None and step_count(body) > self.max_steps:
+            raise self.too_many_steps
         workout_id = self._new_id()
         self.workouts[workout_id] = self._as_stored(body, workout_id)
         return self.workouts[workout_id]

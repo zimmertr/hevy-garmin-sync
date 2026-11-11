@@ -1,4 +1,4 @@
-"""One run by hand against TJ's own accounts, for #22, #24 and #6. CI never runs it.
+"""One run by hand against TJ's own accounts, for the open points in docs/DATA.md. CI never runs it.
 
 `make live-check` runs `record`, and `make live-cleanup` runs `cleanup` once the watch has been
 looked at. `make live-check-hevy` runs `record-hevy`. All run in Docker, from a clone, on TJ's
@@ -10,14 +10,18 @@ machine.
    The exercise template and its history are read for the first exercise of a routine, else of
    a logged workout. For Hevy Trainer it also keeps `next_workout_index` and the templates'
    `index` values, which the calendar rule reads (spec F-31).
-2. Signs in to Garmin as its own session (`login.sign_in`), then creates `HGS check names`, with
-   one step for every exercise map row whose category Garmin stored differently on 2026-11-10
-   (#22), and `HGS check 1` to `HGS check 6` (#6). It reads the first back and prints, step by
-   step, the exercise sent and the one Garmin stored. Last it creates `HGS check step name`, one
-   step with a `stepName` and no exercise (#24), on its own: Garmin may refuse such a step, and a
-   refusal there is recorded without costing the other checks. Then it puts every workout it made,
-   seven or eight, on today and sends them to the watch, as the app does.
-3. Writes what it recorded to live-check/recorded.json and prints it, for the issues.
+2. Signs in to Garmin as its own session (`login.sign_in`), then creates `HGS check set`: one set
+   of `HYPEREXTENSION` / `HYPEREXTENSION` for 10 reps, a pair Garmin stores with an empty exercise
+   name, then three matching sets that become a repeat group, then a two-round superset that
+   becomes another. It reads it back, keeps the shape of each kind of step it finds, groups and the
+   steps inside them included, prints the exercise sent and the one Garmin stored for each set,
+   then puts it on today and sends it to the watch, as the app does. TJ records the first set on the
+   watch, to see what Garmin Connect and Strava call it and which rep count they keep.
+3. Probes Garmin's step cap: creates `HGS check steps` with about 250 steps that no repeat group
+   can shorten, and deletes it at once, never scheduled or sent. If Garmin refuses it, it prints
+   Garmin's status and reason, then tries about 100 steps, then about 50, and stops at the first
+   size Garmin takes.
+4. Writes what it recorded to live-check/recorded.json and prints it.
 
 `cleanup` removes those workouts from the calendar and deletes them, then the saved Garmin token.
 It is safe to run again.
@@ -27,14 +31,15 @@ nothing made anywhere, and not held back by an earlier run that wasn't cleaned u
 
 Safety, enforced in code:
 - Never writes to Hevy: only the read methods of `Hevy` and `HevyPrivate` are called.
-- Deletes and unschedules only its own workouts: a Garmin workout that carries one of the eight
-  names and, when live-check/created.json is there, one of the ids it lists. The workouts'
-  description is not the app's (`workout.owner` gives None), so the running app never claims or
-  deletes them.
+- Deletes and unschedules only its own workouts: a Garmin workout that carries one of the two
+  names and, when live-check/created.json is there, one of the ids it lists. Each id is saved there
+  the moment the workout exists. The workouts' description is not the app's (`workout.owner` gives
+  None), so the running app never claims or deletes them.
 - Prints and saves shapes, never a value: `shape` keeps keys and type names, and replaces any key
   that could itself be a value, such as an id or a date, with `<key>`. The only values out are
-  Garmin's exercise keys, the invented step name, and the two Trainer index values above. Errors
-  print their type only.
+  Garmin's exercise and step type keys, the step counts tried, and the two Trainer index values
+  above. Errors print their type only, but for Garmin refusing the step probe: there the status and
+  Garmin's own reason are the answer, and they hold no personal data.
 - Never reads a token or session from DATA_DIR or a cluster. The Garmin token is the one its own
   sign-in returned, kept only in live-check/ (git and Docker builds ignore it), never printed, and
   removed by `cleanup`. The Hevy session lives in a temporary folder that is gone when `record`
@@ -57,8 +62,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import garminconnect
 import requests
 
-from hevy_garmin_sync import exercises, login, trainer, workout
-from hevy_garmin_sync.errors import ConfigError, Refused, ServiceError
+from hevy_garmin_sync import login, trainer, workout
+from hevy_garmin_sync.errors import ConfigError, Refused, ServiceError, Unavailable
 from hevy_garmin_sync.garmin import TOKENS, Garmin
 from hevy_garmin_sync.hevy import Hevy
 from hevy_garmin_sync.hevy_private import _WORKOUT_PAGE, HevyPrivate, parse_cookie
@@ -69,16 +74,26 @@ FOLDER = Path(__file__).resolve().parents[1] / "live-check"
 RECORDED = "recorded.json"
 HEVY_RECORDED = "recorded-hevy.json"  # `record-hevy`'s, so it never overwrites what `record` saved
 CREATED = "created.json"
-NAMES_WORKOUT = "HGS check names"
-CALENDAR_WORKOUTS = tuple(f"HGS check {n}" for n in range(1, 7))
-STEP_NAME_WORKOUT = "HGS check step name"
-NAMES = (NAMES_WORKOUT, *CALENDAR_WORKOUTS, STEP_NAME_WORKOUT)
+SET_WORKOUT = "HGS check set"
+STEPS_WORKOUT = "HGS check steps"
+NAMES = (SET_WORKOUT, STEPS_WORKOUT)
 # Not the app's first line, so `workout.owner` never takes one of these for the app's (F-12).
 DESCRIPTION = "Made by hevy-garmin-sync's scripts/live_check.py; `make live-cleanup` deletes it."
-CHECKED_CATEGORIES = ("BATTLE_ROPE", "HYPEREXTENSION")  # stored as another exercise on 2026-11-10 (#22)
-STEP_NAME = "HGS Check Step Name"  # invented, so the watch shows whether it reads `stepName` (#24)
-STEP_NAME_CATEGORY = "CORE"  # hevy2garmin kept the category beside its `stepName`
-CALENDAR_EXERCISE = Exercise("Check", "CURL", "CURL", (Set(reps=10),))
+_TEN = Set(reps=10)
+SET_EXERCISES = (
+    # Garmin stored this pair with an empty exercise name on 2026-11-10: the set TJ records on the watch.
+    Exercise("Check", "HYPEREXTENSION", "HYPEREXTENSION", (_TEN,)),
+    # Three matching sets, so `workout.build` makes a repeat group (F-20a).
+    Exercise("Check", "CURL", "CURL", (_TEN,) * 3, rest_seconds=60),
+    # Two matching rounds of a superset, a repeat group of two exercises (F-26).
+    Exercise("Check", "CRUNCH", "CRUNCH", (_TEN,) * 2, superset=1),
+    Exercise("Check", "SQUAT", "SQUAT", (_TEN,) * 2, rest_seconds=60, superset=1),
+)
+STEP_SIZES = (250, 100, 50)  # the step probe's sizes, largest first; it stops at the first Garmin takes
+# Rep targets no two rounds in a row share, so no repeat group shortens the probe.
+_PROBE_REPS = (8, 10, 12, 10, 8)
+_PROBE_PAIRS = (("CURL", "CURL"), ("CRUNCH", "CRUNCH"), ("SQUAT", "SQUAT"), ("LUNGE", "LUNGE"), ("ROW", "ROW"))
+_REASON_LENGTH = 500  # how much of Garmin's reason the probe prints
 CALENDAR_DAYS = 31  # how far either side of today `cleanup` looks for the check workouts' entries
 _KEY = re.compile(r"[a-z][A-Za-z_]*")  # a key that names a field; anything else may be a value
 
@@ -160,37 +175,22 @@ def read_trainer(private: HevyPrivate) -> tuple[Json, Json]:
     return shapes, order
 
 
-def checked_rows() -> list[tuple[str, str]]:
-    """Every map row, of either table, in a category Garmin stored as another exercise (#22)."""
-    found = []
-    for table in ("exercise_map.csv", "custom_exercise_map.csv"):
-        for row in exercises.rows(exercises.DATA / table):
-            if row["garmin_category"] in CHECKED_CATEGORIES:
-                found.append((row["garmin_category"], row["garmin_name"]))
-    return found
+def _body(name: str, steps: Sequence[Exercise], system: str | None) -> Json:
+    return workout.build(Workout(workout.ROUTINE, "check", name, tuple(steps)), system) | {"description": DESCRIPTION}
 
 
-def names_body(system: str | None) -> Json:
-    steps = tuple(Exercise("Check", category, name, (Set(reps=10),)) for category, name in checked_rows())
-    return workout.build(Workout(workout.ROUTINE, "check", NAMES_WORKOUT, steps), system) | {
-        "description": DESCRIPTION
-    }
+def set_body(system: str | None) -> Json:
+    """`HGS check set`, built by the app's own `workout.build`, as a routine of SET_EXERCISES would be."""
+    return _body(SET_WORKOUT, SET_EXERCISES, system)
 
 
-def step_name_body(system: str | None) -> Json:
-    """One step with a `stepName` and no exercise, as hevy2garmin sent for an exercise it couldn't match (#24)."""
-    step = Exercise("Check", STEP_NAME_CATEGORY, STEP_NAME_CATEGORY, (Set(reps=10),))
-    body = workout.build(Workout(workout.ROUTINE, "check", STEP_NAME_WORKOUT, (step,)), system)
-    (only,) = sets(body)
-    del only["exerciseName"]
-    only["stepName"] = STEP_NAME
-    return body | {"description": DESCRIPTION}
-
-
-def calendar_body(name: str, system: str | None) -> Json:
-    return workout.build(Workout(workout.ROUTINE, "check", name, (CALENDAR_EXERCISE,)), system) | {
-        "description": DESCRIPTION
-    }
+def steps_body(size: int, system: str | None) -> Json:
+    """`HGS check steps` with `size` steps (a multiple of 10): five sets and their rests per exercise, no group."""
+    probe = [
+        Exercise("Check", *_PROBE_PAIRS[n % len(_PROBE_PAIRS)], tuple(Set(reps=r) for r in _PROBE_REPS))
+        for n in range(size // (2 * len(_PROBE_REPS)))
+    ]
+    return _body(STEPS_WORKOUT, probe, system)
 
 
 def sets(body: Json) -> Iterator[Json]:
@@ -208,9 +208,9 @@ def sets(body: Json) -> Iterator[Json]:
 
 
 def named_steps(node: Any) -> Iterator[Json]:
-    """Every dict anywhere in a reply that has an `exerciseName` or a `stepName`, in order, whatever the nesting."""
+    """Every dict anywhere in a reply that has an `exerciseName`, in order, whatever the nesting."""
     if isinstance(node, dict):
-        if "exerciseName" in node or "stepName" in node:
+        if "exerciseName" in node:
             yield node
         for value in node.values():
             yield from named_steps(value)
@@ -220,32 +220,80 @@ def named_steps(node: Any) -> Iterator[Json]:
 
 
 def compare(sent: Json, stored: Json) -> list[str]:
-    """One line per step: the exercise sent and the one Garmin stored. Garmin's keys only.
+    """One line per set: the exercise sent and the one Garmin stored. Garmin's keys only.
 
-    Should Garmin nest the stored steps in another way, the step counts differ, and every step a
-    plain walk finds is listed too, so the run still answers what Garmin stored (#22).
+    Should Garmin nest the stored steps in another way, the counts differ, and every step a plain
+    walk finds is listed too, so the run still answers what Garmin stored.
     """
     out_steps, back_steps = list(sets(sent)), list(sets(stored))
     lines = []
     for number, (out, back) in enumerate(zip(out_steps, back_steps, strict=False), start=1):
+        sent_pair = f"{out['category']} / {out['exerciseName']}"
         stored_pair = f"{back.get('category')} / {back.get('exerciseName')}"
-        if "stepName" in out:
-            kept = "kept" if back.get("stepName") == STEP_NAME else "not kept"
-            what = f"{out['category']} with a stepName and no exercise"
-            lines.append(f"Step {number}: sent {what}, Garmin stored {stored_pair}, stepName {kept}")
-        else:
-            what = f"{out['category']} / {out['exerciseName']}"
-            lines.append(f"Step {number}: sent {what}, Garmin stored {stored_pair}")
+        lines.append(f"Set {number}: sent {sent_pair}, Garmin stored {stored_pair}")
     if len(out_steps) != len(back_steps):
         lines.append(
             f"The counts differed: {len(out_steps)} steps sent, {len(back_steps)} found where the app reads them. "
             "Every step found anywhere in the stored workout:"
         )
         for found in named_steps(stored):
-            lines.append(
-                f"- category {found.get('category')}, exerciseName {found.get('exerciseName')}, "
-                f"stepName {found.get('stepName')}"
-            )
+            lines.append(f"- category {found.get('category')}, exerciseName {found.get('exerciseName')}")
+    return lines
+
+
+def step_shapes(stored: Json) -> Json:
+    """The shape of the first step of each kind in a stored workout, inside repeat groups too.
+
+    Keyed by where the step is and its step type: `step.interval`, `group.repeat` (the group without
+    its steps), `in_group.rest` and so on. `shape` alone keeps only a list's first item, so a group
+    that is not the first step would be lost.
+    """
+    found: Json = {}
+
+    def walk(steps: Sequence[Json], where: str) -> None:
+        for step in steps:
+            kind = str((step.get("stepType") or {}).get("stepTypeKey"))
+            kind = kind if _KEY.fullmatch(kind) else "<key>"
+            if isinstance(step.get("workoutSteps"), list):
+                found.setdefault(f"group.{kind}", shape({k: v for k, v in step.items() if k != "workoutSteps"}))
+                walk(step["workoutSteps"], "in_group")
+            else:
+                found.setdefault(f"{where}.{kind}", shape(step))
+
+    for segment in stored.get("workoutSegments") or []:
+        walk(segment.get("workoutSteps") or [], "step")
+    return found
+
+
+def refusal(error: ServiceError) -> str:
+    """Garmin's status and its own reason for refusing a request, cut short. They hold no personal data."""
+    status = getattr(getattr(error.__cause__, "response", None), "status_code", None)
+    reason = str(error)[:_REASON_LENGTH]
+    return f"{type(error).__name__}, HTTP {status}: {reason}" if status else f"{type(error).__name__}: {reason}"
+
+
+def probe_steps(garmin: CheckGarmin, store: Store, created: list[int], system: str | None) -> list[str]:
+    """Create `HGS check steps` at each of STEP_SIZES until Garmin takes one, deleting it at once.
+
+    Never scheduled or sent. A refusal, or a failure on Garmin's side, is the answer for that size,
+    so the probe goes on to the next.
+    """
+    lines = []
+    for size in STEP_SIZES:
+        body = steps_body(size, system)
+        count = workout.step_count(body)
+        try:
+            probe_id = garmin.create(body)
+        except (Refused, Unavailable) as e:
+            lines.append(f"{count} steps: refused ({refusal(e)})")
+            continue
+        created.append(probe_id)
+        save(store, CREATED, {"workouts": created})  # before the delete, so cleanup finds it should the run die
+        lines.append(f"{count} steps: accepted")
+        garmin.delete(probe_id)
+        created.remove(probe_id)
+        save(store, CREATED, {"workouts": created})
+        break
     return lines
 
 
@@ -254,7 +302,10 @@ def save(store: Store, name: str, value: Any) -> None:
 
 
 def check_garmin(garmin: CheckGarmin, store: Store, created: list[int], utcnow: Callable[[], datetime]) -> Json:
-    """Create, read back, schedule and send the check workouts. `created` gets each id as it is made."""
+    """Make, read back, schedule and send `HGS check set`, then probe the step cap.
+
+    `created` gets each id as it is made.
+    """
     try:
         zone = ZoneInfo(garmin.time_zone() or "UTC")  # "today" as the app works it out with TZ unset (C-7)
     except ZoneInfoNotFoundError, ValueError, OSError:
@@ -263,37 +314,25 @@ def check_garmin(garmin: CheckGarmin, store: Store, created: list[int], utcnow: 
     system = garmin.measurement_system()
     recorded: Json = {"settings": shape(garmin.settings())}
 
-    sent = names_body(system)
-    for body in (sent, *(calendar_body(name, system) for name in CALENDAR_WORKOUTS)):
-        created.append(garmin.create(body))
-        save(store, CREATED, {"workouts": created})  # at once, so a failure later still leaves cleanup the id
-
-    stored = garmin.stored(created[0])
+    sent = set_body(system)
+    set_id = garmin.create(sent)
+    created.append(set_id)
+    save(store, CREATED, {"workouts": created})  # at once, so a failure later still leaves cleanup the id
+    stored = garmin.stored(set_id)
     recorded["stored_workout"] = shape(stored)
-    recorded["steps"] = compare(sent, stored)
+    recorded["stored_steps"] = step_shapes(stored)
+    recorded["sets"] = compare(sent, stored)
 
-    # Last and alone: Garmin may refuse a step with no exercise, and that must not cost the checks above.
-    named = step_name_body(system)
+    recorded["schedule_reply"] = shape(garmin.schedule_reply(set_id, today))
     try:
-        named_id = garmin.create(named)
-    except Refused as e:
-        recorded["step_name"] = [f"Garmin refused a step with a stepName and no exercise ({type(e).__name__})"]
-    else:
-        created.append(named_id)
-        save(store, CREATED, {"workouts": created})
-        recorded["step_name"] = compare(named, garmin.stored(named_id))
+        garmin.send_to_device(set_id)
+        recorded["sent_to_the_watch"] = True
+    except Refused:
+        recorded["sent_to_the_watch"] = False  # no watch to send to; the calendar entry still stands (Sync._send)
 
-    for workout_id in created:
-        recorded["schedule_reply"] = shape(garmin.schedule_reply(workout_id, today))
-    unsent = 0
-    for workout_id in created:
-        try:
-            garmin.send_to_device(workout_id)
-        except Refused:
-            unsent += 1  # no watch to send to; the calendar entry still stands (Sync._send)
-    recorded["not_sent_to_the_watch"] = unsent
+    recorded["step_cap"] = probe_steps(garmin, store, created, system)
 
-    listed = [w for w in garmin.workouts() if w.get("workoutId") == created[0]]
+    listed = [w for w in garmin.workouts() if w.get("workoutId") == set_id]
     recorded["workout_list_item"] = shape(listed[0] if listed else None)
     recorded["calendar"] = shape(garmin.scheduled(today, today))
     return recorded
@@ -337,24 +376,27 @@ def record(
         recorded["garmin"] = check_garmin(open_garmin(token, store), store, created, utcnow)
     except (ServiceError, ConfigError) as e:
         print(
-            f"Garmin failed partway ({type(e).__name__}). {len(created)} of {len(NAMES)} check workouts were made; "
+            f"Garmin failed partway ({type(e).__name__}). {len(created)} check workouts are left in Garmin; "
             "run `make live-cleanup` to delete them and the saved Garmin token.",
             file=out,
         )
         return 1
     save(store, RECORDED, recorded)
 
-    print(f"{NAMES_WORKOUT}:", file=out)
-    for line in recorded["garmin"]["steps"]:
+    print(f"{SET_WORKOUT}:", file=out)
+    for line in recorded["garmin"]["sets"]:
         print(line, file=out)
-    print(f"{STEP_NAME_WORKOUT}:", file=out)
-    for line in recorded["garmin"]["step_name"]:
+    print("Kinds of step Garmin stored: " + ", ".join(sorted(recorded["garmin"]["stored_steps"])), file=out)
+    print(f"{STEPS_WORKOUT} (the step cap, each made and deleted at once):", file=out)
+    for line in recorded["garmin"]["step_cap"]:
         print(line, file=out)
-    print(f"\nSaved to live-check/{RECORDED}, which holds no values. Paste it into #22:\n", file=out)
+    print(f"\nSaved to live-check/{RECORDED}, which holds no values. Paste it into the PR:\n", file=out)
     print(json.dumps(recorded, indent=1, sort_keys=True), file=out)
+    where = "and on its way to the watch" if recorded["garmin"]["sent_to_the_watch"] else "but was not sent to a watch"
     print(
-        f"\nThe {len(created)} check workouts are on today's calendar and on their way to the watch. Look at the "
-        "watch, then run `make live-cleanup`.",
+        f"\n{SET_WORKOUT} is on today's calendar {where}. Start it on the watch and do its first set "
+        "without changing the reps, then save the activity. Look at that set in Garmin Connect and on Strava, "
+        "then run `make live-cleanup`.",
         file=out,
     )
     return 0
