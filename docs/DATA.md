@@ -64,4 +64,4 @@ Garmin's unofficial web API, through [python-garminconnect](https://github.com/c
 
 ## Quirks
 
-None beyond the findings above yet.
+- **kustomize 5.8 adds no namespace to a chart's resources.** Argo CD 3.5.7 runs kustomize 5.8.1, and on 2026-11-10 it refused chart 0.2.0 with "Namespace for hevy-garmin-sync apps/v1, Kind=Deployment is missing", while kustomize 5.7.1 rendered the same folder with the namespace set. The chart's templates now state `.Release.Namespace` themselves, and the `Chart` job checks it.

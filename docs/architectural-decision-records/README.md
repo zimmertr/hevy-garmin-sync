@@ -27,4 +27,5 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0001](0001-build-to-the-signed-off-spec.md) | Build hevy-garmin-sync to the signed-off spec, one direction only, in one repo with its chart | 2026-11-07 | Accepted |
 | [0002](0002-ci-on-yggdrasil-modules.md) | CI runs on zimmertr/yggdrasil's modules, pinned to the versions a live consumer runs | 2026-11-07 | Accepted |
 | [0003](0003-docker-hub-until-yggdrasil-has-ghcr.md) | The image and the chart are published to Docker Hub until yggdrasil adds GHCR | 2026-11-07 | Accepted |
-| [0004](0004-bump-a-disabled-folder-until-cutover.md) | Releases bump a disabled Kubernetes-Manifests folder until TJ's cutover | 2026-11-07 | Accepted |
+| [0004](0004-bump-a-disabled-folder-until-cutover.md) | Releases bump a disabled Kubernetes-Manifests folder until TJ's cutover | 2026-11-07 | Superseded by 0005 |
+| [0005](0005-releases-deploy-through-the-live-folder.md) | Since the cutover, every release bumps the live Kubernetes-Manifests folder and so deploys | 2026-11-10 | Accepted |

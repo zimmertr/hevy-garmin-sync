@@ -33,7 +33,7 @@ Every merge to main is a release (`release.yml`), one at a time:
 1. `test` runs again on the squash commit.
 2. yggdrasil's release module reads the version from the squash commit's title with GitVersion (`feat` a minor, `!` a major, anything else a patch; the first release is 0.1.0), builds and pushes `zimmertr/hevy-garmin-sync:<version>` for amd64 and arm64 with an SBOM and provenance, scans each platform with Trivy, then tags `v<version>` and publishes the GitHub release. A fixable Critical or High stops the tag and release.
 3. `Publish OCI chart` packages `charts/hevy-garmin-sync-helm` with that version as both `version` and `appVersion` and pushes it to `oci://registry-1.docker.io/zimmertr`. A re-run finds it there and skips.
-4. `Bump Kubernetes-Manifests` sets the chart version in `misc/hevy-garmin-sync.disabled/kustomization.yml` through a PR on the fixed branch `chore/hevy-garmin-sync-chart`, and arms auto-merge.
+4. `Bump Kubernetes-Manifests` sets the chart version in `misc/hevy-garmin-sync/kustomization.yml` through a PR on the fixed branch `chore/hevy-garmin-sync-chart`, and arms auto-merge. When that PR merges, Argo CD rolls the pod to the new release.
 
 `image-scan.yml` re-scans the latest release every Monday and sends the findings to the Security tab. Its first run fails until a release exists.
 

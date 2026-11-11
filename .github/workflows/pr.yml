@@ -55,6 +55,10 @@ jobs:
       - run: helm lint charts/hevy-garmin-sync-helm
       - run: helm template hevy-garmin-sync charts/hevy-garmin-sync-helm >/dev/null
       - run: helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --set existingSecret=hevy-garmin-sync >/dev/null
+      # Every resource states its namespace: kustomize 5.8, which Argo CD runs,
+      # adds none to a chart's output. The default render has three resources.
+      - run: |
+          test "$(helm template hevy-garmin-sync charts/hevy-garmin-sync-helm --namespace check | grep -c '^  namespace: check$')" -eq 3
 
   # yggdrasil's docker-build module: hadolint, the linux/amd64 image built but
   # not pushed, a Trivy table in a sticky comment, the smoke test, then a
