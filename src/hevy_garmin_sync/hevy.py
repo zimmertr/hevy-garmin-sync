@@ -1,7 +1,8 @@
 """Hevy's public API (api.hevyapp.com/docs), read with the Pro API key (spec A-1).
 
-Read only: the app never writes to Hevy (S-1). The API has no webhooks and no
-change feed for routines, so the app polls (F-2).
+Read only: the app never writes to Hevy (S-1). Hevy's only webhook reports a
+saved workout, and nothing reports a changed routine, so the app polls. A
+webhook would also need a listening port, which F-2 rules out.
 """
 
 from collections.abc import Callable, Iterator
