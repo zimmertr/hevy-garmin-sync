@@ -34,7 +34,7 @@ One long-running process and one thread (spec F-1). Nothing listens on a port (F
 5. **Midnight.** At local midnight, a full run again: yesterday's calendar entries go and today's are added.
 6. **Stop.** SIGTERM or SIGINT lets the write in progress finish and starts no new one.
 
-A failing service gets its own wait, one minute doubling to thirty (O-1). Hevy's public API, Hevy's private API and Garmin each have one, so routines keep syncing while only Trainer is down, and Hevy is still read while Garmin is down.
+A failing service gets its own wait, one minute doubling to thirty (O-1). Hevy's public API, Hevy's private API and Garmin each have one, so routines keep syncing while only Trainer is down, and Hevy is still read while Garmin is down. A rejected key, token or session is not waited out: it exits 1 with the fix, as at startup, so Kubernetes or Docker shows the app as failing.
 
 ## The modules
 
