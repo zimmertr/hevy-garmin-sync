@@ -1,6 +1,6 @@
 # CI/CD
 
-How a change gets from a PR to a release. Every workflow calls a zimmertr/yggdrasil module where one exists (record [0002](architectural-decision-records/0002-ci-on-yggdrasil-modules.md)); the module pins are the versions hevy-trainer-sync runs, and Dependabot moves them once a yggdrasil release is three days old.
+How a change gets from a PR to a release. Every workflow calls a zimmertr/yggdrasil module where one exists (record [0002](architectural-decision-records/0002-ci-on-yggdrasil-modules.md)); Renovate moves the module pins as soon as yggdrasil releases.
 
 ```mermaid
 flowchart LR
@@ -22,9 +22,8 @@ flowchart LR
 | `pr.yml` | `Docker Build / Docker Build` | yggdrasil's docker-build module: hadolint, the amd64 image built, a Trivy table in a sticky comment, the smoke test, and a failure on any fixable Critical or High |
 | `lint.yml` | `Lint / actionlint`, `Lint / zizmor`, `Lint / semgrep` | yggdrasil's lint module over the workflows and the Dockerfile |
 | `pr-title.yml` | `PR Title / PR Title` | yggdrasil's pr-title module: the title must be `type(scope): summary` |
-| `dependabot-auto-merge.yml` | `Dependabot auto-merge / Auto-merge patch and minor updates` | Arms auto-merge on Dependabot's patch and minor updates; skipped on every other PR |
 
-The default-branch ruleset requires every check above except the auto-merge one. Renaming or adding a check needs a PR in zimmertr/yggdrasil that changes this repo's `required_checks`, merged together with the rename; otherwise PRs wait forever on the old name.
+The default-branch ruleset requires every check above. Renaming or adding a check needs a PR in zimmertr/yggdrasil that changes this repo's `required_checks`, merged together with the rename; otherwise PRs wait forever on the old name.
 
 ## The release
 
@@ -36,6 +35,23 @@ Every merge to main is a release (`release.yml`), one at a time. After the test,
 4. `Release / Deploy Bump (zimmertr/Kubernetes-Manifests)` sets the chart version in `misc/hevy-garmin-sync/kustomization.yml` through a PR on the fixed branch `chore/hevy-garmin-sync-chart`, and arms auto-merge. When that PR merges, Argo CD rolls the pod to the new release.
 
 `image-scan.yml` re-scans the latest release every Monday and sends the findings to the Security tab. Its first run fails until a release exists.
+
+## Dependency updates
+
+Renovate opens the update PRs, titled `chore(deps): update ...`. `.github/renovate.json` extends zimmertr/yggdrasil's shared preset, which holds the rules every repo of TJ's uses (record [0014](architectural-decision-records/0014-renovate-under-yggdrasils-preset.md)):
+
+- A release waits seven days before Renovate proposes it. yggdrasil's own modules don't wait, and neither does anything whose registry gives no publish date.
+- Everything below a major merges itself once the required checks pass, and that merge is a release. A major waits for TJ.
+
+What this repo adds:
+
+| Setting | Why |
+|---|---|
+| `pip-compile` reads `requirements.txt` and `requirements-dev.txt` | Renovate bumps the pin in the `.in` file and recompiles every lock that depends on it, hashes included. A pin in `requirements.in` moves both locks in one PR |
+| `pip_requirements` is off | It would bump a lock's pin without recompiling its hashes |
+| `ghcr.io/zimmertr/hevy-garmin-sync` is off | `compose.yaml` runs this repo's own image. A bump would merge, release a new version and be proposed again |
+
+Renovate recompiles a lock with the command in its header, so the header must hold only options Renovate knows. pip-tools 7.5.3 wrote `--no-index` there, which Renovate refuses; `make lock` pins 7.6.2, which doesn't.
 
 ## The upstream check
 
@@ -60,7 +76,6 @@ After a failure, re-run the failed jobs only. Never re-run an old release after 
 |---|---|---|
 | `GITHUB_TOKEN` | Given to each run | The image push and the chart push, to GHCR (`packages: write`); the upstream check's issue (`issues: write`) |
 | `GH_PAT` | Actions | The Kubernetes-Manifests bump, as the release module's `deploy-token`, and the upstream check's push and PR here (contents and pull-requests write on both repos) |
-| `AUTO_MERGE_PAT` | Dependabot | The auto-merge module's `merge-token`; a merge made with `GITHUB_TOKEN` would not start the release |
 
 ## Repo settings
 

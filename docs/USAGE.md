@@ -55,7 +55,7 @@ What you see when it runs, and what to do when it breaks.
 
 | You see | Do |
 |---|---|
-| The release stopped at a scan | A fixable Critical or High is in the image. The fix is the next release, usually a Dependabot digest PR for the base image |
+| The release stopped at a scan | A fixable Critical or High is in the image. The fix is the next release, usually a Renovate digest PR for the base image |
 | `Release / Push Chart` failed | Re-run the failed jobs, not all jobs; a chart already pushed is skipped |
 | `Release / Deploy Bump` failed on its `yq` step | The file or the chart entry is missing in Kubernetes-Manifests; restore it, then re-run the failed job |
 | The weekly image scan failed | Same as a release scan: ship a fix in the next release |
