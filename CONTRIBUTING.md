@@ -1,6 +1,6 @@
 # Contributing
 
-hevy-garmin-sync has one maintainer. For a large change, open an issue first, so the approach gets discussed before you build it.
+Thanks for your interest in contributing to hevy-garmin-sync. For a large change, please open an issue first, so the approach is agreed before you put time into it.
 
 If you send a change:
 
