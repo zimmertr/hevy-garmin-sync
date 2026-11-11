@@ -284,19 +284,95 @@ class ReadingTest(TrainerCase):
 
 
 class CalendarTest(TrainerCase):
-    def test_a_workout_logged_this_week_is_off_the_calendar(self) -> None:
-        self.assertEqual(self.trainer.plans().off_calendar, frozenset({"t-lower"}))
+    """Only the workout Hevy would start next is on today (F-31, #25)."""
 
-    def test_one_logged_last_week_is_not(self) -> None:
-        self.private.workouts = [fixtures.logged_lower(TUESDAY - timedelta(days=7))]
+    def three(self, **program: Any) -> None:
+        """A program of three workouts, t-0, t-1 and t-2, in that order."""
+        keys = ("upper_3x_a", "lower_3x_a", "full_body_3x_a")
+        templates = [trainer_template(f"t-{i}", key, [trainer_exercise("T-SIDE-BEND")]) for i, key in enumerate(keys)]
+        self.private.program = fixtures.trainer_program(templates, **program)
+
+    def test_of_three_workouts_only_the_next_one_is_on_the_calendar_and_all_three_are_planned(self) -> None:
+        self.three(next_workout_index=1)
+        plans = self.trainer.plans()
+        self.assertEqual(plans.off_calendar, frozenset({"t-0", "t-2"}))
+        self.assertEqual([w.source_id for w in plans.workouts], ["t-0", "t-1", "t-2"])
+
+    def test_the_next_workout_counts_the_workouts_in_their_index_order(self) -> None:
+        self.three(next_workout_index=0)
+        assert self.private.program is not None
+        self.private.program["templates"][0]["index"] = 5  # t-1, t-2, t-0
+        self.assertEqual(self.trainer.plans().off_calendar, frozenset({"t-0", "t-2"}))
+
+    def test_the_next_workout_is_on_the_calendar_even_if_it_was_logged_this_week(self) -> None:
         self.assertEqual(self.trainer.plans().off_calendar, frozenset())
+
+    def test_a_poll_follows_hevy_when_the_next_workout_changes(self) -> None:
+        self.three(next_workout_index=0)
+        self.assertEqual(self.trainer.plans().off_calendar, frozenset({"t-1", "t-2"}))
+        assert self.private.program is not None
+        self.private.program["next_workout_index"] = 2
+        self.assertEqual(self.trainer.plans().off_calendar, frozenset({"t-0", "t-1"}))
+
+
+class NoNextWorkoutTest(TrainerCase):
+    """Without a next workout from Hevy, one logged this week is off the calendar (F-33), with one WARNING."""
+
+    def off(self) -> frozenset[str]:
+        """What a fresh start keeps off the calendar when Hevy names no next workout."""
+        assert self.private.program is not None
+        self.private.program["next_workout_index"] = None
+        with self.assertLogs(LOGGER, "WARNING"):
+            off = self.start().plans().off_calendar
+        return off
+
+    def test_a_missing_odd_or_out_of_range_next_workout_falls_back_and_warns_once(self) -> None:
+        for value in ("missing", None, "0", True, 0.0, -1, 1):
+            with self.subTest(value=value):
+                self.private.program = fixtures.trainer_program([fixtures.lower_template()], next_workout_index=value)
+                if value == "missing":
+                    del self.private.program["next_workout_index"]
+                trainer = self.start()
+                with self.assertLogs(LOGGER, "WARNING") as logs:
+                    self.assertEqual(trainer.plans().off_calendar, frozenset({"t-lower"}))
+                self.assertEqual(len(logs.output), 1)
+                self.assertIn("names no next workout", logs.output[0])
+                with self.assertNoLogs(LOGGER, "WARNING"):
+                    trainer.plans()
+
+    def test_a_next_workout_with_no_id_is_no_next_workout(self) -> None:
+        templates = [fixtures.lower_template(), {"key": "odd"}]
+        self.private.program = fixtures.trainer_program(templates, next_workout_index=1)
+        with self.assertLogs(LOGGER, "WARNING"):
+            self.assertEqual(self.trainer.plans().off_calendar, frozenset({"t-lower"}))
+
+    def test_the_warning_comes_back_when_hevy_stops_naming_one_again(self) -> None:
+        assert self.private.program is not None
+        self.private.program["next_workout_index"] = None
+        with self.assertLogs(LOGGER, "WARNING"):
+            self.trainer.plans()
+        self.private.program["next_workout_index"] = 0
+        with self.assertNoLogs(LOGGER, "WARNING"):
+            self.trainer.plans()
+        self.private.program["next_workout_index"] = None
+        with self.assertLogs(LOGGER, "WARNING"):
+            self.trainer.plans()
+
+    def test_an_empty_program_warns_about_nothing(self) -> None:
+        self.private.program = fixtures.trainer_program([], next_workout_index=None)
+        with self.assertNoLogs(LOGGER, "WARNING"):
+            self.assertEqual(self.trainer.plans().off_calendar, frozenset())
+
+    def test_one_logged_last_week_is_on_the_calendar(self) -> None:
+        self.private.workouts = [fixtures.logged_lower(TUESDAY - timedelta(days=7))]
+        self.assertEqual(self.off(), frozenset())
 
     def test_the_week_starts_on_the_users_first_weekday_in_the_users_zone(self) -> None:
         # 23:30 on Sunday 1 November in Los Angeles, which is already Monday in UTC.
         self.private.workouts = [fixtures.logged_lower(datetime(2026, 11, 1, 23, 30, tzinfo=fixtures.ZONE))]
-        self.assertEqual(self.start().plans().off_calendar, frozenset())
+        self.assertEqual(self.off(), frozenset())
         self.private.user["first_weekday"] = "sunday"
-        self.assertEqual(self.start().plans().off_calendar, frozenset({"t-lower"}))
+        self.assertEqual(self.off(), frozenset({"t-lower"}))
 
     def test_another_workouts_session_or_one_with_no_start_does_not_count(self) -> None:
         self.private.workouts = [
@@ -304,7 +380,7 @@ class CalendarTest(TrainerCase):
             logged_workout(None, TUESDAY, {}),
             fixtures.logged_lower(TUESDAY) | {"start_time": None},
         ]
-        self.assertEqual(self.trainer.plans().off_calendar, frozenset())
+        self.assertEqual(self.off(), frozenset())
         self.assertIn("no prescription", self.said()[-1])
 
 

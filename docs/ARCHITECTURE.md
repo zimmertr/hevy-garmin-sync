@@ -31,7 +31,7 @@ One long-running process and one thread (spec F-1). Nothing listens on a port (F
 1. **Start.** Read the environment. Anything wrong exits with a message naming the variable. Load the Garmin token, and the Hevy session if `HEVY_SESSION` is set, from `DATA_DIR`, seeding each from its variable when the variable is new (A-4).
 2. **Check.** One call to each service. A rejected key, token or session exits with the fix. An outage is waited out.
 3. **Full run.** Read every routine (and the Trainer program), read Garmin's workout list and the calendar, then create, update and delete until Garmin matches. Put each workout on today.
-4. **Poll.** Every `HEVY_POLL_INTERVAL_SECONDS`, read Hevy again. Garmin is called only for what changed (F-4a).
+4. **Poll.** Every `HEVY_POLL_INTERVAL_SECONDS`, read Hevy again. Garmin is called only for what changed (F-4a). When Hevy Trainer's next workout changes, its calendar entry moves to it in the same poll (F-31).
 5. **Midnight.** At local midnight, a full run again: yesterday's calendar entries go and today's are added.
 6. **Stop.** SIGTERM or SIGINT lets the write in progress finish and starts no new one.
 

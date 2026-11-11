@@ -3,7 +3,8 @@
 A full run reads Garmin's workout list and calendar first, and happens at
 startup, at local midnight, and after Garmin comes back from a failure. Every
 other run works from what the last run left in memory and calls Garmin only for
-what changed in Hevy (F-4a).
+what changed in Hevy (F-4a), including a workout that moved on or off today's
+calendar (F-31, #25).
 """
 
 import logging
@@ -31,7 +32,8 @@ class Plans:
     # Keep this kind's Garmin workouts even when they are not listed: the
     # source could not say for sure that they are gone (F-14a).
     hold: bool = False
-    # Hevy ids that get no calendar entry at the next full run (F-33).
+    # Hevy ids that get no calendar entry today (F-31, F-33). A change moves
+    # the entry in the same run, or at the next full run when its id is unknown.
     off_calendar: frozenset[str] = frozenset()
 
 
@@ -71,6 +73,9 @@ class Sync:
     _empty: set[Key] = field(default_factory=set)
     _unsent: list[int] = field(default_factory=list)
     _entries: dict[int, int] = field(default_factory=dict)  # workout id -> today's calendar entry
+    # Workouts on today's calendar, also those whose entry id Garmin did not give,
+    # so a poll never schedules one twice.
+    _on_today: set[int] = field(default_factory=set)
     _no_device_reported: bool = False
 
     def run(self, plans: Sequence[Plans], full: bool) -> Counts:
@@ -86,6 +91,8 @@ class Sync:
         self._delete_missing(desired, {p.kind for p in plans if p.hold}, counts)
         if full:
             self._reconcile_calendar(today, off_calendar, counts)
+        elif self.scheduled:
+            self._follow_calendar(desired, off_calendar, today, counts)
         return counts
 
     def _read_garmin(self, counts: Counts) -> None:
@@ -188,6 +195,7 @@ class Sync:
             if known.workout_id in self._entries:
                 self.garmin.unschedule(self._entries.pop(known.workout_id))
                 counts.unscheduled += 1
+            self._on_today.discard(known.workout_id)
             self.garmin.delete(known.workout_id)
             counts.deleted += 1
             log.debug("Deleted the Garmin workout of %s %s", *key)
@@ -195,9 +203,33 @@ class Sync:
 
     def _schedule(self, workout_id: int, day: date, counts: Counts) -> None:
         entry = self.garmin.schedule(workout_id, day)
+        self._on_today.add(workout_id)
         if entry is not None:
             self._entries[workout_id] = entry
         counts.scheduled += 1
+
+    def _follow_calendar(
+        self, desired: dict[Key, Workout], off_calendar: set[Key], today: date, counts: Counts
+    ) -> None:
+        """Between full runs, move a workout on or off today as soon as its source says so (F-31, #25).
+
+        Hevy Trainer moves its next workout when one is logged or the program
+        is reordered, and the watch should follow within a poll, not at
+        midnight. This reads no calendar (F-4a): it works from the entries the
+        last runs made, so one whose id Garmin did not give stays until the
+        next full run. Only listed workouts move, so a held kind's (F-14a) and
+        a deleted routine's entries are left to the paths that handle them.
+        The old entry goes before the new one is added, as at a full run.
+        """
+        listed = [(self._known[key].workout_id, key in off_calendar) for key in desired if key in self._known]
+        for workout_id, off in listed:
+            if off and workout_id in self._entries:
+                self.garmin.unschedule(self._entries.pop(workout_id))
+                self._on_today.discard(workout_id)
+                counts.unscheduled += 1
+        for workout_id, off in listed:
+            if not off and workout_id not in self._on_today:
+                self._schedule(workout_id, today, counts)
 
     def _reconcile_calendar(self, today: date, off_calendar: set[Key], counts: Counts) -> None:
         """One entry on today for each workout, and none of the app's on the 31 days before (F-31, F-32).
@@ -208,6 +240,7 @@ class Sync:
         """
         mine = {known.workout_id: key for key, known in self._known.items()}
         self._entries = {}
+        self._on_today = set()
         for entry in self.garmin.scheduled(today - timedelta(days=_CALENDAR_DAYS_BACK), today):
             workout_id = (entry.get("workout") or {}).get("workoutId")
             entry_id = entry.get("workoutScheduleId")
@@ -221,6 +254,7 @@ class Sync:
             )
             if wanted:
                 self._entries[workout_id] = int(entry_id)
+                self._on_today.add(workout_id)
             else:
                 self.garmin.unschedule(int(entry_id))
                 counts.unscheduled += 1

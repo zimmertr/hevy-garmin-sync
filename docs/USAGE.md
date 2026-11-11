@@ -7,7 +7,7 @@ What you see when it runs, and what to do when it breaks.
 - One strength workout per Hevy routine: `Hevy: {routine}` for a routine in no folder, `Hevy/{folder}: {routine}` for one in a folder.
 - With Hevy Trainer on, one per Trainer workout: `Hevy/Trainer: Upper (C2-W2)`, with the cycle and week the Hevy app shows.
 - Each has a four-line description that marks it as the app's. Don't edit it: without it the app no longer knows the workout and makes a new one.
-- Every workout is on today's calendar, so the watch offers them when you start a strength activity. A Trainer workout already logged this week is not on the calendar, but stays in the watch's saved workouts.
+- Every routine is on today's calendar, so the watch offers them when you start a strength activity. Of the Trainer workouts, only the one Hevy says is next is on the calendar. When that changes in Hevy, because you logged one or reordered them, the calendar follows within a minute. The others stay in the watch's saved workouts.
 - A change in Hevy reaches Garmin Connect within a minute, and the watch at its next sync with your phone.
 - A routine deleted in Hevy leaves Garmin Connect and the calendar. The copy in the watch's saved workout list stays until you delete it on the watch.
 
@@ -34,6 +34,7 @@ What you see when it runs, and what to do when it breaks.
 | `Garmin is rate limiting the app` | Nothing. It waits at least 15 minutes |
 | `Garmin refused '<workout>' (N steps)` | Garmin won't take that one workout. The others still sync. It is tried again when the routine changes, at the next start and at midnight. Open an issue with the line |
 | `No exercise map row for Hevy exercise ...` | A built-in Hevy exercise the map doesn't know. It still syncs, under the closest exercise by muscle group. Open an issue so it gets a proper row |
+| `Hevy's program names no next workout` | Hevy didn't say which Trainer workout is next. Until it does, every Trainer workout not logged this week is on today. Open an issue with the line |
 | `'<folder>' in INCLUDE_HEVY_FOLDERS is gone` | The folder was renamed or deleted in Hevy. Its workouts are kept. Fix the variable and restart |
 | A workout shows the wrong exercise name on the watch | The map has a poor row for it. Open an issue or a PR against `src/hevy_garmin_sync/data/exercise_map.csv` |
 | Two copies of a workout in the watch's saved list | An old copy from before a delete. Remove it on the watch |

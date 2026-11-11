@@ -37,11 +37,12 @@ Every call has a 30 second timeout (O-1a) and a `User-Agent` that names the app 
 - **Not yet known:** whether the session's refresh token has an absolute lifetime. The question was first recorded in hevy-trainer-sync on 2026-11-04 and is still open.
 - **`/user_workouts_paged`** answered a `limit` of 10 with a 400 on 2026-11-07. The app asks for 3.
 - **The program's `current_week`** is not the week the Hevy app shows ([HEVY_TRAINER_RULES.md](HEVY_TRAINER_RULES.md)).
-- **The program also carries** `next_workout_index`, `program_variety`, `exercises_rotated_at` and `edits` (2026-11-04, first recorded in hevy-trainer-sync). The app reads none of them.
+- **The program also carries** `next_workout_index`, `program_variety`, `exercises_rotated_at` and `edits` (2026-11-04, first recorded in hevy-trainer-sync). The app reads `next_workout_index` (below) and none of the other three.
 - **`exercises_rotated_at`** read Thursday 29 October 2026, so exercises do not rotate on a week boundary (2026-11-04, first recorded in hevy-trainer-sync).
 - **Not yet seen live:** what the program call answers for an account with no program (the app takes a 404 or a reply without a program as "no program"), and a row of `/exercise_template_units`. That call answered with an empty list on 2026-11-10, for an account that logs no exercise in the other unit; the app logs the shape, without values, the first time.
 - **A Trainer template's `name`** held its key (`upper_2x_a`) on 2026-11-10, not a display name. The app reads a name in a key's form as a key, so the workout is called "Upper".
 - **The first run against a real account** (2026-11-10, from a clone, Hevy Trainer on): two routines and a two-workout program became four Garmin workouts with no failure.
+- **The program's `next_workout_index`** is the workout the Hevy app would start next, counted in the templates' `index` order. hevy-trainer-sync put that one workout on today from 2026-11-04 to 2026-11-10, and this app does the same since #25 (spec F-33). Not yet seen live, as of 2026-11-10: how it moves after a logged session, after a reorder in the Hevy app, and across a week change. A value that is missing, not an integer or out of range is logged as a WARNING, and the app falls back to keeping the week's logged workouts off the calendar.
 
 ## Garmin Connect
 
@@ -56,7 +57,7 @@ Garmin's unofficial web API, through [python-garminconnect](https://github.com/c
 | Create, update or delete a workout | When a routine or Trainer workout was added, changed or removed |
 | Send to Device, three calls | After each create and update |
 | The calendar, 31 days back through today | Every full run |
-| Schedule or unschedule a workout | Every full run, and when a workout is created or deleted |
+| Schedule or unschedule a workout | Every full run, when a workout is created or deleted, and when Hevy Trainer's next workout changes |
 
 ### Findings
 
