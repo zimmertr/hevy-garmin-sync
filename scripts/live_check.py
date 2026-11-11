@@ -36,12 +36,12 @@ It is safe to run again.
 nothing made anywhere, and not held back by an earlier run that wasn't cleaned up.
 
 `notes` is for #3, last time's numbers in a set's note: one Garmin sign-in and no Hevy read. It
-creates `HGS check notes`, four exercises. Three carry made-up numbers, last time's working sets one
-to a line: the form TJ chose after the note the app writes today (F-30), on two matching sets, which
-stay one repeat group (F-20a); the widest line such a note is likely to hold; and four sets, six
-lines in all. The fourth carries fifteen numbered lines, to read off how many the watch shows. It
-reads the workout back and says whether Garmin stored every note whole, then puts it on today and
-sends it to the watch, so TJ can see how each note reads there. `cleanup` removes it like the others.
+creates `HGS check notes`, three exercises, to find a way to write one of last time's sets that fits
+on one line of the watch. The first note writes the widest likely set four ways with its unit on
+every line; the second names the unit once, in a heading, and holds numbers only; the third is a
+ruler of thirty digits and two headings. It reads the workout back and says whether Garmin stored
+every note whole, then puts it on today and sends it to the watch, so TJ can see which lines stay
+whole there. `cleanup` removes it like the others.
 
 Safety, enforced in code:
 - Never writes to Hevy: only the read methods of `Hevy` and `HevyPrivate` are called.
@@ -107,34 +107,27 @@ SET_EXERCISES = (
     Exercise("Check", "CRUNCH", "CRUNCH", (_TEN,) * 2, superset=1),
     Exercise("Check", "SQUAT", "SQUAT", (_TEN,) * 2, rest_seconds=60, superset=1),
 )
-_KG_PER_LB = 0.45359237
-# `HGS check notes` (#3): each exercise and the lines its sets' note gets, last time's working sets one to
-# a line (TJ, 2026-11-11, after the first run showed the watch breaking a list of sets inside a set). The
-# numbers are made up.
-NOTE_LINES = 15  # the numbered lines of the last note, more than the watch is likely to show at once
+# `HGS check notes` (#3): each exercise and the lines its set's note gets. One of last time's sets must
+# fit on one line of the watch (TJ, 2026-11-11): the second run broke `65 lb x 6 @ RPE 7.5` in two. So
+# each line here is one way to write the widest set a note is likely to hold: a weight with a decimal,
+# kilograms, two-digit reps and an RPE with a decimal. The numbers are made up.
+RULER = "123456789012345678901234567890"  # where the watch cuts it is how many digits one line holds
 CHECK_NOTES = (
-    # The form TJ chose, after the note the app writes for a rep range (F-30): five lines. Two matching
-    # sets, which must stay one repeat group with the note on both (F-20a).
+    # The unit on every line, from the roomiest form to the tightest, then a four-digit weight.
     (
-        Exercise(
-            "Check", "CURL", "CURL", (Set(rep_range=(4, 6), weight_kg=65 * _KG_PER_LB),) * 2, rest_seconds=60
-        ),
-        "Prev:\n65 lb x 6 @ RPE 7\n65 lb x 6 @ RPE 7.5\n65 lb x 5 @ RPE 8",
+        Exercise("Check", "CURL", "CURL", (_TEN,)),
+        "102.5 kg x 12 @ 9.5\n102.5kg x12 @9.5\n102.5kg x12 9.5\n1002.5kg x12 @9.5",
     ),
-    # The widest a line is likely to get: a weight with a decimal, in kilograms, two-digit reps.
+    # The unit once, in the heading, and numbers only below it.
     (
-        Exercise("Check", "SQUAT", "SQUAT", (Set(reps=12, weight_kg=102.5),)),
-        "Prev:\n102.5 kg x 12 @ RPE 7.5\n102.5 kg x 12 @ RPE 8.5\n102.5 kg x 10 @ RPE 9.5",
+        Exercise("Check", "SQUAT", "SQUAT", (_TEN,)),
+        "Prev (kg):\n102.5 x 12 @ 9.5\n1002.5 x 12 @ 9.5\n1002.5 x12 @9.5",
     ),
-    # Four sets after a rep range: six lines, one more than the first run showed whole.
+    # A ruler, so the width of any other form can be worked out without the watch, and two headings
+    # that say what the numbers are.
     (
-        Exercise("Check", "ROW", "ROW", (Set(rep_range=(8, 12), weight_kg=45 * _KG_PER_LB),)),
-        "Prev:\n45 lb x 12 @ RPE 7\n45 lb x 12 @ RPE 8\n45 lb x 10 @ RPE 9\n45 lb x 9 @ RPE 10",
-    ),
-    # Numbered lines, so the highest number on the watch is how many lines a note can show.
-    (
-        Exercise("Check", "LUNGE", "LUNGE", (Set(reps=10),)),
-        "\n".join(f"Line {number}" for number in range(1, NOTE_LINES + 1)),
+        Exercise("Check", "ROW", "ROW", (_TEN,)),
+        f"{RULER}\nkg x reps @ RPE\nPrev: kg x reps @ RPE",
     ),
 )
 STEP_SIZES = (250, 100, 50)  # the step probe's sizes, largest first; it stops at the first Garmin takes
@@ -433,7 +426,6 @@ def steps_body(size: int, system: str | None) -> Json:
 def notes_body(system: str | None) -> Json:
     """`HGS check notes`: the app's own steps, each set's note followed by its lines of CHECK_NOTES."""
     body = _body(NOTES_WORKOUT, [exercise for exercise, _ in CHECK_NOTES], system)
-    # One set step per exercise: the two matching sets are one step inside their group.
     for step, (_, lines) in zip(sets(body), CHECK_NOTES, strict=True):
         step["description"] = "\n".join(part for part in (step.get("description"), lines) if part)
     return body
@@ -777,10 +769,8 @@ def check_notes(
         print(line, file=out)
     print(
         "\nSync the watch and start it. For each exercise, open the note's own screen during the set and "
-        "photograph it. Does every set stay on one line? The first exercise has two sets: check that the watch "
-        f"counts SET 1/2 and 2/2 and shows the note on both. The last note is {NOTE_LINES} numbered lines: which "
-        "is the highest the watch shows, and does the screen scroll to the rest? Then discard the activity and "
-        "run `make live-cleanup`.",
+        "photograph it. Which lines stay on one line? In the last note, how many digits of the ruler does the "
+        "first line hold? Then discard the activity and run `make live-cleanup`.",
         file=out,
     )
     return 0

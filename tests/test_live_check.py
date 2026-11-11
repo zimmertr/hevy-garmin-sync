@@ -516,29 +516,26 @@ class NotesTest(LiveCheckCase):
         self.assertEqual(self.tokens, [TOKEN])
         self.assertIsNone(workout.owner(stored["description"]))
         self.assertIn(f"{lc.NOTES_WORKOUT} is on today's calendar and on its way to the watch", out)
-        self.assertIn("1. Curl: 4-6 reps / Prev: / 65 lb x 6 @ RPE 7 / 65 lb x 6 @ RPE 7.5 / ", out)
-        self.assertIn("2. Squat: Prev: / 102.5 kg x 12 @ RPE 7.5 / ", out)
-        self.assertIn("3. Row: 8-12 reps / Prev: / 45 lb x 12 @ RPE 7 / ", out)
-        self.assertIn("4. Lunge: Line 1 / Line 2 / ", out)
-        self.assertIn(" / Line 15\nGarmin stored every note whole.\n", out)
-        self.assertIn("The last note is 15 numbered lines", out)
+        self.assertIn("1. Curl: 102.5 kg x 12 @ 9.5 / 102.5kg x12 @9.5 / 102.5kg x12 9.5 / 1002.5kg x12 @9.5\n", out)
+        self.assertIn("2. Squat: Prev (kg): / 102.5 x 12 @ 9.5 / 1002.5 x 12 @ 9.5 / 1002.5 x12 @9.5\n", out)
+        self.assertIn(f"3. Row: {lc.RULER} / kg x reps @ RPE / Prev: kg x reps @ RPE\n", out)
+        self.assertIn("RPE\nGarmin stored every note whole.\n", out)
+        self.assertIn("how many digits of the ruler", out)
 
-    def test_each_exercise_carries_its_lines_and_the_matching_sets_stay_one_group(self) -> None:
+    def test_each_exercise_is_one_set_with_its_lines_and_no_note_of_the_apps_own(self) -> None:
         body = lc.notes_body("statute_us")
         steps = body["workoutSegments"][0]["workoutSteps"]
-        self.assertEqual([s["type"] for s in steps], ["RepeatGroupDTO"] + ["ExecutableStepDTO"] * 6)
-        self.assertEqual(steps[0]["numberOfIterations"], 2)
+        self.assertEqual([s["type"] for s in steps], ["ExecutableStepDTO"] * 6)
         found = list(lc.sets(body))
-        self.assertEqual([s["exerciseName"] for s in found], ["CURL", "SQUAT", "ROW", "LUNGE"])
+        self.assertEqual([s["exerciseName"] for s in found], ["CURL", "SQUAT", "ROW"])
         self.assertEqual(
             [s["description"].split("\n") for s in found],
             [
-                # The app's own note first (F-30), then last time's sets, one to a line.
-                ["4-6 reps", "Prev:", "65 lb x 6 @ RPE 7", "65 lb x 6 @ RPE 7.5", "65 lb x 5 @ RPE 8"],
-                ["Prev:", "102.5 kg x 12 @ RPE 7.5", "102.5 kg x 12 @ RPE 8.5", "102.5 kg x 10 @ RPE 9.5"],
-                ["8-12 reps", "Prev:", "45 lb x 12 @ RPE 7", "45 lb x 12 @ RPE 8"]
-                + ["45 lb x 10 @ RPE 9", "45 lb x 9 @ RPE 10"],
-                [f"Line {number}" for number in range(1, 16)],
+                # The widest likely set, its unit on every line, from the roomiest form to the tightest.
+                ["102.5 kg x 12 @ 9.5", "102.5kg x12 @9.5", "102.5kg x12 9.5", "1002.5kg x12 @9.5"],
+                # The unit once, in the heading.
+                ["Prev (kg):", "102.5 x 12 @ 9.5", "1002.5 x 12 @ 9.5", "1002.5 x12 @9.5"],
+                ["123456789012345678901234567890", "kg x reps @ RPE", "Prev: kg x reps @ RPE"],
             ],
         )
 
@@ -551,8 +548,8 @@ class NotesTest(LiveCheckCase):
         self.assertEqual(
             lc.notes_kept(sent, stored),
             [
-                "Garmin stored 40 of the 77 characters of exercise 2's note.",
-                "Garmin stored 0 of the 91 characters of exercise 3's note.",
+                "Garmin stored 40 of the 61 characters of exercise 2's note.",
+                "Garmin stored 0 of the 68 characters of exercise 3's note.",
             ],
         )
 

@@ -37,12 +37,11 @@ If `make live-check` stops partway, it says how many check workouts it left; `ma
 
 `make live-check-hevy` is the Hevy part of steps 1 and 2 alone: it asks for the same key and cookie, reads Hevy, prints the same Trainer edit lines, and writes `live-check/recorded-hevy.json`. It signs in to nothing else, makes nothing, never touches `recorded.json`, and runs even when an earlier `make live-check` wasn't cleaned up. With no routines in the account, the exercise template and its history come from a logged workout instead.
 
-`make live-check-notes` is for [#3](https://github.com/zimmertr/hevy-garmin-sync/issues/3), last time's numbers in a set's note. It asks for the Garmin sign-in only, reads nothing from Hevy, and makes `HGS check notes`: four exercises. Three hold made-up numbers, last time's working sets one to a line, and the fourth finds how many lines the watch shows.
+`make live-check-notes` is for [#3](https://github.com/zimmertr/hevy-garmin-sync/issues/3), last time's numbers in a set's note. It asks for the Garmin sign-in only, reads nothing from Hevy, and makes `HGS check notes`: three exercises of one set each, to find a way to write one of last time's sets that fits on one line of the watch. Every line is the widest set a note is likely to hold, with made-up numbers.
 
-1. Curl, two matching sets with a rep range: the app's own `4-6 reps`, then `Prev:`, then `65 lb x 6 @ RPE 7`, `65 lb x 6 @ RPE 7.5` and `65 lb x 5 @ RPE 8`, each on its own line. The sets must stay one repeat group, so the watch counts SET 1/2 and 2/2.
-2. Squat, one set: `Prev:` and three lines such as `102.5 kg x 12 @ RPE 7.5`, the widest a line is likely to get.
-3. Row, one set with a rep range: `8-12 reps`, `Prev:` and four sets, six lines in all.
-4. Lunge, one set: `Line 1` to `Line 15`, each on its own line.
+1. Curl, the unit on every line: `102.5 kg x 12 @ 9.5`, `102.5kg x12 @9.5`, `102.5kg x12 9.5` and `1002.5kg x12 @9.5`.
+2. Squat, the unit once in a heading: `Prev (kg):`, then `102.5 x 12 @ 9.5`, `1002.5 x 12 @ 9.5` and `1002.5 x12 @9.5`.
+3. Row: a ruler of thirty digits, then the headings `kg x reps @ RPE` and `Prev: kg x reps @ RPE`.
 
 It reads the workout back and says whether Garmin stored every note whole. Then it puts the workout on today, sends it to the watch and prints the notes. Start it on the watch, photograph each note, and discard the activity. Then `make live-cleanup`, as after `make live-check`. It won't run while an earlier run's `live-check/created.json` is there.
 
