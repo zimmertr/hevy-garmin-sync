@@ -223,7 +223,7 @@ class RecordTest(LiveCheckCase):
         self.assertEqual(self.tokens, [TOKEN])
         self.assertEqual(self.store.read(garmin.TOKENS), fixtures.GARMIN_TOKENS)
 
-    def test_without_a_session_it_asks_once_and_skips_hevy_trainer(self) -> None:
+    def test_with_nothing_set_it_asks_for_the_key_and_the_cookie_and_an_empty_one_skips_trainer(self) -> None:
         self.hevy_api.routines = []
         self.answers = [API_KEY, ""]
         code, _ = self.record(env={})
