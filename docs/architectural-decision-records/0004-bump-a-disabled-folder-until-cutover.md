@@ -1,6 +1,6 @@
 # 0004. Releases bump a disabled Kubernetes-Manifests folder until TJ's cutover
 
-- Status: Accepted
+- Status: Superseded by 0005
 - Date: 2026-11-07
 - Decider: TJ ("Create the folder now")
 - Issues and PRs: #1, KM#1944

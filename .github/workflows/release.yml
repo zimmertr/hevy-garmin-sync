@@ -97,8 +97,8 @@ jobs:
           echo "Pushed chart ${VER}." >> "$GITHUB_STEP_SUMMARY"
 
   # Points Kubernetes-Manifests at the chart through a self-merging PR, because
-  # Kubernetes-Manifests forbids direct commits to main. Until TJ's cutover the
-  # file is in a disabled folder, so nothing deploys (decision record 0004).
+  # Kubernetes-Manifests forbids direct commits to main. The folder is
+  # live, so the bump PR is a deploy: Argo CD rolls the pod (decision record 0005).
   #
   # The release module's deploy job, run here after the chart push: yq sets the
   # one value, create-pull-request opens the PR on a fixed branch or advances
@@ -125,7 +125,7 @@ jobs:
       - uses: mikefarah/yq@a4330671f17776618660a419ab2531e4f4dc48b6 # v4.54.2
         env:
           VERSION: ${{ needs.chart.outputs.version }}
-          FILE: misc/hevy-garmin-sync.disabled/kustomization.yml
+          FILE: misc/hevy-garmin-sync/kustomization.yml
           SET: (.helmCharts[] | select(.name == "hevy-garmin-sync-helm")).version
         with:
           cmd: yq -i "$SET = strenv(VERSION)" "$FILE" && yq -e "($SET) == strenv(VERSION)" "$FILE"

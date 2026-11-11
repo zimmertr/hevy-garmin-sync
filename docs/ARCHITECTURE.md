@@ -81,4 +81,4 @@ Built by the release for `linux/amd64` and `linux/arm64`, tagged with the versio
 
 ## Where it runs for TJ
 
-Kubernetes-Manifests `misc/hevy-garmin-sync.disabled` holds the chart version each release bumps. The misc ApplicationSet skips `*.disable*` folders, so nothing deploys until TJ's cutover from hevy2garmin (spec D-7, record [0004](architectural-decision-records/0004-bump-a-disabled-folder-until-cutover.md)).
+Kubernetes-Manifests `misc/hevy-garmin-sync` holds the chart version each release bumps, the values (the hand-made Secret and the volume's storage class) and the namespace. The misc ApplicationSet deploys it, so the bump PR is the deploy (spec D-7, record [0005](architectural-decision-records/0005-releases-deploy-through-the-live-folder.md)). It replaced hevy2garmin and hevy-trainer-sync on 2026-11-10.
