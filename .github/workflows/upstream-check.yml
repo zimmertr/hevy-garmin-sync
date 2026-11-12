@@ -40,7 +40,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       # Exit 3 is a difference, handed to the issue and PR jobs. Anything else
       # but 0 fails here: 2 is a source that can't be read, 1 a crash.
       - id: compare
@@ -120,7 +120,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       # Read again rather than handed over from the check job, so the PR
       # holds the sources as they are now. A source that can't be read this
       # time exits 2 and fails the job.

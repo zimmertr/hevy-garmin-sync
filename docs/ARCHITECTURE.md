@@ -12,7 +12,7 @@ Where each part of the app lives. The behaviour is specified in [SPEC.md](SPEC.m
 | `scripts/` | `check_upstream.py`, the weekly upstream check: compares the copies of Garmin's list and Hevy's spec with their source ([CICD.md](CICD.md#the-upstream-check)). `live_check.py`, the run by hand against TJ's own accounts that records the shapes of Hevy's and Garmin's replies, puts a check workout on the watch and probes Garmin's step cap ([DEVELOPMENT.md](DEVELOPMENT.md#the-live-check)). Neither is in the image |
 | `charts/hevy-garmin-sync-helm/` | The Helm chart: one Deployment, its PersistentVolumeClaim and Secret |
 | `compose.yaml` | The same container for Docker Compose |
-| `Dockerfile` | The image: `python:3.14-slim`, the hashed lock, the package, `/data`, user 1000 |
+| `Dockerfile` | The image: `python:3.15-slim`, the hashed lock, the package, `/data`, user 1000 |
 | `.github/workflows/` | Callers of zimmertr/yggdrasil's modules, plus the chart's release jobs and the upstream check ([CICD.md](CICD.md)) |
 | `docs/` | This set. [SPEC.md](SPEC.md) is the plan |
 

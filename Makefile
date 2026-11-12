@@ -1,7 +1,7 @@
 # Every check CI runs, runnable the same way here. Each target runs in Docker;
 # nothing installs on the workstation (docs/DEVELOPMENT.md).
 
-PYTHON_IMAGE := python:3.14-slim
+PYTHON_IMAGE := python:3.15-slim
 TRIVY_IMAGE  := aquasec/trivy:0.68.1
 HADOLINT     := hadolint/hadolint:v2.12.0
 # The Helm version yggdrasil's chart and release modules install.
