@@ -586,11 +586,16 @@ def hevy_template(template_id: str, title: str, **fields: Any) -> dict[str, Any]
 
 
 def hevy_history_set(
-    kilograms: float, reps: int, workout_start: str | None, set_type: str = "normal", template_id: str = "T-BENCH"
+    kilograms: float | None,
+    reps: int | None,
+    workout_start: str | None,
+    set_type: str = "normal",
+    template_id: str = "T-BENCH",
+    **fields: Any,
 ) -> dict[str, Any]:
-    """One set of an exercise's history, in the shape Hevy sent on 2026-11-11. The app reads the first four."""
+    """One set of an exercise's history, in the shape Hevy sent on 2026-11-11, with `fields` over it."""
     return {
-        "weight_kg": float(kilograms),
+        "weight_kg": None if kilograms is None else float(kilograms),
         "reps": reps,
         "set_type": set_type,
         "workout_start_time": workout_start,
@@ -602,13 +607,13 @@ def hevy_history_set(
         "distance_meters": None,
         "duration_seconds": None,
         "custom_metric": None,
-    }
+    } | fields
 
 
-def hevy_workout_event(workout_id: str, template_id: str, title: str) -> dict[str, Any]:
-    """An `updated` workout event, holding a logged workout of one exercise, in the shape Hevy sent on 2026-11-10."""
-    logged_set = {
-        "index": 0,
+def hevy_logged_set(index: int = 0, **fields: Any) -> dict[str, Any]:
+    """One set of a workout in a workout event, in the shape Hevy sent on 2026-11-10: 60 kg for 8 at RPE 8."""
+    return {
+        "index": index,
         "type": "normal",
         "weight_kg": 60.0,
         "reps": 8,
@@ -616,14 +621,25 @@ def hevy_workout_event(workout_id: str, template_id: str, title: str) -> dict[st
         "distance_meters": None,
         "duration_seconds": None,
         "custom_metric": None,
-    }
+    } | fields
+
+
+def hevy_workout_event(
+    workout_id: str,
+    template_id: str,
+    title: str,
+    sets: list[dict[str, Any]] | None = None,
+    start: str = "2026-01-15T17:00:00+00:00",
+) -> dict[str, Any]:
+    """An `updated` workout event, in the shape Hevy sent on 2026-11-10: a logged workout of one exercise,
+    with `sets`, else one `hevy_logged_set`."""
     exercise = {
         "index": 0,
         "title": title,
         "notes": None,
         "exercise_template_id": template_id,
         "superset_id": None,
-        "sets": [logged_set],
+        "sets": [s | {"index": i} for i, s in enumerate(sets or [hevy_logged_set()])],
     }
     return {
         "type": "updated",
@@ -632,13 +648,18 @@ def hevy_workout_event(workout_id: str, template_id: str, title: str) -> dict[st
             "title": "Made Up",
             "routine_id": None,
             "description": "",
-            "start_time": "2026-01-15T17:00:00+00:00",
-            "end_time": "2026-01-15T18:00:00+00:00",
-            "updated_at": "2026-01-15T18:00:00+00:00",
-            "created_at": "2026-01-15T18:00:00+00:00",
+            "start_time": start,
+            "end_time": start,
+            "updated_at": start,
+            "created_at": start,
             "exercises": [exercise],
         },
     }
+
+
+def hevy_deleted_event(workout_id: str) -> dict[str, Any]:
+    """A `deleted` workout event: the workout's id alone, as Hevy's API reference gives it."""
+    return {"type": "deleted", "id": workout_id, "deleted_at": "2026-01-15T18:00:00+00:00"}
 
 
 class FakeHevyApi:

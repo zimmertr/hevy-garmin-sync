@@ -2,10 +2,11 @@
 
 The program comes from Hevy's private API without weights; trainer_rules.py
 works them out from the user's logged workouts and preferences. What is read
-when (F-4): the program and the public workout events on every poll; the
-preferences and the logged workouts at startup, at local midnight, and after a
-workout was saved, edited or deleted. Only the workout the program says is next
-goes on today's calendar (F-31, #25).
+when (F-4): the program on every poll; the preferences and the logged workouts
+at startup, at local midnight, and after a workout was saved, edited or
+deleted, which app.py learns from the public workout events and passes on with
+`logged`. Only the workout the program says is next goes on today's calendar
+(F-31, #25).
 """
 
 import logging
@@ -18,6 +19,7 @@ from . import trainer_rules as rules
 from .exercises import ExerciseMap
 from .hevy import ASSISTED, WEIGHTED_BODYWEIGHT, Hevy
 from .hevy_private import HevyPrivate, parse_time
+from .previous import Previous
 from .sync import Plans
 from .trainer_rules import Prescription, RepRange
 from .workout import TRAINER, Exercise, Set, Workout
@@ -85,12 +87,13 @@ class Trainer:
         public: Hevy,
         exercises: ExerciseMap,
         now: Callable[[], datetime],  # the current time in the user's zone
+        previous: Previous | None = None,  # None: ENABLE_PREVIOUS_VALUES is false
     ) -> None:
         self._private = private
         self._public = public
         self._exercises = exercises
         self._now = now
-        self._cursor = now()  # workout events before startup are covered by the first read (F-4)
+        self._previous = previous
         self._read_on: date | None = None
         self._logged_since_read = False
         self._units_shape_said = False
@@ -113,12 +116,13 @@ class Trainer:
         """At startup: one call with the session, so a rejected one shows before the loop (section 11)."""
         self._private.user_preferences()
 
+    def logged(self) -> None:
+        """A workout was saved, edited or deleted. Kept until the workouts are read again, so a failure
+        in between, or Trainer's own wait after one, does not lose it."""
+        self._logged_since_read = True
+
     def plans(self) -> Plans:
         now = self._now()
-        if self._public.workout_events(self._cursor):
-            # Kept until the workouts are read again, so a failure in between does not lose it.
-            self._logged_since_read = True
-        self._cursor = now
         program = self._private.program()
         if program is None:
             if not self._no_program_said:
@@ -244,6 +248,7 @@ class Trainer:
             sets=(*warmup_sets, *[working] * int(planned.get("set_count") or 0)),
             rest_seconds=int(rest) if rest else None,
             assisted=details.get("type") in ASSISTED,
+            previous=self._previous.sets(exercise_id) if self._previous else (),
         )
 
     def _prescribe(

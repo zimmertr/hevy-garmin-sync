@@ -38,3 +38,4 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0012](0012-the-chart-goes-through-yggdrasils-modules.md) | The chart is checked, pushed and deployed by yggdrasil's modules | 2026-11-11 | Accepted. Supersedes 0002 in part |
 | [0013](0013-custom-exercises-set-by-one-variable.md) | A custom exercise's Garmin exercise is logged, and one variable, CUSTOM_EXERCISE_MAP, can set it | 2026-11-10 | Accepted |
 | [0014](0014-renovate-under-yggdrasils-preset.md) | Renovate keeps dependencies current, under yggdrasil's shared preset | 2026-11-11 | Accepted. Supersedes 0002 in part |
+| [0015](0015-last-times-sets-in-each-sets-note.md) | Every set but a warm-up lists last time's working sets in its note, from the last workout of any kind that logged the exercise | 2026-11-11 | Accepted |

@@ -4,8 +4,9 @@ import unittest
 from typing import Any
 
 from hevy_garmin_sync import errors, hevy, workout
+from hevy_garmin_sync.previous import Previous
 from hevy_garmin_sync.routines import Routines
-from hevy_garmin_sync.workout import Set
+from hevy_garmin_sync.workout import LoggedSet, Set
 from tests import fixtures
 from tests.fixtures import hevy_exercise, hevy_folder, hevy_routine, hevy_set
 
@@ -231,6 +232,26 @@ class ConversionTest(RoutinesCase):
         self.api.routines = [hevy_routine("r1", "Empty", None, [])]
         (planned,) = self.routines().plans().workouts
         self.assertEqual(planned.exercises, ())
+
+
+class PreviousTest(RoutinesCase):
+    """With ENABLE_PREVIOUS_VALUES on, each exercise carries last time's working sets (#3)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.api.routines = [hevy_routine("r1", "Mixed")]
+        self.api.history["T-BENCH"] = [fixtures.hevy_history_set(62.5, 7, "2026-01-10T17:00:00+00:00")]
+
+    def test_each_exercise_carries_the_working_sets_of_its_last_session(self) -> None:
+        client = hevy.Hevy("made-up-key", self.api)  # type: ignore[arg-type]
+        routines = Routines(client, (), fixtures.exercise_map(), Previous(client, lambda: fixtures.NOW))
+        (planned,) = routines.plans().workouts
+        self.assertEqual(planned.exercises[0].previous, (LoggedSet(62.5, 7, 8.0),))
+
+    def test_with_it_off_no_history_is_read(self) -> None:
+        (planned,) = self.routines().plans().workouts
+        self.assertEqual(planned.exercises[0].previous, ())
+        self.assertNotIn("/exercise_history/T-BENCH", [path for path, _ in self.api.requests])
 
 
 if __name__ == "__main__":

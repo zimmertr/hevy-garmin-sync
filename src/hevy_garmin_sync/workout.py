@@ -58,6 +58,17 @@ class Set:
 
 
 @dataclass(frozen=True)
+class LoggedSet:
+    """A working set as Hevy logged it, for the note's lines of last time's numbers (previous.py)."""
+
+    weight_kg: float | None = None
+    reps: int | None = None
+    rpe: float | None = None
+    seconds: int | None = None
+    meters: float | None = None
+
+
+@dataclass(frozen=True)
 class Exercise:
     title: str  # Hevy's title, for the note on a timed set's wait step
     category: str  # Garmin's exercise category key
@@ -66,6 +77,7 @@ class Exercise:
     rest_seconds: int | None = None
     superset: int | None = None
     assisted: bool = False
+    previous: tuple[LoggedSet, ...] = ()  # the working sets of the last session that logged it
 
 
 @dataclass(frozen=True)
@@ -248,7 +260,7 @@ def _set_step(exercise: Exercise, current: Set, system: str | None) -> Step:
         else:
             step["weightValue"] = float(current.weight_kg)
             step["weightUnit"] = {"unitId": 8, "unitKey": "kilogram"}
-    note = _note(current, exercise.assisted, system)
+    note = _note(current, exercise, system)
     if note:
         step["description"] = note
     return step
@@ -268,20 +280,77 @@ def _rest_step(seconds: int | None) -> Step:
 
 def _wait_step(exercise: Exercise, current: Set) -> Step:
     """A timed set counts down the instant the step before it ends, so the user starts it (F-27)."""
-    minutes, seconds = divmod(current.seconds or 0, 60)
-    length = " ".join(part for part in (f"{minutes}m" if minutes else "", f"{seconds}s" if seconds else "") if part)
-    return _rest_step(None) | {"description": f"Press Lap button to start {length} {exercise.title} countdown"}
+    return _rest_step(None) | {
+        "description": f"Press Lap button to start {_length(current.seconds or 0)} {exercise.title} countdown"
+    }
 
 
-def _note(current: Set, assisted: bool, system: str | None) -> str | None:
-    """The one note a set carries: its type, then its rep range or distance (F-30)."""
+def _length(total: int) -> str:
+    """A duration as the watch's notes spell it: 45s, 1m, 1m 30s."""
+    minutes, seconds = divmod(total, 60)
+    return " ".join(part for part in (f"{minutes}m" if minutes else "", f"{seconds}s" if seconds else "") if part)
+
+
+def _distance(meters: float, system: str | None) -> str:
+    yards = system in (STATUTE_US, STATUTE_UK)
+    return f"{round(meters * _YARDS_PER_METER)} yd" if yards else f"{round(meters)} m"
+
+
+def _note(current: Set, exercise: Exercise, system: str | None) -> str | None:
+    """The one note a set carries: its type, its rep range or distance (F-30), then last time's sets (F-30b).
+
+    Each on a line of its own, so the watch breaks none of them in two: it
+    wrapped `Drop set: 4-6 reps`, 18 characters, and left `reps` on a line by
+    itself (TJ, 2026-11-11, #3).
+    """
     label = _SET_LABELS.get(current.kind, "")
-    if assisted:
+    if exercise.assisted:
         label = f"{label}, assisted" if label else "Assisted"
-    detail = ""
+    goal = ""
     if current.meters:
-        yards = system in (STATUTE_US, STATUTE_UK)
-        detail = f"{round(current.meters * _YARDS_PER_METER)} yd" if yards else f"{round(current.meters)} m"
+        goal = f"Goal: {_distance(current.meters, system)}"
     elif current.rep_range and current.rep_range[0] != current.rep_range[1]:
-        detail = f"{current.rep_range[0]}-{current.rep_range[1]} reps"
-    return ": ".join(part for part in (label, detail) if part) or None
+        goal = f"Goal: {current.rep_range[0]}-{current.rep_range[1]} reps"
+    # Every working set of an exercise gets the same block, so matching sets still share a repeat group (F-20a).
+    previous = "" if current.kind == "warmup" else _previous(exercise.previous, system)
+    return "\n".join(part for part in (label, goal, previous) if part) or None
+
+
+def _previous(logged: Sequence[LoggedSet], system: str | None) -> str:
+    """Last time's working sets, one to a line under a heading that names the unit once, or "" for none.
+
+    The form was settled on a Fenix 8 (TJ, 2026-11-11, #3): a line holds 14
+    digits and wraps at a space, so a line of more than 8 digits drops the
+    spaces after `x` and `@` to stay whole.
+    """
+    pounds = system == STATUTE_US  # the unit the weights go to Garmin in (F-21a)
+    lines = []
+    weighed = False
+    for done in logged:
+        weight = ""
+        if done.weight_kg:
+            weight = f"{round(done.weight_kg * _POUNDS_PER_KG if pounds else done.weight_kg, 1):g}"
+        amount = ""
+        if done.reps:
+            amount = str(done.reps)
+        elif done.seconds:
+            amount = _length(done.seconds)
+        elif done.meters:
+            amount = _distance(done.meters, system)
+        if not (weight or amount):
+            continue  # a set logged with nothing in it has nothing to show
+        weighed = weighed or bool(weight)
+        rpe = f"{done.rpe:g}" if done.rpe else ""
+        spaced = _line(weight, amount, rpe, " ")
+        lines.append(spaced if sum(c.isdigit() for c in spaced) <= 8 else _line(weight, amount, rpe, ""))
+    if not lines:
+        return ""
+    unit = (" (lb)" if pounds else " (kg)") if weighed else ""
+    # "Previous" is Hevy's own word for the column, and 14 characters with the unit fit one line of the watch.
+    return "\n".join([f"Previous{unit}:", *lines])
+
+
+def _line(weight: str, amount: str, rpe: str, gap: str) -> str:
+    """`65 x 6 @ 7.5` with `gap` a space, `65 x6 @7.5` with it empty."""
+    line = f"{weight} x{gap}{amount}" if weight and amount else weight or amount
+    return f"{line} @{gap}{rpe}" if rpe else line

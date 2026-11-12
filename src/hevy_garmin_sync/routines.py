@@ -7,6 +7,7 @@ from typing import Any
 from .errors import ConfigError
 from .exercises import ExerciseMap
 from .hevy import ASSISTED, Hevy
+from .previous import Previous
 from .sync import Plans
 from .workout import ROUTINE, Exercise, Set, Workout
 
@@ -28,10 +29,17 @@ def _matching(entry: str, folders: Sequence[Json]) -> set[Any]:
 
 
 class Routines:
-    def __init__(self, hevy: Hevy, entries: Sequence[str], exercises: ExerciseMap) -> None:
+    def __init__(
+        self,
+        hevy: Hevy,
+        entries: Sequence[str],
+        exercises: ExerciseMap,
+        previous: Previous | None = None,  # None: ENABLE_PREVIOUS_VALUES is false
+    ) -> None:
         self._hevy = hevy
         self._entries = tuple(entries)
         self._exercises = exercises
+        self._previous = previous
         self._missing: list[str] = []
 
     def check(self) -> None:
@@ -101,6 +109,7 @@ class Routines:
             rest_seconds=_whole(exercise.get("rest_seconds")),
             superset=_whole(exercise.get("superset_id"), zero=True),
             assisted=template.get("type") in ASSISTED,
+            previous=self._previous.sets(template_id) if self._previous else (),
         )
 
 

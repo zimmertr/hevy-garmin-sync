@@ -225,7 +225,8 @@ class PollTest(AppCase):
     def test_each_poll_logs_its_hevy_call_count_at_debug(self) -> None:
         with self.assertLogs(LOGGER, "DEBUG") as logs:
             self.run_app()
-        self.assertIn("Hevy poll: 3 calls, 2 routines", "\n".join(logs.output))
+        # The workout events, the folders, the routines, the exercise templates and the bench press's history.
+        self.assertIn("Hevy poll: 5 calls, 2 routines", "\n".join(logs.output))
 
     def test_an_hour_with_no_change_gets_one_line_saying_so(self) -> None:
         with self.assertLogs(LOGGER, "INFO") as logs:
@@ -295,8 +296,9 @@ class FailureTest(AppCase):
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(self.break_garmin(*down), *[None] * 7), 0)
         self.assertEqual([line.split("Trying again in ")[1] for line in logs.output], ["1 min.", "2 min.", "4 min."])
-        # Polled on every wake, whatever Garmin was doing: 8 wakes after the break, 2 calls each.
-        self.assertEqual(len(self.hevy_api.requests), 16)
+        # Polled on every wake, whatever Garmin was doing: 8 wakes after the break, 3 calls each (the workout
+        # events, the folders and the routines).
+        self.assertEqual(len(self.hevy_api.requests), 24)
         self.assertIn("Hevy/PPL: Legs", self.names())
 
     def test_a_garmin_rate_limit_waits_fifteen_minutes_first(self) -> None:
@@ -424,6 +426,7 @@ class TrainerTest(AppCase):
     """With HEVY_SESSION set, Hevy Trainer's workouts sync beside the routines (spec section 6)."""
 
     LOWER, UPPER = "Hevy/Trainer: Lower (C2-W2)", "Hevy/Trainer: Upper (C2-W2)"
+    INPUTS = ["v2/user_preferences", "hevy_trainer/user_preferences", "exercise_template_units", "user_workouts_paged"]
 
     def setUp(self) -> None:
         super().setUp()
@@ -484,10 +487,32 @@ class TrainerTest(AppCase):
             self.hevy_api.events = [fixtures.hevy_workout_event("made-up", "T-SIDE-BEND", "Side Bend (Dumbbell)")]
             self.garmin_api.calls.clear()
 
+        # Without last time's sets, so the weight is all that changes.
         with self.assertLogs(LOGGER, "INFO") as logs:
-            self.run_app(log_upper)
+            self.run_app(log_upper, ENABLE_PREVIOUS_VALUES="false")
         self.assertEqual(self.garmin_api.calls, ["update_workout", "push_workout_to_device"])
         self.assertIn("Hevy Trainer: Side Bend (Dumbbell): 40 lbs (up)", "\n".join(logs.output))
+
+    def test_a_workout_logged_while_trainer_waits_after_a_failure_is_still_acted_on(self) -> None:
+        def down() -> None:
+            self.private_api.fail(503)
+
+        def logged() -> None:
+            self.hevy_api.events = [fixtures.hevy_workout_event("made-up", "T-SIDE-BEND", "Side Bend (Dumbbell)")]
+
+        def quiet() -> None:
+            self.hevy_api.events = []
+            self.private_api.requests.clear()
+
+        with self.assertLogs(LOGGER, "ERROR"):
+            self.run_app(down, logged, quiet, None, None, HEVY_POLL_INTERVAL_SECONDS="15")
+        # Trainer failed at 15 s and was left alone until 75 s; the workout logged at 30 s was not lost.
+        self.assertEqual(self.private_api.paths(), ["hevy_trainer/v3/program", *self.INPUTS])
+
+    def test_the_workout_events_are_read_once_a_poll_for_trainer_and_last_times_sets_alike(self) -> None:
+        self.run_app(None)
+        events = [path for path, _ in self.hevy_api.requests if path == "/workouts/events"]
+        self.assertEqual(len(events), 2)
 
     def test_a_rejected_session_at_startup_exits_with_the_fix(self) -> None:
         self.end_the_session()
@@ -562,9 +587,71 @@ class TrainerTest(AppCase):
     def test_each_poll_logs_trainers_hevy_call_count_at_debug(self) -> None:
         with self.assertLogs(LOGGER, "DEBUG") as logs:
             self.run_app()
-        # The workout events and one exercise's history from the public API; the program, three sets of
-        # preferences and one page of logged workouts from the private one.
-        self.assertIn("Hevy Trainer poll: 7 calls, 2 workouts", "\n".join(logs.output))
+        # From the public API, the history of the four exercises new to last time's sets and of one exercise new
+        # to its workout; the program, three sets of preferences and one page of logged workouts from the private
+        # one. The workout events count in the Hevy poll's line.
+        self.assertIn("Hevy Trainer poll: 10 calls, 2 workouts", "\n".join(logs.output))
+
+
+class PreviousTest(AppCase):
+    """Last time's working sets in each set's note, kept current by the workout events (#3)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.hevy_api.history["T-BENCH"] = [fixtures.hevy_history_set(60, 8, "2026-01-10T17:00:00+00:00")]
+
+    def notes(self) -> set[str | None]:
+        """Every set's note in Garmin, from the repeat group each routine's three bench sets make."""
+        groups = (w["workoutSegments"][0]["workoutSteps"][0] for w in self.garmin_api.workouts.values())
+        return {group["workoutSteps"][0].get("description") for group in groups}
+
+    def events_asked(self) -> list[str]:
+        return [params["since"] for path, params in self.hevy_api.requests if path == "/workouts/events"]
+
+    def test_every_workout_with_the_exercise_shows_a_saved_workouts_sets_on_the_next_poll(self) -> None:
+        before: list[set[str | None]] = []
+
+        def save() -> None:
+            sets = [fixtures.hevy_logged_set(weight_kg=62.5, reps=6), fixtures.hevy_logged_set(weight_kg=62.5, reps=5)]
+            self.hevy_api.events = [fixtures.hevy_workout_event("w-new", "T-BENCH", "Bench Press (Barbell)", sets)]
+            before.append(self.notes())
+            self.garmin_api.calls.clear()
+
+        self.run_app(save)
+        self.assertEqual(before, [{"Previous (lb):\n132.3 x 8 @ 8"}])
+        self.assertEqual(self.notes(), {"Previous (lb):\n137.8 x 6 @ 8\n137.8 x 5 @ 8"})
+        self.assertEqual(self.garmin_api.calls, ["update_workout", "push_workout_to_device"] * 2)
+        # One history read, at startup; the events did the rest.
+        self.assertEqual(sum(path.startswith("/exercise_history/") for path, _ in self.hevy_api.requests), 1)
+
+    def test_a_saved_workout_that_changes_no_note_makes_no_garmin_call(self) -> None:
+        def save() -> None:
+            self.hevy_api.events = [fixtures.hevy_workout_event("w-new", "T-PLANK", "Plank")]
+            self.garmin_api.calls.clear()
+
+        self.run_app(save)
+        self.assertEqual(self.garmin_api.calls, [])
+
+    def test_the_events_are_asked_for_since_startup_and_then_since_the_poll_before(self) -> None:
+        started = self.utc
+        self.run_app(None, None)
+        minute = hevy._utc(started + timedelta(seconds=60))
+        self.assertEqual(self.events_asked(), [hevy._utc(started), hevy._utc(started), minute])
+
+    def test_a_failed_events_read_is_waited_out_and_asked_again_from_where_it_was(self) -> None:
+        started = self.utc
+        with self.assertLogs(LOGGER, "ERROR") as logs:
+            self.run_app(None, lambda: self.hevy_api.fail(503), None)
+        self.assertIn("Hevy can't be reached or is failing (HTTP 503", logs.output[0])
+        # The read two minutes on failed, so the one a minute after it asks from the same instant.
+        minute = hevy._utc(started + timedelta(seconds=60))
+        self.assertEqual(self.events_asked(), [hevy._utc(started), hevy._utc(started), minute, minute])
+
+    def test_with_it_off_the_notes_are_as_before_and_no_history_or_event_is_read(self) -> None:
+        self.run_app(None, ENABLE_PREVIOUS_VALUES="false")
+        self.assertEqual(self.notes(), {None})
+        asked = {path for path, _ in self.hevy_api.requests}
+        self.assertEqual(asked, {"/routine_folders", "/routines", "/exercise_templates"})
 
 
 class BackoffTest(unittest.TestCase):
