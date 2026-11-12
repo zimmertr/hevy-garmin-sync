@@ -8,8 +8,9 @@ from typing import Any
 
 from hevy_garmin_sync import errors, hevy, trainer, workout
 from hevy_garmin_sync.hevy_private import HevyPrivate
+from hevy_garmin_sync.previous import Previous
 from hevy_garmin_sync.store import Store
-from hevy_garmin_sync.workout import Exercise, Set
+from hevy_garmin_sync.workout import Exercise, LoggedSet, Set
 from tests import fixtures
 from tests.fixtures import hevy_template, logged_set, logged_workout, trainer_exercise, trainer_template
 
@@ -33,7 +34,9 @@ class TrainerCase(unittest.TestCase):
         self.now = WEEK_8
         self.trainer = self.start()
 
-    def start(self) -> trainer.Trainer:
+    def start(self, previous: bool = False) -> trainer.Trainer:
+        """A Trainer as the app makes it; with `previous`, as ENABLE_PREVIOUS_VALUES=true makes it."""
+        public = hevy.Hevy("made-up-key", self.public)  # type: ignore[arg-type]
         return trainer.Trainer(
             HevyPrivate(
                 fixtures.HEVY_SESSION_TOKENS,
@@ -41,9 +44,10 @@ class TrainerCase(unittest.TestCase):
                 self.private,  # type: ignore[arg-type]
                 utcnow=lambda: self.now.astimezone(UTC),
             ),
-            hevy.Hevy("made-up-key", self.public),  # type: ignore[arg-type]
+            public,
             fixtures.exercise_map(),
             lambda: self.now,
+            Previous(public, lambda: self.now) if previous else None,
         )
 
     def one(self, *exercises: dict[str, Any], **program: Any) -> None:
@@ -207,26 +211,25 @@ class ReadingTest(TrainerCase):
     def test_the_first_poll_reads_the_program_the_preferences_and_the_logged_workouts(self) -> None:
         self.assertEqual(self.poll(), ["hevy_trainer/v3/program", *INPUTS])
 
-    def test_a_poll_after_that_reads_only_the_program_and_the_workout_events(self) -> None:
+    def test_a_poll_after_that_reads_only_the_program(self) -> None:
         self.poll()
         self.public.requests.clear()
         self.assertEqual(self.poll(), ["hevy_trainer/v3/program"])
-        self.assertEqual([path for path, _ in self.public.requests], ["/workouts/events"])
+        # The workout events are the app's to read, once for everyone (F-4).
+        self.assertEqual(self.public.requests, [])
 
     def test_a_saved_edited_or_deleted_workout_has_everything_read_again(self) -> None:
         self.poll()
-        self.public.events = [fixtures.hevy_workout_event("made-up", "T-SIDE-BEND", "Side Bend (Dumbbell)")]
+        self.trainer.logged()
         self.assertEqual(self.poll(), ["hevy_trainer/v3/program", *INPUTS])
-        self.public.events = []
         self.assertEqual(self.poll(), ["hevy_trainer/v3/program"])
 
-    def test_a_workout_event_is_not_lost_when_the_read_after_it_fails(self) -> None:
+    def test_a_logged_workout_is_not_lost_when_the_read_after_it_fails(self) -> None:
         self.poll()
-        self.public.events = [{"type": "deleted", "id": "made-up"}]
+        self.trainer.logged()
         self.private.fail(503)
         with self.assertRaises(errors.Unavailable):
             self.trainer.plans()
-        self.public.events = []
         self.assertEqual(self.poll(), ["hevy_trainer/v3/program", *INPUTS])
 
     def test_local_midnight_has_everything_read_again(self) -> None:
@@ -240,15 +243,6 @@ class ReadingTest(TrainerCase):
         self.poll()
         self.private.program = fixtures.trainer_program([fixtures.lower_template()], created_at="2026-11-02T09:00:00Z")
         self.assertEqual(self.poll(), ["hevy_trainer/v3/program", *INPUTS])
-
-    def test_workout_events_are_asked_for_since_startup_and_then_since_the_poll_before(self) -> None:
-        started = self.now
-        self.now += timedelta(minutes=1)
-        self.trainer.plans()
-        self.now += timedelta(minutes=1)
-        self.trainer.plans()
-        asked = [params["since"] for path, params in self.public.requests if path == "/workouts/events"]
-        self.assertEqual(asked, [hevy._utc(started), hevy._utc(started + timedelta(minutes=1))])
 
     def test_the_logged_workouts_are_read_from_the_programs_start(self) -> None:
         self.private.workouts.append(
@@ -276,7 +270,7 @@ class ReadingTest(TrainerCase):
         self.private.workouts.append(
             logged_workout("t-lower", TUESDAY + timedelta(days=2), {"T-SIDE-BEND": [logged_set(40, 12)] * 3})
         )
-        self.public.events = [fixtures.hevy_workout_event("made-up", "T-SIDE-BEND", "Side Bend (Dumbbell)")]
+        self.trainer.logged()
         with self.assertLogs(LOGGER, "INFO") as logs:
             self.trainer.plans()
         self.assertEqual(len(logs.output), 1)
@@ -586,7 +580,7 @@ class NewExerciseTest(TrainerCase):
         self.trainer.plans()
         self.trainer.plans()
         self.assertEqual(asked(), 1)
-        self.public.events = [fixtures.hevy_workout_event("made-up", "T-SIDE-BEND", "Side Bend (Dumbbell)")]
+        self.trainer.logged()
         self.trainer.plans()
         self.assertEqual(asked(), 2)
 
@@ -606,6 +600,29 @@ class NewExerciseTest(TrainerCase):
         # 5% over 135 lb is 141.75, and the nearest step up from 135 that the bar loads is 140.
         self.assertEqual(self.said(), ["Bench Press (Barbell): 140 lbs (up), warm-ups 85"])
         self.assertNotIn("/exercise_history/T-BENCH", [path for path, _ in self.public.requests])
+
+
+class PreviousTest(TrainerCase):
+    """With ENABLE_PREVIOUS_VALUES on, each exercise carries last time's working sets, from any workout (#3)."""
+
+    def test_each_exercise_carries_the_working_sets_of_its_last_session_in_any_workout(self) -> None:
+        when = (TUESDAY + timedelta(days=1)).astimezone(UTC).isoformat()
+        self.public.history["T-GOBLET"] = [
+            fixtures.hevy_history_set(10, 8, when, "warmup", "T-GOBLET", workout_id="w-routine"),
+            fixtures.hevy_history_set(36, 5, when, template_id="T-GOBLET", workout_id="w-routine", rpe=7.5),
+        ]
+        (lower,) = self.start(previous=True).plans().workouts
+        self.assertEqual([e.previous for e in lower.exercises], [(LoggedSet(36.0, 5, 7.5),), (), (), ()])
+        asked = [path for path, _ in self.public.requests if path.startswith("/exercise_history/")]
+        self.assertEqual(
+            asked, [f"/exercise_history/{e}" for e in ("T-GOBLET", "T-LUNGE", "T-LEG-RAISE", "T-SIDE-BEND")]
+        )
+
+    def test_with_it_off_no_history_is_read_for_it(self) -> None:
+        self.public.history["T-GOBLET"] = [fixtures.hevy_history_set(36, 5, None, template_id="T-GOBLET")]
+        (lower,) = self.start().plans().workouts
+        self.assertEqual({e.previous for e in lower.exercises}, {()})
+        self.assertEqual(self.public.requests, [("/exercise_templates", {"page": 1, "pageSize": 100})])
 
 
 if __name__ == "__main__":

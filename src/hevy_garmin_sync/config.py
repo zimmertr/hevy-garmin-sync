@@ -24,6 +24,7 @@ class Config:
     include_folders: tuple[str, ...]
     custom_exercises: Mapping[str, GarminExercise]
     scheduled: bool
+    previous_values: bool
     hevy_session: str | None
     poll_seconds: int
     zone: ZoneInfo | None
@@ -44,6 +45,7 @@ class Config:
                 else "unset (custom exercises go by muscle group and equipment)"
             ),
             "ENABLE_SCHEDULED_WORKOUTS": str(self.scheduled).lower(),
+            "ENABLE_PREVIOUS_VALUES": str(self.previous_values).lower(),
             "HEVY_SESSION": "set (Hevy Trainer on)" if self.hevy_session else "unset (Hevy Trainer off)",
             "HEVY_POLL_INTERVAL_SECONDS": str(self.poll_seconds),
             "TZ": self.zone.key if self.zone else "unset (using the Garmin profile's time zone)",
@@ -64,6 +66,10 @@ def load(env: Mapping[str, str]) -> Config:
     scheduled = get("ENABLE_SCHEDULED_WORKOUTS").lower() or "true"
     if scheduled not in ("true", "false"):
         raise ConfigError("ENABLE_SCHEDULED_WORKOUTS must be true or false")
+
+    previous_values = get("ENABLE_PREVIOUS_VALUES").lower() or "true"
+    if previous_values not in ("true", "false"):
+        raise ConfigError("ENABLE_PREVIOUS_VALUES must be true or false")
 
     poll = get("HEVY_POLL_INTERVAL_SECONDS") or "60"
     if not poll.isascii() or not poll.isdigit() or int(poll) < _MIN_POLL_SECONDS:
@@ -90,6 +96,7 @@ def load(env: Mapping[str, str]) -> Config:
         include_folders=tuple(part.strip() for part in get("INCLUDE_HEVY_FOLDERS").split(",") if part.strip()),
         custom_exercises=_custom_exercises(get("CUSTOM_EXERCISE_MAP")),
         scheduled=scheduled == "true",
+        previous_values=previous_values == "true",
         hevy_session=get("HEVY_SESSION") or None,
         poll_seconds=int(poll),
         zone=zone,

@@ -18,6 +18,7 @@ class ConfigTest(unittest.TestCase):
         self.assertIsNone(loaded.garmin_token)
         self.assertEqual(loaded.include_folders, ())
         self.assertTrue(loaded.scheduled)
+        self.assertTrue(loaded.previous_values)
         self.assertIsNone(loaded.hevy_session)
         self.assertEqual(loaded.poll_seconds, 60)
         self.assertIsNone(loaded.zone)
@@ -31,6 +32,7 @@ class ConfigTest(unittest.TestCase):
                 "GARMIN_TOKEN": " token ",
                 "INCLUDE_HEVY_FOLDERS": " Push Pull Legs , 42,, ",
                 "ENABLE_SCHEDULED_WORKOUTS": "False",
+                "ENABLE_PREVIOUS_VALUES": " FALSE ",
                 "HEVY_SESSION": "cookie",
                 "HEVY_POLL_INTERVAL_SECONDS": "10",
                 "TZ": "America/Los_Angeles",
@@ -42,6 +44,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(loaded.garmin_token, "token")
         self.assertEqual(loaded.include_folders, ("Push Pull Legs", "42"))
         self.assertFalse(loaded.scheduled)
+        self.assertFalse(loaded.previous_values)
         self.assertEqual(loaded.hevy_session, "cookie")
         self.assertEqual(loaded.poll_seconds, 10)
         self.assertEqual(loaded.zone.key if loaded.zone else None, "America/Los_Angeles")
@@ -59,6 +62,7 @@ class ConfigTest(unittest.TestCase):
         cases = {
             "HEVY_API_KEY": [""],
             "ENABLE_SCHEDULED_WORKOUTS": ["yes", "1"],
+            "ENABLE_PREVIOUS_VALUES": ["no", "0"],
             "HEVY_POLL_INTERVAL_SECONDS": ["9", "0", "-60", "1.5", "a minute", "٦٠"],
             "TZ": ["Mars/Olympus_Mons", "../etc/passwd"],
             "LOG_LEVEL": ["LOUD"],
@@ -80,6 +84,7 @@ class ConfigTest(unittest.TestCase):
                 "INCLUDE_HEVY_FOLDERS",
                 "CUSTOM_EXERCISE_MAP",
                 "ENABLE_SCHEDULED_WORKOUTS",
+                "ENABLE_PREVIOUS_VALUES",
                 "HEVY_SESSION",
                 "HEVY_POLL_INTERVAL_SECONDS",
                 "TZ",

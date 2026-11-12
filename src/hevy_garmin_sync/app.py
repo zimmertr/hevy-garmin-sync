@@ -25,6 +25,7 @@ from .exercises import ExerciseMap
 from .garmin import LOGIN_FIX, Garmin
 from .hevy import KEY_FIX, Hevy
 from .hevy_private import SESSION, SESSION_FIX, HevyPrivate
+from .previous import Previous
 from .routines import Routines
 from .store import Store
 from .sync import Plans, Sync
@@ -113,8 +114,10 @@ class App:
         self._clock = clock
         self._utcnow = utcnow
         self._zone: ZoneInfo = config.zone or ZoneInfo("UTC")
-        self._routines = Routines(hevy, config.include_folders, exercises)
-        self._trainer = Trainer(hevy_private, hevy, exercises, self._now) if hevy_private else None
+        self._previous = Previous(hevy, self._now) if config.previous_values else None
+        self._routines = Routines(hevy, config.include_folders, exercises, self._previous)
+        self._trainer = Trainer(hevy_private, hevy, exercises, self._now, self._previous) if hevy_private else None
+        self._events_since = self._now()  # workouts logged before startup are in the first reads (F-4)
         self._sync = Sync(garmin, config.scheduled, self._now)
         self._hevy_backoff = Backoff(clock, shortest=config.poll_seconds)
         self._trainer_backoff = Backoff(clock, shortest=config.poll_seconds)
@@ -227,6 +230,7 @@ class App:
             return None
         calls = self._hevy.calls
         try:
+            self._read_events()
             routines = self._routines.plans()
         except Rejected as e:
             raise ConfigError(_problem("Hevy", KEY_FIX, e)) from e  # O-1, as at startup
@@ -242,6 +246,25 @@ class App:
         log.debug("Hevy poll: %d calls, %d routines", self._hevy.calls - calls, len(routines.workouts))
         self._plans = [routines, self._read_trainer()]
         return self._plans
+
+    def _read_events(self) -> None:
+        """The workouts saved, edited or deleted since the last read: one read a poll, for all who need it (F-4).
+
+        Nobody needs them without Hevy Trainer or last time's sets, so then
+        nothing is read. The cursor moves only once Hevy has answered.
+        """
+        if self._previous is None and self._trainer is None:
+            return
+        now = self._now()
+        events = self._hevy.workout_events(self._events_since)
+        self._events_since = now
+        if not events:
+            return
+        # Trainer first: it only takes note, so a reply that last time's sets can't read still reaches it.
+        if self._trainer:
+            self._trainer.logged()
+        if self._previous:
+            self._previous.update(events)
 
     def _read_trainer(self) -> Plans:
         """What Hevy Trainer wants in Garmin now; what it wanted last while it is failing.
