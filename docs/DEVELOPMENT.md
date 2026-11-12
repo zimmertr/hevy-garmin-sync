@@ -42,8 +42,8 @@ If `make live-check` stops partway, it says how many check workouts it left; `ma
 1. Curl, the unit on every line: `102.5 kg x 12 @ 9.5`, `102.5kg x12 @9.5`, `102.5kg x12 9.5` and `1002.5kg x12 @9.5`.
 2. Squat, the unit once in a heading: `Prev (kg):`, then `102.5 x 12 @ 9.5`, `1002.5 x 12 @ 9.5` and `1002.5 x12 @9.5`.
 3. Row: a ruler of thirty digits, then the headings `kg x reps @ RPE` and `Prev: kg x reps @ RPE`.
-4. Lunge, a whole note with the unit on every line: the app's own `4-6 reps`, `Prev:`, then `65lb x6 @7`, `65lb x6 @7.5` and `65lb x5 @8`.
-5. Crunch, a whole note with the unit in the heading: `4-6 reps`, `Prev (lb):`, then `65 x 6 @ 7`, `65 x 6 @ 7.5` and `65 x 5 @ 8`.
+4. Lunge, a whole note with the unit on every line: the app's own `Goal: 4-6 reps`, `Prev:`, then `65lb x6 @7`, `65lb x6 @7.5` and `65lb x5 @8`.
+5. Crunch, a whole note with the unit in the heading: `Goal: 4-6 reps`, `Prev (lb):`, then `65 x 6 @ 7`, `65 x 6 @ 7.5` and `65 x 5 @ 8`.
 
 It reads the workout back and says whether Garmin stored every note whole. Then it puts the workout on today, sends it to the watch and prints the notes. Start it on the watch, photograph each note, and discard the activity. Then `make live-cleanup`, as after `make live-check`. It won't run while an earlier run's `live-check/created.json` is there.
 

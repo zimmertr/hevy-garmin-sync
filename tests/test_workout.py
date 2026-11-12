@@ -111,7 +111,7 @@ class SetStepTest(unittest.TestCase):
     def test_a_rep_range_targets_its_top_and_puts_the_range_in_the_note(self) -> None:
         (step, _) = steps(side_bend(Set(rep_range=(4, 6))))
         self.assertEqual((step["endCondition"], step["endConditionValue"]), (REPS, 6.0))
-        self.assertEqual(step["description"], "4-6 reps")
+        self.assertEqual(step["description"], "Goal: 4-6 reps")
 
     def test_a_set_with_no_rep_target_ends_on_a_button_press_and_keeps_its_weight(self) -> None:
         (step, _) = steps(side_bend(Set(kind="warmup", weight_kg=KG_40_LB)))
@@ -128,20 +128,20 @@ class SetStepTest(unittest.TestCase):
         cases: list[tuple[Set, bool, str | None]] = [
             (Set(reps=8), False, None),
             (Set(rep_range=(8, 8)), False, None),
-            (Set(rep_range=(4, 6)), False, "4-6 reps"),
+            (Set(rep_range=(4, 6)), False, "Goal: 4-6 reps"),
             (Set(kind="warmup"), False, "Warm-up"),
-            (Set(kind="warmup", rep_range=(8, 10)), False, "Warm-up: 8-10 reps"),
-            (Set(kind="dropset", rep_range=(4, 6)), False, "Drop set: 4-6 reps"),
+            (Set(kind="warmup", rep_range=(8, 10)), False, "Warm-up\nGoal: 8-10 reps"),
+            (Set(kind="dropset", rep_range=(4, 6)), False, "Drop set\nGoal: 4-6 reps"),
             (Set(kind="dropset", reps=6), False, "Drop set"),
-            (Set(kind="failure", rep_range=(4, 6)), False, "To failure: 4-6 reps"),
+            (Set(kind="failure", rep_range=(4, 6)), False, "To failure\nGoal: 4-6 reps"),
             (Set(kind="failure", reps=6), False, "To failure"),
             (Set(reps=8), True, "Assisted"),
-            (Set(rep_range=(4, 6)), True, "Assisted: 4-6 reps"),
-            (Set(kind="warmup", rep_range=(8, 10)), True, "Warm-up, assisted: 8-10 reps"),
+            (Set(rep_range=(4, 6)), True, "Assisted\nGoal: 4-6 reps"),
+            (Set(kind="warmup", rep_range=(8, 10)), True, "Warm-up, assisted\nGoal: 8-10 reps"),
             (Set(kind="dropset", reps=6), True, "Drop set, assisted"),
-            (Set(meters=20), False, "22 yd"),
-            (Set(kind="warmup", meters=20), False, "Warm-up: 22 yd"),
-            (Set(kind="dropset", meters=20), False, "Drop set: 22 yd"),
+            (Set(meters=20), False, "Goal: 22 yd"),
+            (Set(kind="warmup", meters=20), False, "Warm-up\nGoal: 22 yd"),
+            (Set(kind="dropset", meters=20), False, "Drop set\nGoal: 22 yd"),
         ]
         for planned, assisted, note in cases:
             with self.subTest(set=planned, assisted=assisted):
@@ -307,12 +307,12 @@ class TimeAndDistanceTest(unittest.TestCase):
 
     def test_a_distance_ends_on_a_press_with_the_distance_in_the_note(self) -> None:
         carry = Exercise("Farmer's Walk", "CARRY", "FARMERS_WALK", (Set(meters=20, weight_kg=22.6796),), 30)
-        for system, note in (("statute_us", "22 yd"), ("statute_uk", "22 yd"), ("metric", "20 m"), (None, "20 m")):
+        for system, distance in (("statute_us", "22 yd"), ("statute_uk", "22 yd"), ("metric", "20 m"), (None, "20 m")):
             with self.subTest(system=system):
                 (step, _) = steps(carry, system=system)
                 self.assertEqual(step["endCondition"], LAP_BUTTON)
                 self.assertIsNone(step["endConditionValue"])
-                self.assertEqual(step["description"], note)
+                self.assertEqual(step["description"], f"Goal: {distance}")
                 self.assertIn("weightValue", step)
 
     def test_a_timed_carry_counts_down_and_notes_its_distance(self) -> None:
@@ -320,7 +320,7 @@ class TimeAndDistanceTest(unittest.TestCase):
         (wait, step, _) = steps(carry)
         self.assertEqual(wait["description"], "Press Lap button to start 45s Farmer's Walk countdown")
         self.assertEqual((step["endCondition"], step["endConditionValue"]), (TIME, 45.0))
-        self.assertEqual(step["description"], "22 yd")
+        self.assertEqual(step["description"], "Goal: 22 yd")
 
 
 class PreviousTest(unittest.TestCase):
@@ -334,7 +334,7 @@ class PreviousTest(unittest.TestCase):
     def test_the_block_follows_the_sets_own_note_and_names_the_unit_once(self) -> None:
         last = (LoggedSet(65 / LB, 6, 7), LoggedSet(65 / LB, 6, 7.5), LoggedSet(65 / LB, 5, 8))
         note = self.note(*last, planned=Set(rep_range=(4, 6)))
-        self.assertEqual(note, "4-6 reps\nPrevious (lb):\n65 x 6 @ 7\n65 x 6 @ 7.5\n65 x 5 @ 8")
+        self.assertEqual(note, "Goal: 4-6 reps\nPrevious (lb):\n65 x 6 @ 7\n65 x 6 @ 7.5\n65 x 5 @ 8")
 
     def test_it_is_the_whole_note_when_the_set_has_none(self) -> None:
         self.assertEqual(self.note(LoggedSet(20, 8)), "Previous (lb):\n44.1 x 8")

@@ -297,19 +297,23 @@ def _distance(meters: float, system: str | None) -> str:
 
 
 def _note(current: Set, exercise: Exercise, system: str | None) -> str | None:
-    """The one note a set carries: its type, then its rep range or distance (F-30), then last time's sets (F-30b)."""
+    """The one note a set carries: its type, its rep range or distance (F-30), then last time's sets (F-30b).
+
+    Each on a line of its own, so the watch breaks none of them in two: it
+    wrapped `Drop set: 4-6 reps`, 18 characters, and left `reps` on a line by
+    itself (TJ, 2026-11-11, #3).
+    """
     label = _SET_LABELS.get(current.kind, "")
     if exercise.assisted:
         label = f"{label}, assisted" if label else "Assisted"
-    detail = ""
+    goal = ""
     if current.meters:
-        detail = _distance(current.meters, system)
+        goal = f"Goal: {_distance(current.meters, system)}"
     elif current.rep_range and current.rep_range[0] != current.rep_range[1]:
-        detail = f"{current.rep_range[0]}-{current.rep_range[1]} reps"
-    note = ": ".join(part for part in (label, detail) if part)
+        goal = f"Goal: {current.rep_range[0]}-{current.rep_range[1]} reps"
     # Every working set of an exercise gets the same block, so matching sets still share a repeat group (F-20a).
     previous = "" if current.kind == "warmup" else _previous(exercise.previous, system)
-    return "\n".join(part for part in (note, previous) if part) or None
+    return "\n".join(part for part in (label, goal, previous) if part) or None
 
 
 def _previous(logged: Sequence[LoggedSet], system: str | None) -> str:

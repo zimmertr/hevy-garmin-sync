@@ -10,10 +10,11 @@ What you see when it runs, and what to do when it breaks.
 - Every routine is on today's calendar, so the watch offers them when you start a strength activity. Of the Trainer workouts, only the one Hevy says is next is on the calendar. When that changes in Hevy, because you logged one or reordered them, the calendar follows within a minute. The others stay in the watch's saved workouts.
 - With many workouts on today, the watch's prompt lists them all under "Dismiss" (eight, on 2026-11-10). Dismiss it and it comes back the next time you start a strength activity. Once you've done one of today's workouts, the prompt stops offering that one and keeps the others; it is still in the saved list. One evening the next Trainer workout was missing from the prompt as well, after another workout had been recorded that day (spec U-10); it was still in the saved list.
 - A change in Hevy reaches Garmin Connect within a minute, and the watch at its next sync with your phone.
-- Each set but a warm-up shows last time's working sets in its note, after anything the note already said:
+- A set's note says what the watch's own screens don't. The set's type gets a line: `Warm-up`, `Drop set`, `To failure` or `Assisted`. A rep range or a distance gets the next, as `Goal: 4-6 reps` or `Goal: 22 yd`. A normal set with a plain rep target has neither.
+- Each set but a warm-up shows last time's working sets in its note, after those lines:
 
   ```
-  4-6 reps
+  Goal: 4-6 reps
   Previous (lb):
   65 x 6 @ 7
   65 x 6 @ 7.5

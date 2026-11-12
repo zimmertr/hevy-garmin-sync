@@ -1,6 +1,6 @@
 # hevy-garmin-sync: specification
 
-Audience: the AI agent implementing this project. Status: signed off by TJ on 2026-11-07; tracked in #1. Source of truth for scope and requirements; record every change here with a date. Last updated 2026-11-11 (changes from the final review are marked 2026-11-10; choices made during the build are in D-11; the first watch check of the built code and the Hevy read of 2026-11-10 are in F-28a, F-50, U-17, C-7 and D-11; the live checks of 2026-11-10 and 2026-11-11 and the midnight run of 2026-11-11 are in F-31, F-53, U-10, C-7, D-10 and D-11; the second live check of 2026-11-11 is in F-16, F-20a, F-31, U-10, U-15, D-10, D-11 and B-5; the notes check of 2026-11-11 is in F-30 and B-3; last time's sets in each set's note, built on 2026-11-11, are in S-2, F-3b, F-4, F-4a, F-30b, C-12 and B-3).
+Audience: the AI agent implementing this project. Status: signed off by TJ on 2026-11-07; tracked in #1. Source of truth for scope and requirements; record every change here with a date. Last updated 2026-11-11 (changes from the final review are marked 2026-11-10; choices made during the build are in D-11; the first watch check of the built code and the Hevy read of 2026-11-10 are in F-28a, F-50, U-17, C-7 and D-11; the live checks of 2026-11-10 and 2026-11-11 and the midnight run of 2026-11-11 are in F-31, F-53, U-10, C-7, D-10 and D-11; the second live check of 2026-11-11 is in F-16, F-20a, F-31, U-10, U-15, D-10, D-11 and B-5; the notes check of 2026-11-11 is in F-30 and B-3; last time's sets in each set's note, built on 2026-11-11, are in S-2, F-3b, F-4, F-4a, F-30b, C-12 and B-3, with the set type and the <code>Goal:</code> line each on a line of their own in F-30).
 
 ## 0. How to use this document
 
@@ -182,7 +182,7 @@ A workout is the app's only when the first line matches and the id line parses. 
 <td class="id">F-27</td>
 <td>Duration or distance targets</td>
 <td>Time (e.g. plank): a step with a time target (end condition <code>time</code>), plus weight if set. VERIFIED on TJ's Fenix 8, 2026-11-07: it shows the time, counts down and ends on its own, but the countdown starts the instant the previous step ends. So before every timed set, insert a wait step: a rest step ending on a button press with the note <code>Press Lap button to start 30s Plank countdown</code> (the set's duration as <code>30s</code> or <code>1m 30s</code>, and the Hevy exercise title) (TJ, 2026-11-07; how a rest step shows its note is U-22). In a repeat group the wait step is inside the group, before the set.<br />
-Distance (e.g. farmer's walk, sled push): the set ends on a button press, with the distance in the set's note in Garmin's unit (the profile's measurement system, as for weights: metric <code>20 m</code>, imperial <code>22 yd</code>; TJ, 2026-11-07; Hevy's own unit setting is private-API only), plus weight if set (TJ, 2026-11-07). A set with both a time and a distance (e.g. a timed carry) uses the time target and puts the distance in the note. Do NOT send a distance end condition: on the Fenix 8 it showed 20 m as "0.01mi" and, indoors, never ended on its own.<br />
+Distance (e.g. farmer's walk, sled push): the set ends on a button press, with the distance in the set's note in Garmin's unit (the profile's measurement system, as for weights: metric <code>Goal: 20 m</code>, imperial <code>Goal: 22 yd</code>, F-30; TJ, 2026-11-07; Hevy's own unit setting is private-API only), plus weight if set (TJ, 2026-11-07). A set with both a time and a distance (e.g. a timed carry) uses the time target and puts the distance in the note. Do NOT send a distance end condition: on the Fenix 8 it showed 20 m as "0.01mi" and, indoors, never ended on its own.<br />
 When a timed exercise has no rest timer, its open rest and the wait step come back to back, so the user presses twice. Accepted (TJ, 2026-11-10).<br />
 VERIFIED on TJ's Fenix 8, 2026-11-10 (U-22): the wait step opens with "Rest / Until Lap Press", its screen shows "Next: Plank 0:30" and a note icon, and the note itself is one page down, not on the main screen. The plank's 30 seconds start on the button press, but a "Plank 0:30" splash covers the first few seconds. After a timed set with no weight the watch shows its own confirm screen ("0.0 / 0.00"); the app cannot change it.</td>
 </tr>
@@ -204,22 +204,22 @@ VERIFIED on TJ's Fenix 8, 2026-11-10 (U-22): the wait step opens with "Rest / Un
 <tr>
 <td class="id">F-30</td>
 <td>Set notes</td>
-<td>Each set step gets at most one note, written by the app in the step's <code>description</code>. VERIFIED on TJ's Fenix 8, 2026-11-07, with a one-off script that is not in the repo: a step note shows as a note icon on the step in the step list and as an extra data screen (second position) during that set; it does not show on the set's start screen, the confirm screen, or the in-workout sets list. Formats, approved by TJ 2026-11-07: set type first, then a rep range when the set has one.<br />
+<td>Each set step gets at most one note, written by the app in the step's <code>description</code>. VERIFIED on TJ's Fenix 8, 2026-11-07, with a one-off script that is not in the repo: a step note shows as a note icon on the step in the step list and as an extra data screen (second position) during that set; it does not show on the set's start screen, the confirm screen, or the in-workout sets list. Formats, approved by TJ 2026-11-07: set type first, then a rep range when the set has one. Changed by TJ on 2026-11-11 (#3): the set type and the rep range each get a line of their own, and the range is labelled <code>Goal:</code>. Before, they shared a line, as in <code>Drop set: 4-6 reps</code>; at 18 characters the watch wrapped that and left <code>reps</code> on a line by itself, and a bare <code>20 m</code> did not say what it was. <code>Goal: 10-12 reps</code> is 16 characters; <code>Target: 10-12 reps</code> would be 18. A line break is written below as <code>/</code>.<br />
 Warm-up, no reps or fixed reps: <code>Warm-up</code><br />
-Warm-up with a range: <code>Warm-up: 8-10 reps</code><br />
-Drop set: <code>Drop set: 4-6 reps</code>, or <code>Drop set</code> without a range<br />
-Failure: <code>To failure: 4-6 reps</code>, or <code>To failure</code> without a range<br />
-Normal set with a range: <code>4-6 reps</code><br />
+Warm-up with a range: <code>Warm-up</code> / <code>Goal: 8-10 reps</code><br />
+Drop set: <code>Drop set</code> / <code>Goal: 4-6 reps</code>, or <code>Drop set</code> without a range<br />
+Failure: <code>To failure</code> / <code>Goal: 4-6 reps</code>, or <code>To failure</code> without a range<br />
+Normal set with a range: <code>Goal: 4-6 reps</code><br />
 Normal set with fixed reps: no note (the watch already shows the target)<br />
-Assisted exercise (F-28a): <code>Assisted</code> joins the set type, e.g. <code>Assisted: 4-6 reps</code>, <code>Warm-up, assisted: 8-10 reps</code>, <code>Drop set, assisted</code>; a normal assisted set with fixed reps gets <code>Assisted</code><br />
-Distance set (F-27): the distance takes the place of the rep range, e.g. <code>20 m</code>, <code>Warm-up: 20 m</code>, <code>Drop set: 20 m</code><br />
+Assisted exercise (F-28a): <code>Assisted</code> joins the set type, e.g. <code>Assisted</code> / <code>Goal: 4-6 reps</code>, <code>Warm-up, assisted</code> / <code>Goal: 8-10 reps</code>, <code>Drop set, assisted</code>; a normal assisted set with fixed reps gets <code>Assisted</code>. <code>To failure, assisted</code> is 20 characters and may wrap after its comma<br />
+Distance set (F-27): the distance takes the place of the rep range, e.g. <code>Goal: 20 m</code>, <code>Warm-up</code> / <code>Goal: 20 m</code>, <code>Drop set</code> / <code>Goal: 20 m</code><br />
 Sets only share a repeat group (F-20a) when their notes match too. Hevy's own notes (routine exercise notes, pinned exercise notes) are NOT sent: TJ chose to keep his form reminders in Hevy (2026-11-07). The app's own notes stay this short. Longer ones were checked on TJ's Fenix 8 on 2026-11-11 for #3 (<code>docs/DATA.md</code>): a line break starts a new line, a line holds 14 digits or about 16 to 17 characters of mixed text before the watch wraps it at a space, the screen shows about six lines, and it scrolls by itself through a longer note. Garmin stored a note of 110 characters whole.</td>
 </tr>
 <tr>
 <td class="id">F-30b</td>
 <td>Last time's sets</td>
 <td>Every set but a warm-up also lists the working sets of the last session that logged its exercise, after its own note (F-30) and on lines of their own (TJ, 2026-11-11, #3; decision record 0015):<br />
-<code>4-6 reps</code><br />
+<code>Goal: 4-6 reps</code><br />
 <code>Previous (lb):</code><br />
 <code>65 x 6 @ 7</code><br />
 <code>65 x 6 @ 7.5</code><br />

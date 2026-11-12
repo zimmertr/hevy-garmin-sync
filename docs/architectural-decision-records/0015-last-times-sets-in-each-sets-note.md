@@ -17,10 +17,10 @@ Hevy shows beside each set what was lifted last time, and the watch showed only 
 
 The workout events keep it current. An updated workout replaces an exercise's sets when it is the kept workout or starts no earlier than it. When the kept workout no longer holds a working set of the exercise, the entry goes, and the next ask reads the history again. A deleted workout drops every entry kept from it. An exercise not yet asked for is left to its first history read. `app.py` reads the events once a poll, before the routines, for this and for Hevy Trainer alike, and only when one of them is on. The cursor lives in memory, starts at startup and moves only once Hevy has answered; a failed read is waited out by Hevy's backoff. Trainer is told with `Trainer.logged`, which holds until Trainer next reads its inputs, so its own backoff does not lose it.
 
-`workout.py` appends the block to the set's note on its own line, or makes it the whole note:
+`workout.py` appends the block to the set's note on its own line, or makes it the whole note. The note's own parts moved to lines of their own with it (TJ, 2026-11-11): the set type, then the rep range or distance as `Goal: 4-6 reps`. On one line, `Drop set: 4-6 reps` is 18 characters, which the watch wraps, leaving `reps` alone above the block.
 
 ```
-4-6 reps
+Goal: 4-6 reps
 Previous (lb):
 65 x 6 @ 7
 65 x 6 @ 7.5
