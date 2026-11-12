@@ -52,14 +52,20 @@ jobs:
         # With an existing Secret.
         helm template hevy-garmin-sync "$CHART" --set existingSecret=hevy-garmin-sync >/dev/null
         # Every resource states its namespace: kustomize 5.8, which Argo CD
-        # runs, adds none to a chart's output. The default render has three
+        # runs, adds none to a chart's output. The default render has four
         # resources.
-        test "$(helm template hevy-garmin-sync "$CHART" --namespace check | grep -c '^  namespace: check$')" -eq 3
+        test "$(helm template hevy-garmin-sync "$CHART" --namespace check | grep -c '^  namespace: check$')" -eq 4
         # The release writes the digest; it must render as image@digest.
         helm template hevy-garmin-sync "$CHART" --set image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 | grep 'ghcr.io/zimmertr/hevy-garmin-sync@sha256:0' >/dev/null
         # The container's filesystem is read-only unless a user turns it off
         # (spec O-4, record 0008).
         helm template hevy-garmin-sync "$CHART" | grep '^            readOnlyRootFilesystem: true$' >/dev/null
+        # The container port, and so the probes and the Service, follow
+        # HTTP_PORT (spec C-13).
+        helm template hevy-garmin-sync "$CHART" --set env.HTTP_PORT=9090 | grep '^              containerPort: 9090$' >/dev/null
+        # The status page stays reachable while a rejected sign-in makes the
+        # pod unready: it's where the fix is shown (spec W-8).
+        helm template hevy-garmin-sync "$CHART" | grep '^  publishNotReadyAddresses: true$' >/dev/null
 
   # yggdrasil's docker-build module: hadolint, the linux/amd64 image built but
   # not pushed, a Trivy table in a sticky comment, the smoke test, then a
@@ -78,7 +84,8 @@ jobs:
       # its compiled sign-in dependency import, the two exercise tables are
       # in the image and load, it runs as the unprivileged user the chart
       # expects, it starts with the read-only root filesystem the chart and
-      # compose.yaml give it, and it ships its license.
+      # compose.yaml give it, it ships its license, and every file the status
+      # page serves is in it.
       smoke-test: |
         docker run --rm "$IMAGE" --help
         docker run --rm "$IMAGE" --version
@@ -88,3 +95,4 @@ jobs:
         docker run --rm --entrypoint python3 "$IMAGE" -c 'from hevy_garmin_sync.exercises import ExerciseMap; ExerciseMap.load()'
         test "$(docker run --rm --entrypoint id "$IMAGE" -u)" = 1000
         docker run --rm --entrypoint test "$IMAGE" -s /app/LICENSE
+        docker run --rm --entrypoint python3 "$IMAGE" -c 'from hevy_garmin_sync import server; [server._file(name) for name, _ in server._FILES.values()]'

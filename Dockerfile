@@ -31,4 +31,7 @@ RUN apt-get update \
 
 USER 1000:1000
 
+# The status page, on HTTP_PORT (spec W-1, C-13).
+EXPOSE 8080
+
 ENTRYPOINT ["python3", "-m", "hevy_garmin_sync"]

@@ -10,6 +10,11 @@ services:
     # The app writes only to /data (spec O-4), so a write anywhere else fails
     # at once instead of going unnoticed. The chart does the same.
     read_only: true
+    # The status page at http://localhost:8080. It has no sign-in, so it's
+    # published on this machine only; drop `127.0.0.1:` to reach it from
+    # your network.
+    ports:
+      - 127.0.0.1:8080:8080
     # One copy only: two would refresh the same rotating Garmin token and
     # lock each other out.
     volumes:
