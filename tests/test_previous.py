@@ -5,6 +5,7 @@ from datetime import timedelta
 from typing import Any
 
 from hevy_garmin_sync import hevy
+from hevy_garmin_sync.errors import Unavailable
 from hevy_garmin_sync.previous import Previous
 from hevy_garmin_sync.workout import LoggedSet
 from tests import fixtures
@@ -67,6 +68,21 @@ class HistoryTest(PreviousCase):
         self.assertEqual(self.previous.sets("T-PLANK"), ())
         self.assertEqual(self.previous.sets("T-PLANK"), ())
         self.assertEqual(self.history_reads("T-PLANK"), 1)
+
+    def test_a_history_hevy_refuses_gives_none_with_one_warning_and_is_not_asked_for_again(self) -> None:
+        self.api.fail(404)
+        with self.assertLogs("hevy_garmin_sync.previous", "WARNING") as logs:
+            self.assertEqual(self.previous.sets("T-BENCH"), ())
+        self.assertIn("Hevy gave no history for exercise T-BENCH (HTTP 404", logs.output[0])
+        self.assertEqual(self.previous.sets("T-BENCH"), ())
+        self.assertEqual(self.history_reads(), 1)
+
+    def test_a_history_read_that_fails_another_way_is_raised_and_asked_for_again(self) -> None:
+        self.api.fail(503)
+        with self.assertRaises(Unavailable):
+            self.previous.sets("T-BENCH")
+        self.assertEqual(len(self.previous.sets("T-BENCH")), 2)
+        self.assertEqual(self.history_reads(), 2)
 
     def test_a_set_keeps_its_time_and_distance_and_a_zero_or_null_is_none(self) -> None:
         self.api.history["T-BENCH"] = [

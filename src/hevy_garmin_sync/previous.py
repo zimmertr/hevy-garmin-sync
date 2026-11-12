@@ -10,15 +10,18 @@ Kept in memory only: an exercise's history is read the first time it is asked
 for, and the workout events keep it current after that (F-4).
 """
 
+import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from .errors import Refused
 from .hevy import Hevy
 from .hevy_private import parse_time
 from .workout import LoggedSet
 
+log = logging.getLogger(__name__)
 Json = dict[str, Any]
 _HISTORY_DAYS = 365
 _EARLIEST = datetime.min.replace(tzinfo=UTC)
@@ -45,7 +48,13 @@ class Previous:
             return ()
         if template_id not in self._kept:
             now = self._now()
-            rows = self._hevy.exercise_history(template_id, now - timedelta(days=_HISTORY_DAYS), now)
+            try:
+                rows = self._hevy.exercise_history(template_id, now - timedelta(days=_HISTORY_DAYS), now)
+            except Refused as e:
+                # Hevy won't give this one exercise's history, and asking again won't change that. The workout
+                # still syncs, without the lines, rather than every routine waiting on a note (O-1).
+                log.warning("Hevy gave no history for exercise %s (%s). Its notes won't list last time.", template_id, e)
+                rows = []
             self._kept[template_id] = _newest(rows)
         return self._kept[template_id].sets
 
