@@ -31,6 +31,7 @@ class Config:
     data_dir: Path
     log_level: str
     log_format: str
+    http_port: int = 8080  # C-13
 
     def summary(self) -> dict[str, str]:
         """The effective configuration for the startup log, secrets redacted (O-3c)."""
@@ -52,6 +53,7 @@ class Config:
             "DATA_DIR": str(self.data_dir),
             "LOG_LEVEL": self.log_level,
             "LOG_FORMAT": self.log_format,
+            "HTTP_PORT": str(self.http_port),
         }
 
 
@@ -90,6 +92,10 @@ def load(env: Mapping[str, str]) -> Config:
     if log_format not in ("text", "json"):
         raise ConfigError("LOG_FORMAT must be text or json")
 
+    port = get("HTTP_PORT") or "8080"
+    if not port.isascii() or not port.isdigit() or not 1 <= int(port) <= 65535:
+        raise ConfigError("HTTP_PORT must be a whole number from 1 to 65535")
+
     return Config(
         hevy_api_key=api_key,
         garmin_token=get("GARMIN_TOKEN") or None,
@@ -104,6 +110,7 @@ def load(env: Mapping[str, str]) -> Config:
         data_dir=Path(get("DATA_DIR") or "data"),
         log_level=level,
         log_format=log_format,
+        http_port=int(port),
     )
 
 

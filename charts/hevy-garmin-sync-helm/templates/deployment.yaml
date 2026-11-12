@@ -39,6 +39,23 @@ spec:
             - name: {{ $name }}
               value: {{ $value | quote }}
             {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.env.HTTP_PORT | default 8080 }}
+          # Alive while the loop passes or waits as planned, a backoff included:
+          # a restart would only sign in to Garmin again (spec W-7).
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            failureThreshold: 3
+          # Unready while a sign-in is rejected (spec W-8).
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 30
           volumeMounts:
             - name: data
               mountPath: /data

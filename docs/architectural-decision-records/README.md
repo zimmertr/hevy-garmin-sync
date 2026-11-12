@@ -30,7 +30,7 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0004](0004-bump-a-disabled-folder-until-cutover.md) | Releases bump a disabled Kubernetes-Manifests folder until TJ's cutover | 2026-11-07 | Superseded by 0005 |
 | [0005](0005-releases-deploy-through-the-live-folder.md) | Since the cutover, every release bumps the live Kubernetes-Manifests folder and so deploys | 2026-11-10 | Accepted |
 | [0006](0006-ghcr-and-a-digest-pinned-chart.md) | The image and the chart are in GHCR, and the chart pins the image's digest | 2026-11-10 | Accepted |
-| [0007](0007-exit-on-a-credential-rejected-while-running.md) | A credential rejected while running exits the app at once, as at startup | 2026-11-10 | Accepted |
+| [0007](0007-exit-on-a-credential-rejected-while-running.md) | A credential rejected while running exits the app at once, as at startup | 2026-11-10 | Superseded by 0016 |
 | [0008](0008-read-only-root-filesystem-by-default.md) | The container runs with a read-only root filesystem by default, in the chart and in compose.yaml | 2026-11-10 | Accepted |
 | [0009](0009-only-the-next-trainer-workout-on-today.md) | Only the Hevy Trainer workout Hevy says is next is on today, and the calendar follows it within a poll | 2026-11-10 | Accepted |
 | [0010](0010-a-weekly-check-of-the-upstream-copies.md) | A weekly check compares Garmin's exercise list and Hevy's API spec with their copies, and on a difference opens one issue and one PR | 2026-11-10 | Accepted |
@@ -39,3 +39,4 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0013](0013-custom-exercises-set-by-one-variable.md) | A custom exercise's Garmin exercise is logged, and one variable, CUSTOM_EXERCISE_MAP, can set it | 2026-11-10 | Accepted |
 | [0014](0014-renovate-under-yggdrasils-preset.md) | Renovate keeps dependencies current, under yggdrasil's shared preset | 2026-11-11 | Accepted. Supersedes 0002 in part |
 | [0015](0015-last-times-sets-in-each-sets-note.md) | Every set but a warm-up lists last time's working sets in its note, from the last workout of any kind that logged the exercise | 2026-11-11 | Accepted |
+| [0016](0016-a-status-page-and-manual-syncs-on-one-port.md) | The app serves a status page and its API on one port, takes manual syncs through it, and a rejected sign-in degrades its service instead of exiting | 2026-11-12 | Accepted. Supersedes 0007 |

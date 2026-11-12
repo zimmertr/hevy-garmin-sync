@@ -28,6 +28,13 @@ persistence:
   # Use a PersistentVolumeClaim you made yourself instead of a new one.
   existingClaim: ""
 
+# The status page and its API (spec W-1). There is no sign-in: anyone who can
+# reach the Service can press Sync now and Force sync.
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
 resources: {}
 
 podSecurityContext:

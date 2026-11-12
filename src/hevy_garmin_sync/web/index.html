@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>hevy-garmin-sync</title>
+<link rel="icon" id="favicon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<noscript><p class="noscript">This page needs JavaScript.</p></noscript>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <img class="mark" src="/icon.svg" alt="" width="34" height="34">
+      <div>
+        <h1>hevy-garmin-sync</h1>
+        <a class="ver" id="version" href="https://github.com/zimmertr/hevy-garmin-sync/releases" target="_blank" rel="noopener">Version</a>
+      </div>
+    </div>
+    <nav class="toplinks">
+      <div class="theme" role="radiogroup" aria-label="Theme">
+        <button type="button" role="radio" data-theme-set="system" aria-checked="true" title="Follow the system"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.75" y="2.75" width="12.5" height="8.5" rx="1.5"/><path d="M5.5 14h5M8 11.25V14"/></svg><span class="sr">System</span></button>
+        <button type="button" role="radio" data-theme-set="light" aria-checked="false" title="Light"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1"/></svg><span class="sr">Light</span></button>
+        <button type="button" role="radio" data-theme-set="dark" aria-checked="false" title="Dark"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 016.5 2.5a5.5 5.5 0 107 7z"/></svg><span class="sr">Dark</span></button>
+      </div>
+      <a class="ghost" href="https://github.com/zimmertr/hevy-garmin-sync/issues/new/choose" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5v4.2M8 11v.3" stroke-linecap="round"/></svg>
+        Report a problem
+      </a>
+      <a class="ghost" href="https://github.com/zimmertr/hevy-garmin-sync" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </nav>
+  </header>
+
+  <section class="panel control" aria-label="Sync and services">
+    <div class="left">
+      <div class="buttons">
+        <button class="btn sync" id="sync" type="button"><b>Sync now</b><span>Read Hevy and sync all workouts to Garmin Connect</span></button>
+        <button class="btn force" id="force" type="button"><b>Force sync</b><span>Read Hevy and overwrite all workouts on Garmin Connect</span></button>
+      </div>
+      <div class="notice" id="notice" aria-live="polite"></div>
+      <dl class="facts">
+        <div><dt>Last daily run</dt><dd id="last-run">&nbsp;</dd></div>
+        <div><dt>Next daily run</dt><dd id="next-run">&nbsp;</dd></div>
+        <div><dt>Running since</dt><dd id="started">&nbsp;</dd></div>
+        <div><dt>Time zone</dt><dd id="zone">&nbsp;</dd></div>
+      </dl>
+    </div>
+    <div class="services">
+      <h2>Services</h2>
+      <div id="services"></div>
+    </div>
+  </section>
+
+  <details class="panel log" id="log">
+    <summary>
+      <h2>Log</h2>
+      <span class="latest" id="latest"></span>
+      <svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
+    </summary>
+    <div class="logbar"><label class="switch"><input type="checkbox" id="only"> Errors and warnings only</label><button class="copy" type="button" id="copy">Copy log</button></div>
+    <div class="lines" id="lines" tabindex="0" aria-label="Log lines, oldest first"></div>
+  </details>
+
+  <section class="panel">
+    <div class="phead"><h2>Workouts<span class="count" id="wcount"></span></h2></div>
+    <div class="split" id="split">
+      <div class="list">
+        <div class="filters">
+          <input class="search" id="q" type="search" placeholder="Find a workout" aria-label="Find a workout">
+          <div class="chips" id="chips"></div>
+        </div>
+        <div class="rows" id="rows"></div>
+      </div>
+      <div class="detail" id="detail"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="phead">
+      <h2>Settings</h2>
+      <p>Set by environment variables.</p>
+    </div>
+    <dl class="kv" id="kv"></dl>
+  </section>
+</div>
+</body>
+</html>

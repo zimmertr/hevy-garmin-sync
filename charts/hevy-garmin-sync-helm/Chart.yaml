@@ -11,3 +11,4 @@ appVersion: "0.0.0"
 home: https://github.com/zimmertr/hevy-garmin-sync
 sources:
   - https://github.com/zimmertr/hevy-garmin-sync
+icon: https://raw.githubusercontent.com/zimmertr/hevy-garmin-sync/main/src/hevy_garmin_sync/web/icon.svg

@@ -1,6 +1,6 @@
 # 0007. A credential rejected while running exits the app at once, as at startup
 
-- Status: Accepted
+- Status: Superseded by 0016
 - Date: 2026-11-10
 - Decider: TJ ("I think exiting immediatly is fine as we will run this on K8s with exponential backoff and retries.If any non-k8s users are frustrated they can complain and we will change then.")
 - Issues and PRs: #23, #35

@@ -20,7 +20,7 @@ import csv
 import json
 import logging
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -30,11 +30,17 @@ DATA = Path(__file__).parent / "data"
 GARMIN_EXERCISES = DATA / "garmin_exercises.json"
 ANY = "*"
 
+# What chose an exercise's Garmin exercise, for the status page (spec W-2).
+MAPPED = "map"  # a row in exercise_map.csv
+CUSTOM = "custom"  # CUSTOM_EXERCISE_MAP
+GUESSED = "guess"  # the closest by muscle group and equipment
+
 
 @dataclass(frozen=True)
 class GarminExercise:
     category: str
     name: str
+    chosen_by: str = field(default=MAPPED, compare=False)
 
 
 def rows(path: Path) -> list[dict[str, str]]:
@@ -116,7 +122,8 @@ class ExerciseMap:
 
     def _override(self, template_id: str, title: str) -> GarminExercise | None:
         """The CUSTOM_EXERCISE_MAP entry for one exercise: its template id first, then its title (C-11)."""
-        return self._overrides.get(template_id) or self._overrides.get(title.strip())
+        found = self._overrides.get(template_id) or self._overrides.get(title.strip())
+        return replace(found, chosen_by=CUSTOM) if found else None
 
     def _ignore_override(self, template_id: str, title: str) -> None:
         # Whether a title is built-in is only known once Hevy's template is read, so this can't be refused at
@@ -133,5 +140,5 @@ class ExerciseMap:
     def _closest(self, muscle: str, equipment: str) -> GarminExercise:
         for key in ((muscle, equipment), (muscle, ANY), (ANY, ANY)):
             if key in self._fallback:
-                return self._fallback[key]
+                return replace(self._fallback[key], chosen_by=GUESSED)
         raise LookupError("custom_exercise_map.csv has no `*`, `*` row")

@@ -42,6 +42,10 @@ class Previous:
         self._now = now
         self._kept: dict[str, _Last] = {}  # by exercise template id
 
+    def forget(self) -> None:
+        """Drop every exercise's sets, so each is read from Hevy again when next asked for (a forced sync, W-4)."""
+        self._kept = {}
+
     def sets(self, template_id: str) -> tuple[LoggedSet, ...]:
         """The working sets of the exercise's last session, or none. One history read per exercise, ever."""
         if not template_id:

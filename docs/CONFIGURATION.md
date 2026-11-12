@@ -18,6 +18,7 @@ Every setting, and where it is set. The app reads environment variables only (sp
 | `DATA_DIR` | `/data` in the image, `data` from a clone | The one folder the app writes: the rotated Garmin token and Hevy session (C-8) |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. `DEBUG` adds per-workout detail and the call count of each poll (C-9) |
 | `LOG_FORMAT` | `text` | `text` or `json`, one object per line (C-10) |
+| `HTTP_PORT` | `8080` | The port of the status page and its API, on every interface. A whole number from 1 to 65535. The page has no sign-in (C-13, W-1) |
 | `APP_VERSION` | `0.0.0+dev` | Baked into the image by the release. The version `--version` and the startup log report |
 
 The startup log lists the effective value of each, with the three secrets shown only as set or unset (O-3c), and `CUSTOM_EXERCISE_MAP` only as set with its number of entries, since the entries are your own exercise titles.
@@ -47,12 +48,15 @@ Both services replace the refresh token every time it is used, so the folder mus
 | `persistence.size` | `64Mi` | The data volume |
 | `persistence.storageClassName` | empty, the cluster's default | Its storage class |
 | `persistence.existingClaim` | empty | A claim you made instead of a new one |
+| `service.type` | `ClusterIP` | The status page's Service. `LoadBalancer` or `NodePort` to reach it from outside the cluster (W-1) |
+| `service.port` | `8080` | The Service's port |
+| `service.annotations` | empty | Annotations on the Service, such as a load balancer's address pool |
 | `resources`, `nodeSelector`, `tolerations` | empty | As usual for a pod |
 | `podSecurityContext` | uid and gid 1000, `fsGroup` 1000, non-root | Makes the volume writable by the image's user |
 | `securityContext` | no privilege escalation, all capabilities dropped, read-only root filesystem | The container's. The app writes only to `/data` (spec O-4) |
 
-The chart sets `DATA_DIR` to `/data` itself.
+The chart sets `DATA_DIR` to `/data` itself. The container's port follows `env.HTTP_PORT`, and the liveness probe reads `/healthz` and the readiness probe `/readyz` on it (W-7).
 
 ## Compose
 
-`compose.yaml` runs the same image with a named volume on `/data` and a read-only root filesystem, and reads the variables from a `.env` file beside it. `.env` is ignored by git.
+`compose.yaml` runs the same image with a named volume on `/data` and a read-only root filesystem, and reads the variables from a `.env` file beside it. `.env` is ignored by git. It publishes the status page on `127.0.0.1:8080`, this machine only; drop the `127.0.0.1:` to reach it from your network.

@@ -1,5 +1,7 @@
 # hevy-garmin-sync
 
+<img src="src/hevy_garmin_sync/web/icon.svg" alt="" width="96">
+
 Puts your Hevy routines on your Garmin watch as strength workouts.
 
 ## Summary
@@ -49,12 +51,24 @@ From a clone:
 
 ```sh
 make build
-docker run --rm -v hevy-garmin-sync-data:/data --env-file .env hevy-garmin-sync:dev
+docker run --rm -p 127.0.0.1:8080:8080 -v hevy-garmin-sync-data:/data --env-file .env hevy-garmin-sync:dev
 ```
 
 Run one copy only. Two would refresh the same Garmin token and lock each other out. Keep the `/data` volume: it holds the tokens.
 
 Sync your watch, start a strength activity, and your routines are there.
+
+### The status page
+
+Open http://localhost:8080. It shows every workout and what it became in Garmin, which Garmin exercise each Hevy exercise got, the weights, whether Hevy and Garmin are working, and the log. With Helm it's a ClusterIP Service unless you set `service.type`; `kubectl port-forward svc/hevy-garmin-sync 8080` gets you there either way.
+
+**Sync now** reads Hevy and syncs all workouts to Garmin Connect, and sends them all to the watch again. **Force sync** also overwrites every workout on Garmin Connect, so anything you edited there is gone. You get one a minute. From a terminal it's `sync` (or `sync --force`) inside the container:
+
+```sh
+docker compose exec hevy-garmin-sync python3 -m hevy_garmin_sync sync
+```
+
+There's no sign-in. Anyone who can reach the port can see your workouts and press the buttons. Compose and the `docker run` above only publish it on your own machine; Docker without `-p` and Helm with a ClusterIP Service don't publish it at all. Run straight from a clone with Python, it listens on your whole network.
 
 ### Hevy Trainer
 
@@ -80,6 +94,7 @@ To turn it on, open a private browser window, sign in at hevy.com, and copy the 
 | `DATA_DIR` | `/data` | Where the tokens are kept |
 | `LOG_LEVEL` | `INFO` | `DEBUG` for more |
 | `LOG_FORMAT` | `text` | Or `json` |
+| `HTTP_PORT` | `8080` | The status page's port |
 
 [docs/CONFIGURATION.md](docs/CONFIGURATION.md) has the detail on each.
 
@@ -90,7 +105,9 @@ To turn it on, open a private browser window, sign in at hevy.com, and copy the 
 - Don't edit the description of a workout it made. That's how it knows the workout is its own.
 - Weights go to Garmin in the unit your Garmin Connect account uses. The watch shows them in its own weight unit, which is a separate setting on the watch.
 - Each set's note on the watch lists what you did last time, one set to a line, like `65 x 6 @ 7.5` under `Previous (lb):`. The number after `@` is the RPE. Last time is the last workout you logged that exercise in, any workout, in the past 12 months. It doesn't follow Hevy's "Previous Workout Values" setting. Warm-ups are left out. `ENABLE_PREVIOUS_VALUES=false` turns it off.
-- If an exercise shows up under the wrong name on the watch, the fix is one line in [the exercise map](src/hevy_garmin_sync/data/exercise_map.csv). Open an issue or a PR.
+- If Hevy or Garmin rejects a sign-in, the app keeps running and the status page says what to fix. With a rejected `HEVY_SESSION`, routines keep syncing.
+- A sync costs about 3 Garmin calls per workout, and Garmin blocks accounts that call too often. Press Sync now when something looks wrong, not on a timer.
+- If an exercise shows up under the wrong name on the watch, the fix is one line in [the exercise map](src/hevy_garmin_sync/data/exercise_map.csv). Open an issue or a PR. On the status page, an exercise it had to guess has a "Report this match" link that fills the issue in for you.
 
 ## Docs
 

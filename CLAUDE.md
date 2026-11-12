@@ -1,6 +1,6 @@
 # hevy-garmin-sync
 
-Turns Hevy routines, and optionally Hevy Trainer's workouts, into Garmin Connect strength workouts and sends them to the watch. One Python process in one Docker image, configured by environment variables. [`docs/SPEC.md`](docs/SPEC.md) is the signed-off plan and the source of truth for scope and behaviour; start with [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for which module does what.
+Turns Hevy routines, and optionally Hevy Trainer's workouts, into Garmin Connect strength workouts and sends them to the watch. One Python process in one Docker image, configured by environment variables, with a status page and its API on `HTTP_PORT` (spec section 12a). [`docs/SPEC.md`](docs/SPEC.md) is the signed-off plan and the source of truth for scope and behaviour; start with [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for which module does what.
 
 ## Documentation
 
