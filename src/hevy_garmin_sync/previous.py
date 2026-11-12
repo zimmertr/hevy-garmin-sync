@@ -53,7 +53,9 @@ class Previous:
             except Refused as e:
                 # Hevy won't give this one exercise's history, and asking again won't change that. The workout
                 # still syncs, without the lines, rather than every routine waiting on a note (O-1).
-                log.warning("Hevy gave no history for exercise %s (%s). Its notes won't list last time.", template_id, e)
+                log.warning(
+                    "Hevy gave no history for exercise %s (%s). Its notes won't list last time.", template_id, e
+                )
                 rows = []
             self._kept[template_id] = _newest(rows)
         return self._kept[template_id].sets
