@@ -26,7 +26,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - run: pip install --require-hashes -r requirements-dev.txt
       - run: PYTHONPATH=src python -m coverage run -m unittest discover -s tests -v
       # Line and branch coverage with no floor: the aim is 100%, and a gap gets
