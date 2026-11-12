@@ -54,8 +54,11 @@ class _Requests(Protocol):
 class Loop(Protocol):
     """What the server reads from the app: the published status, health, and the door for a manual sync."""
 
-    status: dict[str, Any]
-    requests: _Requests
+    @property
+    def status(self) -> dict[str, Any]: ...
+
+    @property
+    def requests(self) -> _Requests: ...
 
     def alive(self) -> bool: ...
 

@@ -55,6 +55,7 @@ class AppCase(unittest.TestCase):
         self.utc = fixtures.NOW.astimezone(UTC)
         self.waits: list[float] = []
         self.steps: list[Step] = []
+        self.nudged: list[None] = []  # each time the app was woken for a manual sync
 
     def wait(self, seconds: float) -> bool:
         self.waits.append(seconds)
@@ -67,19 +68,28 @@ class AppCase(unittest.TestCase):
             step()
         return False
 
-    def run_app(self, *steps: Step, **env: str) -> int:
-        self.steps = list(steps)
+    def make_app(self, **env: str) -> app.App:
         loaded = config.load(self.env | env)
-        return app.App(
+        self.app = app.App(
             loaded,
             hevy.Hevy("made-up-key", self.hevy_api),  # type: ignore[arg-type]
             self.garmin,
             fixtures.exercise_map(loaded.custom_exercises),
             hevy_private=self.hevy_private,
             wait=self.wait,
+            nudge=lambda: self.nudged.append(None),
             clock=lambda: self.clock,
             utcnow=lambda: self.utc,
-        ).run()
+        )
+        return self.app
+
+    def run_app(self, *steps: Step, **env: str) -> int:
+        self.steps = list(steps)
+        return self.make_app(**env).run()
+
+    def service(self, name: str) -> dict[str, object]:
+        """One service as the status page shows it."""
+        return next(s for s in self.app.status["services"] if s["name"] == name)
 
     def names(self) -> list[str]:
         return sorted(w["workoutName"] for w in self.garmin_api.workouts.values())
@@ -104,19 +114,28 @@ class StartupTest(AppCase):
         self.assertIn("Sync: created 2, updated 0, deleted 0, scheduled 2, unscheduled 0, failed 0", text)
         self.assertIn("Stopped", logs.output[-1])
 
-    def test_a_rejected_hevy_key_exits_with_the_fix(self) -> None:
+    def test_a_rejected_hevy_key_stops_hevy_and_the_app_keeps_running_with_the_fix_on_the_page(self) -> None:
+        # W-8: no exit and no restart loop; the page says what to fix.
         self.hevy_api.fail(401)
         with self.assertLogs(LOGGER, "ERROR") as logs:
-            self.assertEqual(self.run_app(), 1)
+            self.assertEqual(self.run_app(None), 0)
         self.assertIn("Hevy rejected the app's credentials; check HEVY_API_KEY", logs.output[0])
-        self.assertEqual(self.garmin_api.calls, [])
+        self.assertEqual(len(logs.output), 1)
+        self.assertEqual(self.names(), [])
+        self.assertEqual(self.service("Hevy")["state"], "rejected")
+        self.assertIn("HEVY_API_KEY", str(self.service("Hevy")["reason"]))
+        self.assertFalse(self.app.ready())
 
-    def test_a_rejected_garmin_token_exits_with_the_fix(self) -> None:
+    def test_a_rejected_garmin_token_stops_garmin_and_the_app_keeps_running(self) -> None:
         self.garmin_api.fail("get_user_profile", garminconnect.GarminConnectAuthenticationError("401"))
         with self.assertLogs(LOGGER, "ERROR") as logs:
-            self.assertEqual(self.run_app(), 1)
+            self.assertEqual(self.run_app(None), 0)
         self.assertIn("Garmin rejected the app's credentials; run `login` again", logs.output[0])
         self.assertEqual(self.names(), [])
+        self.assertEqual(self.garmin_api.calls, ["get_user_profile"])
+        self.assertEqual(self.service("Garmin")["state"], "rejected")
+        self.assertEqual(self.service("Hevy")["state"], "working")
+        self.assertFalse(self.app.ready())
 
     def test_a_folder_setting_that_names_no_folder_exits(self) -> None:
         with self.assertLogs(LOGGER, "ERROR") as logs:
@@ -352,16 +371,16 @@ class FailureTest(AppCase):
         self.assertIn("Trying again in 30 s.", logs.output[0])
         self.assertEqual(self.waits, [30])
 
-    def test_a_token_garmin_rejects_while_running_exits_one_with_the_fix(self) -> None:
-        # O-1: exit at once, as at startup, so Kubernetes and Docker show the app as failing.
+    def test_a_token_garmin_rejects_while_running_stops_every_garmin_call_after_it(self) -> None:
+        # W-8: waiting can't fix a dead token, so Garmin is left alone until the fix and a restart.
         with self.assertLogs(LOGGER, "ERROR") as logs:
-            self.assertEqual(self.run_app(self.break_garmin(fixtures.garmin_error(401)), None, None), 1)
+            self.assertEqual(self.run_app(self.break_garmin(fixtures.garmin_error(401)), None, None), 0)
         self.assertIn("Garmin rejected the app's credentials; run `login` again", logs.output[-1])
-        # The one poll wait before the break, and none after it: no retry.
-        self.assertEqual(self.waits, [60])
+        self.assertEqual(len(logs.output), 1)
         self.assertEqual(self.garmin_api.calls, ["upload_workout"])
+        self.assertEqual(self.service("Garmin")["state"], "rejected")
 
-    def test_a_garmin_rejection_at_any_call_of_a_sync_exits_one_and_makes_no_call_after_it(self) -> None:
+    def test_a_garmin_rejection_at_any_call_of_a_sync_makes_no_call_after_it(self) -> None:
         for method in (
             "get_workouts",
             "upload_workout",
@@ -373,21 +392,21 @@ class FailureTest(AppCase):
                 self.setUp()
                 self.garmin_api.fail(method, garminconnect.GarminConnectAuthenticationError("401"))
                 with self.assertLogs(LOGGER, "ERROR") as logs:
-                    self.assertEqual(self.run_app(None), 1)
+                    self.assertEqual(self.run_app(None), 0)
                 self.assertIn("Garmin rejected the app's credentials", logs.output[-1])
                 self.assertEqual(self.garmin_api.calls[-1], method)
-                self.assertEqual(self.waits, [])
 
-    def test_a_hevy_key_rejected_while_running_exits_one_with_the_fix(self) -> None:
+    def test_a_hevy_key_rejected_while_running_stops_hevy_and_leaves_garmin_as_it_is(self) -> None:
         def reject() -> None:
             self.hevy_api.fail(401)
             self.garmin_api.calls.clear()
 
         with self.assertLogs(LOGGER, "ERROR") as logs:
-            self.assertEqual(self.run_app(reject, None), 1)
+            self.assertEqual(self.run_app(reject, None, None), 0)
         self.assertIn("Hevy rejected the app's credentials; check HEVY_API_KEY", logs.output[-1])
-        self.assertEqual(self.waits, [60])
+        self.assertEqual(len(logs.output), 1)
         self.assertEqual(self.garmin_api.calls, [])
+        self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push"])
 
     def test_a_hevy_outage_is_logged_and_garmin_is_left_alone(self) -> None:
         def down() -> None:
@@ -514,13 +533,14 @@ class TrainerTest(AppCase):
         events = [path for path, _ in self.hevy_api.requests if path == "/workouts/events"]
         self.assertEqual(len(events), 2)
 
-    def test_a_rejected_session_at_startup_exits_with_the_fix(self) -> None:
+    def test_a_rejected_session_at_startup_stops_only_trainer_and_routines_still_sync(self) -> None:
         self.end_the_session()
         with self.assertLogs(LOGGER, "ERROR") as logs:
-            self.assertEqual(self.run_app(), 1)
+            self.assertEqual(self.run_app(), 0)
         self.assertIn("Hevy Trainer rejected the app's credentials; copy the auth2.0-token cookie", logs.output[0])
         self.assertIn("set HEVY_SESSION to it", logs.output[0])
-        self.assertEqual(self.garmin_api.calls, [])
+        self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push"])
+        self.assertEqual(self.service("Hevy Trainer")["state"], "rejected")
 
     def test_an_outage_of_hevys_private_api_at_startup_is_waited_out(self) -> None:
         self.private_api.fail(503)
@@ -545,21 +565,21 @@ class TrainerTest(AppCase):
         # Asked at the poll that failed and a minute later, not on the three polls in between.
         self.assertEqual(self.private_api.paths().count("hevy_trainer/v3/program"), 2)
 
-    def test_a_session_hevy_ends_while_running_exits_one_with_the_fix(self) -> None:
+    def test_a_session_hevy_ends_while_running_stops_trainer_and_keeps_its_workouts(self) -> None:
         def end() -> None:
             self.end_the_session()
             self.private_api.requests.clear()
             self.garmin_api.calls.clear()
 
         with self.assertLogs(LOGGER, "ERROR") as logs:
-            self.assertEqual(self.run_app(end, None), 1)
+            self.assertEqual(self.run_app(end, None), 0)
+        self.assertIn(self.LOWER, self.names())
+        self.assertNotIn("delete_workout", self.garmin_api.calls)
         self.assertIn("Hevy Trainer rejected the app's credentials; copy the auth2.0-token cookie", logs.output[-1])
         self.assertIn("set HEVY_SESSION to it", logs.output[-1])
-        # The session got its one refresh before the exit, and Garmin was not called.
+        # The session got its one refresh, and was not tried again on the next poll.
         self.assertEqual(self.private_api.paths().count("auth/refresh_token"), 1)
-        self.assertEqual(self.waits, [60])
         self.assertEqual(self.garmin_api.calls, [])
-        self.assertIn(self.LOWER, self.names())
 
     def test_a_rate_limit_from_hevys_private_api_does_not_exit(self) -> None:
         with self.assertLogs(LOGGER, "ERROR") as logs:
@@ -702,6 +722,8 @@ class MainTest(unittest.TestCase):
         self.env = {"HEVY_API_KEY": "made-up-key", "DATA_DIR": folder.name}
         self.err = io.StringIO()
         self.handlers: dict[int, Callable[..., None]] = {}
+        # No socket in a test: the server is started and shut down as a fake (server.py has its own tests).
+        self.start = mock.patch("hevy_garmin_sync.server.start")
         for patcher in (
             mock.patch.object(garminconnect, "Garmin", fixtures.FakeGarminApi),
             mock.patch.object(signal, "signal", lambda signum, handler: self.handlers.update({signum: handler})),
@@ -709,6 +731,22 @@ class MainTest(unittest.TestCase):
         ):
             patcher.start()
             self.addCleanup(patcher.stop)
+        self.server = self.start.start()
+        self.addCleanup(self.start.stop)
+
+    def test_the_status_page_is_served_on_http_port_while_the_app_runs(self) -> None:
+        env = self.env | {"GARMIN_TOKEN": garmin.encode_token(fixtures.GARMIN_TOKENS), "HTTP_PORT": "9090"}
+        with (
+            mock.patch.object(app.App, "run", return_value=0),
+            mock.patch("hevy_garmin_sync.exercises.ExerciseMap.load", return_value=fixtures.exercise_map()),
+            self.assertLogs(LOGGER, "INFO"),
+        ):
+            self.assertEqual(app.main(env, self.err), 0)
+        port, served, _ = self.server.call_args.args
+        self.assertEqual(port, 9090)
+        self.assertIsInstance(served, app.App)
+        self.server.return_value.shutdown.assert_called_once_with()
+        self.server.return_value.server_close.assert_called_once_with()
 
     def test_bad_configuration_exits_one_with_a_plain_message(self) -> None:
         self.assertEqual(app.main({}, self.err), 1)
@@ -809,6 +847,22 @@ class MainTest(unittest.TestCase):
             app.main(env, self.err)
         self.assertEqual(sorted(self.handlers), sorted([signal.SIGTERM, signal.SIGINT]))
         self.assertEqual(waited, [False, True])
+
+    def test_a_manual_sync_ends_the_wait_early_without_stopping_the_app(self) -> None:
+        env = self.env | {"GARMIN_TOKEN": garmin.encode_token(fixtures.GARMIN_TOKENS)}
+        waited: list[bool] = []
+
+        def run(self: app.App) -> int:
+            self.requests.ask(False)
+            waited.append(self._wait(3600))  # woken at once, or this test would hang for an hour
+            return 0
+
+        with (
+            mock.patch.object(app.App, "run", run),
+            mock.patch("hevy_garmin_sync.exercises.ExerciseMap.load", return_value=fixtures.exercise_map()),
+        ):
+            app.main(env, self.err)
+        self.assertEqual(waited, [False])
 
 
 if __name__ == "__main__":

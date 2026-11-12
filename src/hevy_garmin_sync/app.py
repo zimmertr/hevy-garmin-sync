@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from datetime import time as clock_time
 from typing import Any, TextIO
@@ -445,7 +446,7 @@ class App:
         except Rejected as e:
             # HevyPrivate has already refreshed the session and tried once more, so it is dead (O-1).
             self._reject(TRAINER_SERVICE, SESSION_FIX, e)
-            self._trainer_plans = Plans(TRAINER, self._trainer_plans.workouts, hold=True)
+            self._trainer_plans = replace(self._trainer_plans, hold=True)  # as it was, calendar and all
         except ServiceError as e:
             delay = self._trainer_backoff.failed(e, _problem(TRAINER_SERVICE, SESSION_FIX, e))
             log.error("%s. Trying again in %s.", self._trainer_backoff.reason, _for(delay))
@@ -556,3 +557,4 @@ def main(env: Mapping[str, str] = os.environ, err: TextIO = sys.stderr) -> int:
         return app.run()
     finally:
         httpd.shutdown()
+        httpd.server_close()

@@ -438,7 +438,8 @@ class OwnershipTest(unittest.TestCase):
         self.assertIn("\nHevy Trainer template: template-9\n", stamped["description"])
         body = {k: v for k, v in stamped.items() if k != "description"}
         self.assertEqual(
-            workout.owner(stamped["description"]), Owner(workout.TRAINER, "template-9", workout.version(body), STAMPED_AT)
+            workout.owner(stamped["description"]),
+            Owner(workout.TRAINER, "template-9", workout.version(body), STAMPED_AT),
         )
 
     def test_the_version_is_six_hex_digits_of_the_workout_as_built(self) -> None:

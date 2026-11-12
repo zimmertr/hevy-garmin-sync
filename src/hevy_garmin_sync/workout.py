@@ -10,7 +10,7 @@ import hashlib
 import json
 import re
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -79,11 +79,12 @@ class Exercise:
     superset: int | None = None
     assisted: bool = False
     previous: tuple[LoggedSet, ...] = ()  # the working sets of the last session that logged it
-    # For the status page only, never sent to Garmin (spec W-2): what chose the Garmin
-    # exercise, and Hevy Trainer's direction, or why it gave no weight.
-    chosen_by: str = ""
-    direction: str | None = None
-    no_weight: str | None = None
+    # For the status page only, never sent to Garmin (spec W-2), so they take no part in
+    # comparing plans: what chose the Garmin exercise, and Hevy Trainer's direction, or
+    # why it gave no weight.
+    chosen_by: str = field(default="", compare=False)
+    direction: str | None = field(default=None, compare=False)
+    no_weight: str | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -92,8 +93,9 @@ class Workout:
     source_id: str  # the Hevy routine id, or the Trainer template id
     name: str
     exercises: tuple[Exercise, ...]
-    title: str = ""  # the routine's or template's own name, for the status page (W-2)
-    folder: str | None = None  # the routine's Hevy folder
+    # For the status page only (W-2): the routine's or template's own name, and the routine's Hevy folder.
+    title: str = field(default="", compare=False)
+    folder: str | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
