@@ -5,7 +5,7 @@
 - Decider: TJ, on #3: the note's form (option A), which session counts, both kinds of workout, and the switch.
 - Issues and PRs: #3, #47
 - Cited in code as: #3
-- Guide: [`CLAUDE.md`](../../CLAUDE.md), "Build to the spec"; spec F-30, F-20a, F-12 and F-4 in [`docs/SPEC.md`](../SPEC.md)
+- Guide: [`CLAUDE.md`](../../CLAUDE.md), "Build to the spec"; spec F-30b, C-12, S-2, F-20a, F-12 and F-4 in [`docs/SPEC.md`](../SPEC.md)
 
 ## Context
 
@@ -13,7 +13,7 @@ Hevy shows beside each set what was lifted last time, and the watch showed only 
 
 ## Decision
 
-`previous.py` keeps, in memory, for each exercise template id, the working sets (every set but a warm-up) of the newest logged workout that holds the exercise and a working set of it, with that workout's id and start. The first ask for an exercise reads `GET /v1/exercise_history/{id}` for the last 365 days, once, and keeps the answer, an empty one too. The public API only, so a user without `HEVY_SESSION` gets it.
+`previous.py` keeps, in memory, for each exercise template id, the working sets (every set but a warm-up) of the newest logged workout that holds the exercise and a working set of it, with that workout's id and start. The first ask for an exercise reads `GET /v1/exercise_history/{id}` for the last 365 days, once, and keeps the answer, an empty one too. The public API only, so a user without `HEVY_SESSION` gets it. When Hevy refuses one exercise's history with a 4xx, that exercise is kept as having none and the log says so once at WARNING: a refusal is not fixed by asking again, and without this the read would fail every poll and no routine would sync.
 
 The workout events keep it current. An updated workout replaces an exercise's sets when it is the kept workout or starts no earlier than it. When the kept workout no longer holds a working set of the exercise, the entry goes, and the next ask reads the history again. A deleted workout drops every entry kept from it. An exercise not yet asked for is left to its first history read. `app.py` reads the events once a poll, before the routines, for this and for Hevy Trainer alike, and only when one of them is on. The cursor lives in memory, starts at startup and moves only once Hevy has answered; a failed read is waited out by Hevy's backoff. Trainer is told with `Trainer.logged`, which holds until Trainer next reads its inputs, so its own backoff does not lose it.
 

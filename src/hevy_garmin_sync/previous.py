@@ -1,4 +1,4 @@
-"""Last time's working sets of each exercise, for the note on the watch (spec F-30, #3).
+"""Last time's working sets of each exercise, for the note on the watch (spec F-30b, #3).
 
 Last time is the newest logged workout, any workout, that holds the exercise
 and a working set of it. That is Hevy's default for its PREVIOUS column, and

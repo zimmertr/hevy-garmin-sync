@@ -324,7 +324,7 @@ class TimeAndDistanceTest(unittest.TestCase):
 
 
 class PreviousTest(unittest.TestCase):
-    """Last time's working sets, one to a line, after the note every set but a warm-up carries (F-30, #3)."""
+    """Last time's working sets, one to a line, after the note every set but a warm-up carries (F-30b, #3)."""
 
     def note(self, *logged: LoggedSet, planned: Set | None = None, system: str | None = "statute_us") -> str | None:
         (step, _) = steps(side_bend(planned or Set(reps=6), previous=logged), system=system)

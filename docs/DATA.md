@@ -13,8 +13,8 @@ Each upstream service, its terms, and every quirk found, dated. The spec's [sect
 |---|---|
 | `GET /v1/routine_folders`, `GET /v1/routines` | Every poll. Ten per page, so a call per ten routines |
 | `GET /v1/exercise_templates` | Once, on first use, a hundred per page. A template made later is read by itself |
-| `GET /v1/workouts/events` | Every poll, with Trainer on |
-| `GET /v1/exercise_history/{id}` | Only for a Trainer exercise new to its workout, once per exercise until the logged workouts are next read |
+| `GET /v1/workouts/events` | Every poll, once, with Trainer or last time's sets (`ENABLE_PREVIOUS_VALUES`) on |
+| `GET /v1/exercise_history/{id}` | For last time's sets: once per exercise, the first time a synced workout holds it, and again only when the workout it came from is deleted or no longer holds it. For Trainer: only for an exercise new to its workout, once per exercise until the logged workouts are next read |
 | `GET /hevy_trainer/v3/program` | Every poll, with Trainer on |
 | `GET /v2/user_preferences`, `GET /hevy_trainer/user_preferences`, `GET /exercise_template_units`, `GET /user_workouts_paged` | At startup, at local midnight and after a workout event, with Trainer on |
 | `POST /auth/refresh_token` | When the session has expired, about every 30 minutes |
@@ -33,7 +33,9 @@ Every call has a 30 second timeout (O-1a) and a `User-Agent` that names the app 
 - **An exercise template's `type`** came back as `bodyweight_weighted` and `bodyweight_assisted` on 2026-11-10, where the API reference lists `bodyweight_reps` and `bodyweight_assisted_reps`. That read went through a connector, not the raw API, so the app takes both spellings.
 - **A template's `equipment`** matched Hevy Trainer's own equipment value for all 447 exercises compared (2026-11-10, spec F-40).
 - **A routine's weights** are kilograms with the full conversion (`22.67964547178199` for 50 lbs), and a set with a rep range carries `rep_range` with `start` and `end` (2026-11-10).
-- **`GET /v1/workouts/events`** lists `updated` and `deleted` events, each with the whole workout, newest first (2026-11-05, first recorded in hevy-trainer-sync).
+- **`GET /v1/workouts/events`** lists `updated` and `deleted` events, each with the whole workout, newest first (2026-11-05, first recorded in hevy-trainer-sync). Hevy's API reference gives a `deleted` event the workout's `id` and `deleted_at` alone, and only `updated` events are in the recorded shapes, so the app reads the id from either place (2026-11-11, #3).
+- **An exercise history row and a set in a workout event name the logged numbers alike**: `weight_kg`, `reps`, `rpe`, `duration_seconds` and `distance_meters`. The row calls the set's type `set_type` and the event calls it `type`. A row names its workout with `workout_id` and `workout_start_time`, and has no index of its own (the recorded shapes, 2026-11-11, #3).
+- **Not yet known:** the order of one workout's rows in an exercise history. The app lists them as Hevy sends them (2026-11-11, #3).
 - **The session's refresh token rotates** on every refresh, and the refresh needs the old access token in `Authorization` even when it has expired (2026-11-04). The app saves the new pair before it makes another call.
 - **Not yet known:** whether the session's refresh token has an absolute lifetime. The question was first recorded in hevy-trainer-sync on 2026-11-04 and is still open.
 - **`/user_workouts_paged`** answered a `limit` of 10 with a 400 on 2026-11-07. The app asks for 3.

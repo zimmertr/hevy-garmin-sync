@@ -297,7 +297,7 @@ def _distance(meters: float, system: str | None) -> str:
 
 
 def _note(current: Set, exercise: Exercise, system: str | None) -> str | None:
-    """The one note a set carries: its type, then its rep range or distance (F-30), then last time's sets."""
+    """The one note a set carries: its type, then its rep range or distance (F-30), then last time's sets (F-30b)."""
     label = _SET_LABELS.get(current.kind, "")
     if exercise.assisted:
         label = f"{label}, assisted" if label else "Assisted"
