@@ -93,7 +93,14 @@ class Routines:
         title = str(routine.get("title") or "")
         name = f"Hevy/{folder_title}: {title}" if folder_title is not None else f"Hevy: {title}"
         exercises = sorted(routine.get("exercises") or [], key=lambda e: e.get("index") or 0)
-        return Workout(ROUTINE, str(routine["id"]), name, tuple(self._exercise(e) for e in exercises))
+        return Workout(
+            ROUTINE,
+            str(routine["id"]),
+            name,
+            tuple(self._exercise(e) for e in exercises),
+            title=title,
+            folder=folder_title,
+        )
 
     def _exercise(self, exercise: Json) -> Exercise:
         template_id = str(exercise.get("exercise_template_id") or "")
@@ -110,6 +117,7 @@ class Routines:
             superset=_whole(exercise.get("superset_id"), zero=True),
             assisted=template.get("type") in ASSISTED,
             previous=self._previous.sets(template_id) if self._previous else (),
+            chosen_by=garmin.chosen_by,
         )
 
 

@@ -61,6 +61,7 @@ class _Known:
 
     workout_id: int
     version: str | None
+    synced: datetime | None = None  # its last write, for the status page (W-2)
 
 
 @dataclass
@@ -73,6 +74,28 @@ class _Refused:
     # The next try between full runs, in UTC so a clock change can't move it. None once
     # it has been refused across a midnight: from then on only a full run tries it.
     due: datetime | None
+    reason: str = ""  # Garmin's words, for the status page
+
+
+@dataclass(frozen=True)
+class Report:
+    """One planned workout as the status page shows it (W-2)."""
+
+    plan: Workout
+    garmin_id: int | None  # None until Garmin has it
+    scheduled: date | None  # the day of its calendar entry
+    synced: datetime | None
+    refused: str | None = None  # Garmin's reason, while it refuses this version
+    retry: datetime | None = None  # the next try; None with a refusal means the next full run
+
+
+# What Sync.run reports as it goes, for the status page's progress line (W-3):
+# a step's name, and how far through it the run is.
+Progress = Callable[[str, int, int], None]
+
+
+def _quiet(step: str, done: int, total: int) -> None:
+    """No one is watching this run."""
 
 
 @dataclass
@@ -91,23 +114,62 @@ class Sync:
     # so a poll never schedules one twice.
     _on_today: set[int] = field(default_factory=set)
     _no_device_reported: bool = False
+    _desired_last: dict[Key, Workout] = field(default_factory=dict)  # what the last run planned, for report()
+    _calendar_day: date | None = None  # the day today's entries are on
 
-    def run(self, plans: Sequence[Plans], full: bool) -> Counts:
+    @property
+    def system(self) -> str | None:
+        """Garmin's measurement system, as of the last full run: the unit the weights went in."""
+        return self._system
+
+    def resend_all(self) -> None:
+        """Queue every workout the app owns for the watch, changed or not (a manual sync, W-3)."""
+        queued = set(self._unsent)
+        self._unsent.extend(k.workout_id for k in self._known.values() if k.workout_id not in queued)
+
+    def run(self, plans: Sequence[Plans], full: bool, force: bool = False, progress: Progress = _quiet) -> Counts:
+        """One pass. `force` rewrites every workout the app owns, changed or not (W-4)."""
         counts = Counts()
         today = self.now().date()
         if full:
+            progress("Reading Garmin", 0, 0)
             self._read_garmin(counts)
-        self._send()
         desired = self._desired(plans)
         off_calendar = {(p.kind, source_id) for p in plans for source_id in p.off_calendar}
-        for key, plan in desired.items():
-            self._write(key, plan, key in off_calendar, today, full, counts)
+        for done, (key, plan) in enumerate(desired.items()):
+            progress("Writing workouts", done, len(desired))
+            self._write(key, plan, key in off_calendar, today, full, counts, force)
         self._delete_missing(desired, {p.kind for p in plans if p.hold}, counts)
+        progress("Sending to the watch", 0, 0)
+        self._send()
         if full:
+            progress("Updating today's calendar", 0, 0)
             self._reconcile_calendar(today, off_calendar, counts)
         elif self.scheduled:
             self._follow_calendar(desired, off_calendar, today, counts)
+        self._calendar_day = today
+        self._desired_last = desired
         return counts
+
+    def report(self) -> list[Report]:
+        """Every workout the last run planned, with what Garmin has of it (W-2)."""
+        reports = []
+        for key, plan in self._desired_last.items():
+            known = self._known.get(key)
+            refused = self._refused.get(key)
+            garmin_id = known.workout_id if known else None
+            on_today = garmin_id is not None and garmin_id in self._on_today
+            reports.append(
+                Report(
+                    plan,
+                    garmin_id,
+                    self._calendar_day if on_today else None,
+                    known.synced if known else None,
+                    refused.reason if refused else None,
+                    refused.due.astimezone(self.now().tzinfo) if refused and refused.due else None,
+                )
+            )
+        return reports
 
     def _read_garmin(self, counts: Counts) -> None:
         self._system = self.garmin.measurement_system()
@@ -122,7 +184,8 @@ class Sync:
                 self.garmin.delete(int(item["workoutId"]))
                 counts.deleted += 1
             else:
-                self._known[key] = _Known(int(item["workoutId"]), owner.version)
+                synced = owner.updated.replace(tzinfo=self.now().tzinfo) if owner.updated else None
+                self._known[key] = _Known(int(item["workoutId"]), owner.version, synced)
 
     def _desired(self, plans: Sequence[Plans]) -> dict[Key, Workout]:
         desired = {}
@@ -138,11 +201,13 @@ class Sync:
         self._empty = empty
         return desired
 
-    def _write(self, key: Key, plan: Workout, off_calendar: bool, today: date, full: bool, counts: Counts) -> None:
+    def _write(
+        self, key: Key, plan: Workout, off_calendar: bool, today: date, full: bool, counts: Counts, force: bool
+    ) -> None:
         body = workout.build(plan, self._system)
         version = workout.version(body)
         known = self._known.get(key)
-        if known and known.version == version:
+        if known and known.version == version and not force:
             return
         refused = self._refused.get(key)
         if refused and refused.version != version:
@@ -160,7 +225,7 @@ class Sync:
                 created = self.garmin.create(stamped)
         except Refused as e:
             counts.failed += 1
-            next_try = self._refuse(key, version, refused, today)
+            next_try = self._refuse(key, version, refused, today, str(e))
             log.error(
                 "Garmin refused %r (%d steps): %s. It is tried again %s, or as soon as the routine changes.",
                 plan.name,
@@ -172,10 +237,11 @@ class Sync:
         self._refused.pop(key, None)
         if known:
             known.version = version
+            known.synced = self.now()
             counts.updated += 1
             log.debug("Updated %r", plan.name)
         else:
-            known = self._known[key] = _Known(created, version)
+            known = self._known[key] = _Known(created, version, self.now())
             counts.created += 1
             log.debug("Created %r", plan.name)
             if self.scheduled and not off_calendar:
@@ -183,7 +249,7 @@ class Sync:
         self._unsent.append(known.workout_id)
         self._send()
 
-    def _refuse(self, key: Key, version: str, before: _Refused | None, today: date) -> str:
+    def _refuse(self, key: Key, version: str, before: _Refused | None, today: date, reason: str) -> str:
         """Note that Garmin refused this version, and say when it is tried next (F-16; TJ, 2026-11-10, #4).
 
         The gaps start at 5 minutes and double until local midnight. The full
@@ -200,6 +266,7 @@ class Sync:
             refused = before
         else:
             refused = _Refused(version, today, before.gap * 2, now.astimezone(UTC) + before.gap * 2)
+        refused.reason = reason
         self._refused[key] = refused
         due = refused.due.astimezone(now.tzinfo) if refused.due else None
         return f"at {due:%H:%M}" if due and due.date() == today else "at midnight"

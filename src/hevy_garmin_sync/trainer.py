@@ -173,9 +173,8 @@ class Trainer:
                 self._exercise(template_id, planned, history, deload, now)
                 for planned in sorted(template.get("exercises") or [], key=lambda e: e.get("index") or 0)
             )
-            workouts.append(
-                Workout(TRAINER, template_id, f"Hevy/Trainer: {template_name(template)} {label}", exercises)
-            )
+            title = f"{template_name(template)} {label}"
+            workouts.append(Workout(TRAINER, template_id, f"Hevy/Trainer: {title}", exercises, title=title))
         return Plans(TRAINER, workouts, off_calendar=self._off_calendar(program, templates, workouts, done))
 
     def _off_calendar(
@@ -249,6 +248,9 @@ class Trainer:
             rest_seconds=int(rest) if rest else None,
             assisted=details.get("type") in ASSISTED,
             previous=self._previous.sets(exercise_id) if self._previous else (),
+            chosen_by=garmin.chosen_by,
+            direction=_DIRECTIONS.get(prescription.direction) if prescription else None,
+            no_weight=None if prescription else why_not,
         )
 
     def _prescribe(

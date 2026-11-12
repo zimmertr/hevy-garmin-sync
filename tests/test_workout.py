@@ -1,6 +1,7 @@
 """A planned workout becomes the Garmin steps the spec's watch checks proved (sections 3 and 4)."""
 
 import unittest
+from datetime import datetime
 from typing import Any
 
 from hevy_garmin_sync import workout
@@ -13,6 +14,8 @@ REPS = {"conditionTypeId": 10, "conditionTypeKey": "reps", "displayOrder": 10, "
 NO_TARGET = {"workoutTargetTypeId": 1, "workoutTargetTypeKey": "no.target", "displayOrder": 1}
 KG_40_LB = 18.1437
 LB = 2.2046226218  # pounds in a kilogram
+# What `owner` reads back from a description stamped at fixtures.NOW: the wall clock, to the minute.
+STAMPED_AT = fixtures.NOW.replace(tzinfo=None, second=0, microsecond=0)
 
 
 def side_bend(*sets: Set, **kwargs: Any) -> Exercise:
@@ -435,7 +438,7 @@ class OwnershipTest(unittest.TestCase):
         self.assertIn("\nHevy Trainer template: template-9\n", stamped["description"])
         body = {k: v for k, v in stamped.items() if k != "description"}
         self.assertEqual(
-            workout.owner(stamped["description"]), Owner(workout.TRAINER, "template-9", workout.version(body))
+            workout.owner(stamped["description"]), Owner(workout.TRAINER, "template-9", workout.version(body), STAMPED_AT)
         )
 
     def test_the_version_is_six_hex_digits_of_the_workout_as_built(self) -> None:
@@ -454,7 +457,8 @@ class OwnershipTest(unittest.TestCase):
     def test_the_owner_reads_back_from_the_description(self) -> None:
         stamped = workout.stamped(self.body, self.plan, fixtures.NOW)
         self.assertEqual(
-            workout.owner(stamped["description"]), Owner(workout.ROUTINE, "routine-1", workout.version(self.body))
+            workout.owner(stamped["description"]),
+            Owner(workout.ROUTINE, "routine-1", workout.version(self.body), STAMPED_AT),
         )
 
     def test_the_owner_survives_garmin_flattening_the_line_breaks(self) -> None:
@@ -462,7 +466,8 @@ class OwnershipTest(unittest.TestCase):
         for flattened in (stamped["description"].replace("\n", " "), stamped["description"].replace("\n", "\r\n")):
             with self.subTest(flattened=flattened):
                 self.assertEqual(
-                    workout.owner(flattened), Owner(workout.ROUTINE, "routine-1", workout.version(self.body))
+                    workout.owner(flattened),
+                    Owner(workout.ROUTINE, "routine-1", workout.version(self.body), STAMPED_AT),
                 )
 
     def test_a_workout_is_not_the_apps_without_the_first_line_and_an_id(self) -> None:
@@ -477,6 +482,11 @@ class OwnershipTest(unittest.TestCase):
         ):
             with self.subTest(description=description):
                 self.assertIsNone(workout.owner(description))
+
+    def test_the_last_update_reads_back_as_the_local_wall_clock(self) -> None:
+        # The status page's "Synced", which outlives a restart (W-2).
+        owned = workout.owner(f"{workout.FIRST_LINE}\nLast updated: 2026-11-12 09:41 PST\nHevy routine: routine-1")
+        self.assertEqual(owned.updated if owned else None, datetime(2026, 11, 12, 9, 41))
 
     def test_a_missing_version_reads_as_none_so_the_workout_is_rewritten(self) -> None:
         owned = workout.owner(f"{workout.FIRST_LINE}\nHevy routine: routine-1")

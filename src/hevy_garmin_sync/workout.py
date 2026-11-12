@@ -30,6 +30,7 @@ FIRST_LINE = "Synced from Hevy: https://github.com/zimmertr/hevy-garmin-sync"
 _ID_LABELS = {ROUTINE: "Hevy routine", TRAINER: "Hevy Trainer template"}
 _ID_LINE = re.compile(r"(Hevy routine|Hevy Trainer template): (\S+)")
 _VERSION_LINE = re.compile(r"Version: ([0-9a-f]{6})\b")
+_UPDATED_LINE = re.compile(r"Last updated: (\d{4}-\d{2}-\d{2} \d{2}:\d{2})")
 
 _POUNDS_PER_KG = 2.2046226218
 _YARDS_PER_METER = 1.0936133
@@ -78,6 +79,11 @@ class Exercise:
     superset: int | None = None
     assisted: bool = False
     previous: tuple[LoggedSet, ...] = ()  # the working sets of the last session that logged it
+    # For the status page only, never sent to Garmin (spec W-2): what chose the Garmin
+    # exercise, and Hevy Trainer's direction, or why it gave no weight.
+    chosen_by: str = ""
+    direction: str | None = None
+    no_weight: str | None = None
 
 
 @dataclass(frozen=True)
@@ -86,6 +92,8 @@ class Workout:
     source_id: str  # the Hevy routine id, or the Trainer template id
     name: str
     exercises: tuple[Exercise, ...]
+    title: str = ""  # the routine's or template's own name, for the status page (W-2)
+    folder: str | None = None  # the routine's Hevy folder
 
 
 @dataclass(frozen=True)
@@ -95,6 +103,7 @@ class Owner:
     kind: str
     source_id: str
     version: str | None
+    updated: datetime | None = None  # the wall-clock time of the last write, in the user's zone but without it
 
 
 def build(workout: Workout, measurement_system: str | None) -> Body:
@@ -143,7 +152,13 @@ def owner(description: str | None) -> Owner | None:
         return None
     kind = ROUTINE if found.group(1) == _ID_LABELS[ROUTINE] else TRAINER
     ver = _VERSION_LINE.search(description)
-    return Owner(kind, found.group(2), ver.group(1) if ver else None)
+    updated = _UPDATED_LINE.search(description)
+    return Owner(
+        kind,
+        found.group(2),
+        ver.group(1) if ver else None,
+        datetime.strptime(updated.group(1), "%Y-%m-%d %H:%M") if updated else None,
+    )
 
 
 def step_count(body: Body) -> int:
