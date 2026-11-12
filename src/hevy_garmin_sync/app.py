@@ -271,8 +271,8 @@ class App:
         The rest keeps running. A rejected HEVY_SESSION stops only Hevy Trainer,
         and its Garmin workouts stay as they are.
         """
-        if service not in self._rejected:
-            log.error("%s. Until then the app leaves %s alone.", _problem(service, fix, error), service)
+        # Once per service: nothing calls a rejected service again, so nothing rejects it twice.
+        log.error("%s. Until then the app leaves %s alone.", _problem(service, fix, error), service)
         self._rejected[service] = fix
         self._publish()
 

@@ -4,7 +4,6 @@ the running app for a sync (W-3)."""
 import argparse
 import json
 import os
-import sys
 import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
@@ -28,7 +27,7 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
-def sync(force: bool, env: Mapping[str, str] = os.environ, out: TextIO = sys.stdout) -> int:
+def sync(force: bool, env: Mapping[str, str] = os.environ, out: TextIO | None = None) -> int:
     """Ask the app on this machine for a sync, through its API, and say what it answered.
 
     It never talks to Hevy or Garmin itself: a second process refreshing the
@@ -41,11 +40,12 @@ def sync(force: bool, env: Mapping[str, str] = os.environ, out: TextIO = sys.std
         with urllib.request.urlopen(urllib.request.Request(url, method="POST"), timeout=10) as reply:
             answer = json.load(reply)
     except urllib.error.HTTPError as e:
-        if e.code == 429:
-            seconds = json.load(e).get("seconds")
-            print(f"A sync ended less than a minute ago. Try again in {seconds} seconds.", file=out)
-        else:
-            print(f"The app refused the request (HTTP {e.code}).", file=out)
+        with e:
+            if e.code == 429:
+                seconds = json.load(e).get("seconds")
+                print(f"A sync ended less than a minute ago. Try again in {seconds} seconds.", file=out)
+            else:
+                print(f"The app refused the request (HTTP {e.code}).", file=out)
         return 1
     except (urllib.error.URLError, OSError):
         print(f"The app isn't running here: nothing answers on port {port}.", file=out)

@@ -128,12 +128,14 @@ def route(method: str, target: str, headers: dict[str, str], loop: Loop, logs: L
     return _text(404, "Not found")
 
 
-def start(port: int, loop: Loop, logs: LogBuffer, host: str = "0.0.0.0") -> ThreadingHTTPServer:
-    """Serve on every interface, on a daemon thread, until `shutdown` (W-1)."""
+def handler(loop: Loop, logs: LogBuffer) -> type[BaseHTTPRequestHandler]:
+    """http.server's request handler around `route`, with the headers every reply carries."""
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "hevy-garmin-sync"
-        sys_version = ""
+
+        def version_string(self) -> str:
+            return self.server_version  # the default adds Python's version after a space
 
         def _reply(self) -> None:
             headers = {name.lower(): value for name, value in self.headers.items()}
@@ -150,7 +152,12 @@ def start(port: int, loop: Loop, logs: LogBuffer, host: str = "0.0.0.0") -> Thre
         def log_message(self, format: str, *args: Any) -> None:
             log.debug("HTTP %s", format % args)
 
-    httpd = ThreadingHTTPServer((host, port), Handler)
+    return Handler
+
+
+def start(port: int, loop: Loop, logs: LogBuffer, host: str = "0.0.0.0") -> ThreadingHTTPServer:
+    """Serve on every interface, on a daemon thread, until `shutdown` (W-1)."""
+    httpd = ThreadingHTTPServer((host, port), handler(loop, logs))
     httpd.daemon_threads = True
     threading.Thread(target=httpd.serve_forever, name="http", daemon=True).start()
     log.info("Status page on port %d", port)

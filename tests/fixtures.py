@@ -1182,3 +1182,51 @@ class FakeUpstream:
         if url.full_url in self._failures:
             raise self._failures[url.full_url]
         return io.BytesIO(self.bodies[url.full_url])
+
+
+class FakeRequests:
+    """The app's door for a manual sync, answering what it is told to (W-3)."""
+
+    def __init__(self) -> None:
+        self.answer: tuple[str, int] = ("started", 0)
+        self.asked: list[bool] = []
+
+    def ask(self, force: bool) -> tuple[str, int]:
+        self.asked.append(force)
+        return self.answer
+
+
+class FakeLoop:
+    """What the server reads from the app: a status, its health, and the door for a manual sync."""
+
+    def __init__(self) -> None:
+        self.status: dict[str, Any] = {"version": "1.2.3", "workouts": []}
+        self.requests = FakeRequests()
+        self.is_alive = True
+        self.is_ready = True
+
+    def alive(self) -> bool:
+        return self.is_alive
+
+    def ready(self) -> bool:
+        return self.is_ready
+
+
+class FakeSocket:
+    """A connection for http.server's handler, in memory: the raw request in, the raw reply out. No network."""
+
+    def __init__(self, request: bytes) -> None:
+        self._request = io.BytesIO(request)
+        self.reply = b""
+
+    def makefile(self, mode: str, *args: Any, **kwargs: Any) -> io.BytesIO:
+        return self._request
+
+    def sendall(self, data: bytes) -> None:
+        self.reply += bytes(data)
+
+    def settimeout(self, timeout: float | None) -> None:
+        pass
+
+    def setsockopt(self, *args: Any) -> None:
+        pass

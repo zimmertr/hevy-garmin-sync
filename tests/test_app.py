@@ -674,6 +674,140 @@ class PreviousTest(AppCase):
         self.assertEqual(asked, {"/routine_folders", "/routines", "/exercise_templates"})
 
 
+class ManualSyncTest(AppCase):
+    """Sync now, Force sync and the `sync` command, through the one door the server uses (W-3, W-4)."""
+
+    def ask(self, force: bool = False, answers: list[tuple[str, int]] | None = None) -> Callable[[], None]:
+        def step() -> None:
+            answer = self.app.requests.ask(force)
+            if answers is not None:
+                answers.append(answer)
+            self.garmin_api.calls.clear()
+
+        return step
+
+    def test_a_sync_sends_every_workout_to_the_watch_again_and_rewrites_none(self) -> None:
+        with self.assertLogs(LOGGER, "INFO") as logs:
+            self.run_app(self.ask())
+        self.assertEqual(self.nudged, [None])
+        self.assertIn("Manual sync asked for", "\n".join(logs.output))
+        # A full run: the list and the calendar read again, nothing rewritten, both sent to the watch.
+        self.assertNotIn("update_workout", self.garmin_api.calls)
+        self.assertEqual(self.garmin_api.calls.count("push_workout_to_device"), 2)
+        self.assertIn("get_workouts", self.garmin_api.calls)
+        self.assertEqual(self.app.status["sync"]["state"], "idle")
+        self.assertIsNotNone(self.app.status["sync"]["last_ended"])
+        self.assertEqual(self.app.status["sync"]["last_counts"]["updated"], 0)
+
+    def test_a_forced_sync_rewrites_every_workout_in_place(self) -> None:
+        before: list[list[int]] = []
+
+        def ask() -> None:
+            before.append(sorted(self.garmin_api.workouts))
+            self.ask(force=True)()
+
+        with self.assertLogs(LOGGER, "INFO") as logs:
+            self.run_app(ask)
+        self.assertIn("(forced: every workout is rewritten)", "\n".join(logs.output))
+        self.assertEqual(self.garmin_api.calls.count("update_workout"), 2)
+        self.assertNotIn("upload_workout", self.garmin_api.calls)
+        # In place: each keeps its Garmin id, and so its calendar entry.
+        self.assertEqual(before, [sorted(self.garmin_api.workouts)])
+        self.assertNotIn("unschedule_workout", self.garmin_api.calls)
+        self.assertEqual(self.app.status["sync"]["last_counts"]["updated"], 2)
+
+    def test_a_request_within_a_minute_of_the_last_is_refused_with_the_seconds_left(self) -> None:
+        answers: list[tuple[str, int]] = []
+        self.run_app(self.ask(answers=answers), self.ask(answers=answers), HEVY_POLL_INTERVAL_SECONDS="20")
+        # Asked at 20 s and run at once; asked again at 40 s, 20 s after it ended.
+        self.assertEqual(answers, [("started", 0), ("wait", 40)])
+
+    def test_a_request_while_one_waits_joins_it_and_a_force_still_counts(self) -> None:
+        answers: list[tuple[str, int]] = []
+
+        def twice() -> None:
+            answers.append(self.app.requests.ask(False))
+            answers.append(self.app.requests.ask(True))
+            self.garmin_api.calls.clear()
+
+        self.run_app(twice)
+        self.assertEqual(answers, [("started", 0), ("joined", 0)])
+        self.assertEqual(self.garmin_api.calls.count("update_workout"), 2)
+
+    def test_a_sync_asked_for_during_garmins_wait_runs_only_when_the_wait_ends(self) -> None:
+        def down_then_ask() -> None:
+            self.garmin_api.fail("upload_workout", fixtures.garmin_error(503))
+            self.hevy_api.routines.append(hevy_routine("r-legs", "Legs", 42))
+
+        states: list[str] = []
+
+        def ask() -> None:
+            self.app.requests.ask(False)
+            self.garmin_api.calls.clear()
+
+        def look() -> None:
+            states.append(self.app.status["sync"]["state"])
+
+        with self.assertLogs(LOGGER, "ERROR"):
+            # Garmin fails at the first poll and is left alone for a minute; the request at 15 s waits for it.
+            self.run_app(down_then_ask, ask, look, None, None, None, HEVY_POLL_INTERVAL_SECONDS="15")
+        self.assertEqual(states, ["waiting"])
+        self.assertIn("push_workout_to_device", self.garmin_api.calls)
+        self.assertEqual(self.app.status["sync"]["state"], "idle")
+
+    def test_a_sync_asked_for_while_garmins_sign_in_is_rejected_ends_at_once(self) -> None:
+        self.garmin_api.fail("get_user_profile", garminconnect.GarminConnectAuthenticationError("401"))
+        answers: list[tuple[str, int]] = []
+        with self.assertLogs(LOGGER, "ERROR"):
+            self.run_app(self.ask(answers=answers), None)
+        self.assertEqual(self.app.status["sync"]["state"], "idle")
+        self.assertEqual(self.garmin_api.calls, [])
+
+    def test_a_manual_sync_has_trainer_read_its_inputs_again_and_force_reads_last_times_sets_again(self) -> None:
+        trainer = TrainerTest()
+        trainer.setUp()
+        trainer.hevy_api.history["T-SIDE-BEND"] = [fixtures.hevy_history_set(15, 12, "2026-01-10T17:00:00+00:00")]
+
+        def ask() -> None:
+            trainer.app.requests.ask(True)
+            trainer.private_api.requests.clear()
+            trainer.hevy_api.requests.clear()
+
+        trainer.run_app(ask)
+        self.assertEqual([p for p in trainer.private_api.paths() if p in TrainerTest.INPUTS], TrainerTest.INPUTS)
+        self.assertTrue(any(path.startswith("/exercise_history/") for path, _ in trainer.hevy_api.requests))
+
+    def test_the_loop_is_alive_while_it_waits_and_not_once_it_is_overdue(self) -> None:
+        seen: list[bool] = []
+
+        def look() -> None:
+            seen.append(self.app.alive())
+            self.clock += 10_000
+            seen.append(self.app.alive())
+
+        self.run_app(look)
+        self.assertEqual(seen, [True, False])
+
+    def test_the_status_lists_each_workout_with_its_garmin_id_and_today(self) -> None:
+        self.run_app()
+        workouts = self.app.status["workouts"]
+        self.assertEqual([w["title"] for w in workouts], ["Push", "Pull"])
+        self.assertEqual({w["folder"] for w in workouts}, {"PPL"})
+        self.assertTrue(all(w["garmin_id"] for w in workouts))
+        self.assertEqual({w["scheduled"] for w in workouts}, {fixtures.TODAY.isoformat()})
+        self.assertEqual(self.app.status["settings"]["HEVY_API_KEY"], "set")
+        self.assertNotIn("made-up-key", json.dumps(self.app.status))
+
+
+class RequestsTest(unittest.TestCase):
+    def test_a_force_pressed_once_a_sync_is_running_joins_it_and_leaves_it_as_it_is(self) -> None:
+        requests = app.Requests(lambda: 0.0, lambda: None)
+        requests.ask(False)
+        requests.begin()
+        self.assertEqual(requests.ask(True), ("joined", 0))
+        self.assertFalse(requests.force)  # the run already chose what to write
+
+
 class BackoffTest(unittest.TestCase):
     def setUp(self) -> None:
         self.now = 0.0
