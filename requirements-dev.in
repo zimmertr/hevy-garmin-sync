@@ -6,7 +6,7 @@
 # Line and branch coverage, reported in CI.
 coverage==7.17.2
 # The Python Lint job and the Makefile's lint and typecheck targets.
-ruff==0.17.3
+ruff==0.17.4
 mypy==2.4.1
 # requests ships no types; mypy runs strict.
 types-requests==2.33.0.20261030
