@@ -11,7 +11,7 @@ RUN          := docker run --rm -v "$(CURDIR)":/repo -w /repo
 DEV          := pip install -q --root-user-action=ignore --require-hashes -r requirements-dev.txt
 
 .PHONY: test test-one lint typecheck lint-docker chart build scan lock upstream-check upstream-update \
-  live-check live-cleanup live-check-hevy
+  live-check live-cleanup live-check-hevy live-check-notes
 
 # The suite under coverage, with its line and branch report, as the test job
 # runs it.
@@ -85,7 +85,9 @@ upstream-update:
 # the replies' shapes into live-check/, puts `HGS check set` on the watch and
 # probes Garmin's step cap; the second deletes what it made and the saved
 # token. The third reads Hevy alone, with no Garmin sign-in, into
-# live-check/recorded-hevy.json.
+# live-check/recorded-hevy.json. The fourth signs in to Garmin alone and puts
+# `HGS check notes` on the watch, to see how a note holding last time's numbers
+# reads there (#3).
 LIVE := $(RUN) -it -e HEVY_API_KEY -e HEVY_SESSION $(PYTHON_IMAGE) sh -c \
   'pip install -q --root-user-action=ignore --require-hashes -r requirements.txt && \
   PYTHONPATH=src python scripts/live_check.py $$0'
@@ -98,3 +100,6 @@ live-cleanup:
 
 live-check-hevy:
 	$(LIVE) record-hevy
+
+live-check-notes:
+	$(LIVE) notes

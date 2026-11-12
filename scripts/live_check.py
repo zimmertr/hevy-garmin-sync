@@ -1,8 +1,8 @@
 """One run by hand against TJ's own accounts, for the open points in docs/DATA.md. CI never runs it.
 
 `make live-check` runs `record`, and `make live-cleanup` runs `cleanup` once the watch has been
-looked at. `make live-check-hevy` runs `record-hevy`. All run in Docker, from a clone, on TJ's
-machine.
+looked at. `make live-check-hevy` runs `record-hevy`, and `make live-check-notes` runs `notes`. All
+run in Docker, from a clone, on TJ's machine.
 
 `record`:
 1. Reads Hevy's public API with HEVY_API_KEY, and Hevy's private API when HEVY_SESSION is set
@@ -35,9 +35,18 @@ It is safe to run again.
 `record-hevy` is step 1 alone, written to live-check/recorded-hevy.json: no Garmin sign-in,
 nothing made anywhere, and not held back by an earlier run that wasn't cleaned up.
 
+`notes` is for #3, last time's numbers in a set's note: one Garmin sign-in and no Hevy read. It
+creates `HGS check notes`, five exercises, to find a way to write one of last time's sets that fits
+on one line of the watch. The first note writes the widest likely set four ways with its unit on
+every line; the second names the unit once, in a heading, and holds numbers only; the third is a
+ruler of thirty digits and two headings. The last two are whole notes of ordinary numbers, one in
+each form, after the note the app writes today (F-30). It reads the workout back and says whether Garmin stored
+every note whole, then puts it on today and sends it to the watch, so TJ can see which lines stay
+whole there. `cleanup` removes it like the others.
+
 Safety, enforced in code:
 - Never writes to Hevy: only the read methods of `Hevy` and `HevyPrivate` are called.
-- Deletes and unschedules only its own workouts: a Garmin workout that carries one of the two
+- Deletes and unschedules only its own workouts: a Garmin workout that carries one of the three
   names and, when live-check/created.json is there, one of the ids it lists. Each id is saved there
   the moment the workout exists. The workouts' description is not the app's (`workout.owner` gives
   None), so the running app never claims or deletes them.
@@ -85,7 +94,8 @@ HEVY_RECORDED = "recorded-hevy.json"  # `record-hevy`'s, so it never overwrites 
 CREATED = "created.json"
 SET_WORKOUT = "HGS check set"
 STEPS_WORKOUT = "HGS check steps"
-NAMES = (SET_WORKOUT, STEPS_WORKOUT)
+NOTES_WORKOUT = "HGS check notes"
+NAMES = (SET_WORKOUT, STEPS_WORKOUT, NOTES_WORKOUT)
 # Not the app's first line, so `workout.owner` never takes one of these for the app's (F-12).
 DESCRIPTION = "Made by hevy-garmin-sync's scripts/live_check.py; `make live-cleanup` deletes it."
 _TEN = Set(reps=10)
@@ -97,6 +107,39 @@ SET_EXERCISES = (
     # Two matching rounds of a superset, a repeat group of two exercises (F-26).
     Exercise("Check", "CRUNCH", "CRUNCH", (_TEN,) * 2, superset=1),
     Exercise("Check", "SQUAT", "SQUAT", (_TEN,) * 2, rest_seconds=60, superset=1),
+)
+# `HGS check notes` (#3): each exercise and the lines its set's note gets. One of last time's sets must
+# fit on one line of the watch (TJ, 2026-11-11): the second run broke `65 lb x 6 @ RPE 7.5` in two. So
+# each line here is one way to write the widest set a note is likely to hold: a weight with a decimal,
+# kilograms, two-digit reps and an RPE with a decimal. The numbers are made up.
+RULER = "123456789012345678901234567890"  # where the watch cuts it is how many digits one line holds
+CHECK_NOTES = (
+    # The unit on every line, from the roomiest form to the tightest, then a four-digit weight.
+    (
+        Exercise("Check", "CURL", "CURL", (_TEN,)),
+        "102.5 kg x 12 @ 9.5\n102.5kg x12 @9.5\n102.5kg x12 9.5\n1002.5kg x12 @9.5",
+    ),
+    # The unit once, in the heading, and numbers only below it.
+    (
+        Exercise("Check", "SQUAT", "SQUAT", (_TEN,)),
+        "Prev (kg):\n102.5 x 12 @ 9.5\n1002.5 x 12 @ 9.5\n1002.5 x12 @9.5",
+    ),
+    # A ruler, so the width of any other form can be worked out without the watch, and two headings
+    # that say what the numbers are.
+    (
+        Exercise("Check", "ROW", "ROW", (_TEN,)),
+        f"{RULER}\nkg x reps @ RPE\nPrev: kg x reps @ RPE",
+    ),
+    # Each of the two forms as a whole note of ordinary numbers, after the note the app writes for a rep
+    # range (F-30), to judge how it reads.
+    (
+        Exercise("Check", "LUNGE", "LUNGE", (Set(rep_range=(4, 6)),)),
+        "Prev:\n65lb x6 @7\n65lb x6 @7.5\n65lb x5 @8",
+    ),
+    (
+        Exercise("Check", "CRUNCH", "CRUNCH", (Set(rep_range=(4, 6)),)),
+        "Prev (lb):\n65 x 6 @ 7\n65 x 6 @ 7.5\n65 x 5 @ 8",
+    ),
 )
 STEP_SIZES = (250, 100, 50)  # the step probe's sizes, largest first; it stops at the first Garmin takes
 # Rep targets no two rounds in a row share, so no repeat group shortens the probe.
@@ -391,6 +434,25 @@ def steps_body(size: int, system: str | None) -> Json:
     return _body(STEPS_WORKOUT, probe, system)
 
 
+def notes_body(system: str | None) -> Json:
+    """`HGS check notes`: the app's own steps, each set's note followed by its lines of CHECK_NOTES."""
+    body = _body(NOTES_WORKOUT, [exercise for exercise, _ in CHECK_NOTES], system)
+    for step, (_, lines) in zip(sets(body), CHECK_NOTES, strict=True):
+        step["description"] = "\n".join(part for part in (step.get("description"), lines) if part)
+    return body
+
+
+def notes_kept(sent: Json, stored: Json) -> list[str]:
+    """Whether Garmin stored each note as sent: one line for each it changed, else one line saying none."""
+    changed = [
+        f"Garmin stored {len(back.get('description') or '')} of the {len(out['description'])} characters of "
+        f"exercise {number}'s note."
+        for number, (out, back) in enumerate(zip(sets(sent), sets(stored), strict=False), start=1)
+        if back.get("description") != out["description"]
+    ]
+    return changed or ["Garmin stored every note whole."]
+
+
 def sets(body: Json) -> Iterator[Json]:
     """A workout's set steps in order, inside repeat groups too; rests left out."""
 
@@ -499,16 +561,21 @@ def save(store: Store, name: str, value: Any) -> None:
     store.write(name, json.dumps(value, indent=1, sort_keys=True) + "\n")
 
 
+def _today(garmin: CheckGarmin, utcnow: Callable[[], datetime]) -> date:
+    """Today as the app works it out with TZ unset (C-7): in the Garmin profile's zone, else UTC."""
+    try:
+        zone = ZoneInfo(garmin.time_zone() or "UTC")
+    except ZoneInfoNotFoundError, ValueError, OSError:
+        zone = ZoneInfo("UTC")
+    return utcnow().astimezone(zone).date()
+
+
 def check_garmin(garmin: CheckGarmin, store: Store, created: list[int], utcnow: Callable[[], datetime]) -> Json:
     """Make, read back, schedule and send `HGS check set`, then probe the step cap.
 
     `created` gets each id as it is made.
     """
-    try:
-        zone = ZoneInfo(garmin.time_zone() or "UTC")  # "today" as the app works it out with TZ unset (C-7)
-    except ZoneInfoNotFoundError, ValueError, OSError:
-        zone = ZoneInfo("UTC")
-    today = utcnow().astimezone(zone).date()
+    today = _today(garmin, utcnow)
     system = garmin.measurement_system()
     recorded: Json = {"settings": shape(garmin.settings())}
 
@@ -536,6 +603,21 @@ def check_garmin(garmin: CheckGarmin, store: Store, created: list[int], utcnow: 
     return recorded
 
 
+_NOT_CLEANED_UP = "live-check/created.json is from an earlier run: run `make live-cleanup` first."
+_SIGN_IN_ERRORS = (
+    garminconnect.GarminConnectTooManyRequestsError,
+    garminconnect.GarminConnectAuthenticationError,
+    garminconnect.GarminConnectConnectionError,
+)
+
+
+def _partway(error: Exception, created: Sequence[int]) -> str:
+    return (
+        f"Garmin failed partway ({type(error).__name__}). {len(created)} check workouts are left in Garmin; "
+        "run `make live-cleanup` to delete them and the saved Garmin token."
+    )
+
+
 def record(
     env: Mapping[str, str],
     folder: Path,
@@ -550,7 +632,7 @@ def record(
 ) -> int:
     store = Store(folder)
     if store.read(CREATED) is not None:
-        print("live-check/created.json is from an earlier run: run `make live-cleanup` first.", file=out)
+        print(_NOT_CLEANED_UP, file=out)
         return 1
     recorded = read_all_hevy(env, out, ask, hevy_session, private_session, utcnow)
     if recorded is None:
@@ -559,11 +641,7 @@ def record(
 
     try:
         token = sign_in()
-    except (
-        garminconnect.GarminConnectTooManyRequestsError,
-        garminconnect.GarminConnectAuthenticationError,
-        garminconnect.GarminConnectConnectionError,
-    ) as e:
+    except _SIGN_IN_ERRORS as e:
         print(
             f"The Garmin sign-in failed ({type(e).__name__}). Hevy's shapes are saved; nothing was made in Garmin.",
             file=out,
@@ -573,11 +651,7 @@ def record(
     try:
         recorded["garmin"] = check_garmin(open_garmin(token, store), store, created, utcnow)
     except (ServiceError, ConfigError) as e:
-        print(
-            f"Garmin failed partway ({type(e).__name__}). {len(created)} check workouts are left in Garmin; "
-            "run `make live-cleanup` to delete them and the saved Garmin token.",
-            file=out,
-        )
+        print(_partway(e, created), file=out)
         return 1
     save(store, RECORDED, recorded)
 
@@ -662,6 +736,58 @@ def record_hevy(
     return 0
 
 
+def check_notes(
+    folder: Path,
+    out: TextIO,
+    *,
+    sign_in: Callable[[], str] = login.sign_in,
+    open_garmin: OpenGarmin = CheckGarmin.open,
+    utcnow: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> int:
+    """Put `HGS check notes` on today and send it to the watch: one Garmin sign-in, and Hevy is never read."""
+    store = Store(folder)
+    if store.read(CREATED) is not None:
+        print(_NOT_CLEANED_UP, file=out)
+        return 1
+    try:
+        token = sign_in()
+    except _SIGN_IN_ERRORS as e:
+        print(f"The Garmin sign-in failed ({type(e).__name__}). Nothing was made in Garmin.", file=out)
+        return 1
+    created: list[int] = []
+    try:
+        garmin = open_garmin(token, store)
+        today = _today(garmin, utcnow)
+        body = notes_body(garmin.measurement_system())
+        notes_id = garmin.create(body)
+        created.append(notes_id)
+        save(store, CREATED, {"workouts": created})  # at once, so a failure later still leaves cleanup the id
+        kept = notes_kept(body, garmin.stored(notes_id))
+        garmin.schedule(notes_id, today)
+        try:
+            garmin.send_to_device(notes_id)
+            where = "and on its way to the watch"
+        except Refused:
+            where = "but was not sent to a watch"  # no watch to send to; the calendar entry still stands
+    except (ServiceError, ConfigError) as e:
+        print(_partway(e, created), file=out)
+        return 1
+
+    print(f"{NOTES_WORKOUT} is on today's calendar {where}. Its exercises and their notes, line by line:", file=out)
+    for number, step in enumerate(sets(body), start=1):
+        print(f"{number}. {step['exerciseName'].capitalize()}: {step['description'].replace('\n', ' / ')}", file=out)
+    for line in kept:
+        print(line, file=out)
+    print(
+        "\nSync the watch and start it. For each exercise, open the note's own screen during the set and "
+        "photograph it. Which lines stay on one line? In the third note, how many digits of the ruler does the "
+        "first line hold? Which of the last two notes reads better? Then discard the activity and run "
+        "`make live-cleanup`.",
+        file=out,
+    )
+    return 0
+
+
 def cleanup(
     folder: Path,
     out: TextIO,
@@ -712,12 +838,14 @@ def main(
     argv: Sequence[str] | None = None, env: Mapping[str, str] = os.environ, out: TextIO = sys.stdout
 ) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
-    parser.add_argument("command", choices=("record", "record-hevy", "cleanup"))
+    parser.add_argument("command", choices=("record", "record-hevy", "notes", "cleanup"))
     args = parser.parse_args(argv)
     if args.command == "record":
         return record(env, FOLDER, out)
     if args.command == "record-hevy":
         return record_hevy(env, FOLDER, out)
+    if args.command == "notes":
+        return check_notes(FOLDER, out)
     return cleanup(FOLDER, out)
 
 
