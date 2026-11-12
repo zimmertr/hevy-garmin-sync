@@ -24,6 +24,7 @@ class ConfigTest(unittest.TestCase):
         self.assertIsNone(loaded.zone)
         self.assertEqual(loaded.data_dir, Path("data"))
         self.assertEqual((loaded.log_level, loaded.log_format), ("INFO", "text"))
+        self.assertEqual(loaded.http_port, 8080)
 
     def test_every_variable_is_read(self) -> None:
         loaded = config.load(
@@ -39,8 +40,10 @@ class ConfigTest(unittest.TestCase):
                 "DATA_DIR": "/data",
                 "LOG_LEVEL": "debug",
                 "LOG_FORMAT": "JSON",
+                "HTTP_PORT": " 9090 ",
             }
         )
+        self.assertEqual(loaded.http_port, 9090)
         self.assertEqual(loaded.garmin_token, "token")
         self.assertEqual(loaded.include_folders, ("Push Pull Legs", "42"))
         self.assertFalse(loaded.scheduled)
@@ -67,6 +70,7 @@ class ConfigTest(unittest.TestCase):
             "TZ": ["Mars/Olympus_Mons", "../etc/passwd"],
             "LOG_LEVEL": ["LOUD"],
             "LOG_FORMAT": ["xml"],
+            "HTTP_PORT": ["0", "65536", "-1", "80.5", "http", "٨٠"],
         }
         for name, values in cases.items():
             for value in values:
@@ -91,6 +95,7 @@ class ConfigTest(unittest.TestCase):
                 "DATA_DIR",
                 "LOG_LEVEL",
                 "LOG_FORMAT",
+                "HTTP_PORT",
             ],
         )
         for secret in secrets.values():

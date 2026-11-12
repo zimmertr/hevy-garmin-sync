@@ -1,0 +1,6 @@
+# A copy of community-health-files/ISSUE_TEMPLATE/config.yml in
+# zimmertr/yggdrasil (7ed63d1). GitHub serves a repo its own template folder
+# or the shared one, never both, so this repo keeps copies beside
+# exercise-match.yml (yggdrasil record 0058). When the source changes, copy it
+# here again.
+blank_issues_enabled: false

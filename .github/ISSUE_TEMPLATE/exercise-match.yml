@@ -1,0 +1,35 @@
+# This repo's own form, beside the copies of the shared templates (yggdrasil
+# record 0058). The status page's "Report this match" link opens it with the
+# first two fields filled in, by their ids (spec F-55).
+name: Wrong Garmin exercise
+description: A Hevy exercise became the wrong Garmin exercise
+title: "Wrong Garmin exercise for "
+labels: ["bug", "exercise-map"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Say which Garmin exercise it should be, and the exercise map gets a row for it. Garmin's own list is in [garmin_exercises.json](https://github.com/zimmertr/hevy-garmin-sync/blob/main/src/hevy_garmin_sync/data/garmin_exercises.json).
+  - type: input
+    id: hevy-exercise
+    attributes:
+      label: Hevy exercise
+      description: Its name as Hevy shows it.
+    validations:
+      required: true
+  - type: input
+    id: garmin-exercise
+    attributes:
+      label: Garmin exercise the app picked
+    validations:
+      required: true
+  - type: input
+    id: expected
+    attributes:
+      label: Garmin exercise it should be
+      description: Its name in Garmin Connect, or its category and key from garmin_exercises.json. Leave it empty if you don't know.
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else
+      description: Its equipment and muscle group in Hevy, or whether it is one of your own exercises.
