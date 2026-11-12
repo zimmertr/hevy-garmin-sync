@@ -13,6 +13,7 @@
 
 - `.github/renovate.json` extends `github>zimmertr/yggdrasil//defaults/renovate`. The preset holds the seven-day wait, the rule that everything below a major merges itself, and the rule that yggdrasil's own modules don't wait.
 - Renovate's `pip-compile` manager reads `requirements.txt` and `requirements-dev.txt`. It takes the command from each lock's header, bumps the pin in the `.in` file and recompiles every lock that depends on it. `pip_requirements` is off, so nothing bumps a lock's pin without its hashes.
+- The manager's `lockFileMaintenance` is off (TJ, 2026-11-11). It would open a PR that moves every indirect pin to its newest release at once, with no seven-day wait.
 - `make lock` pins pip-tools 7.6.2, and both locks are recompiled with it.
 - `ghcr.io/zimmertr/hevy-garmin-sync` is off, so the version in `compose.yaml` moves by hand with the README's.
 - `.github/dependabot.yml` and `dependabot-auto-merge.yml` are gone. Dependabot's alerts and security updates stay on.

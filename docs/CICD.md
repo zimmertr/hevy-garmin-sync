@@ -48,6 +48,7 @@ What this repo adds:
 | Setting | Why |
 |---|---|
 | `pip-compile` reads `requirements.txt` and `requirements-dev.txt` | Renovate bumps the pin in the `.in` file and recompiles every lock that depends on it, hashes included. A pin in `requirements.in` moves both locks in one PR |
+| `pip-compile`'s `lockFileMaintenance` is off | On by default for this manager, it opens a "Refresh pip-compile outputs" PR that recompiles both locks to move every indirect pin to its newest release, with no seven-day wait. An indirect pin moves when a direct pin's update needs it, or by hand |
 | `pip_requirements` is off | It would bump a lock's pin without recompiling its hashes |
 | `ghcr.io/zimmertr/hevy-garmin-sync` is off | `compose.yaml` runs this repo's own image. A bump would merge, release a new version and be proposed again |
 
