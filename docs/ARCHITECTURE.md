@@ -31,7 +31,7 @@ One long-running process and one thread (spec F-1). Nothing listens on a port (F
 1. **Start.** Read the environment. Anything wrong exits with a message naming the variable. Load the Garmin token, and the Hevy session if `HEVY_SESSION` is set, from `DATA_DIR`, seeding each from its variable when the variable is new (A-4).
 2. **Check.** One call to each service. A rejected key, token or session exits with the fix. An outage is waited out.
 3. **Full run.** Read every routine (and the Trainer program), read Garmin's workout list and the calendar, then create, update and delete until Garmin matches. Put each workout on today.
-4. **Poll.** Every `HEVY_POLL_INTERVAL_SECONDS`, read Hevy again. Garmin is called only for what changed (F-4a). When Hevy Trainer's next workout changes, its calendar entry moves to it in the same poll (F-31).
+4. **Poll.** Every `HEVY_POLL_INTERVAL_SECONDS`, read Hevy again. Garmin is called only for what changed (F-4a). When Hevy Trainer's next workout changes, its calendar entry moves to it in the same poll (F-31). The workout events are read once, first, for Trainer and for last time's sets alike, and not at all when neither is on (F-4).
 5. **Midnight.** At local midnight, a full run again: yesterday's calendar entries go and today's are added.
 6. **Stop.** SIGTERM or SIGINT lets the write in progress finish and starts no new one.
 
@@ -42,7 +42,7 @@ A failing service gets its own wait, one minute doubling to thirty (O-1). A rate
 | Module | Does |
 |---|---|
 | `cli.py` | The command line: no command runs the app, `login` signs in to Garmin |
-| `app.py` | The loop: startup checks, polling, midnight, the waits after a failure, stopping |
+| `app.py` | The loop: startup checks, polling, the workout events read once a poll, midnight, the waits after a failure, stopping |
 | `config.py` | Reads and checks the environment variables, including each `CUSTOM_EXERCISE_MAP` pair against Garmin's list |
 | `logs.py` | Text or JSON log lines |
 | `store.py` | The data folder: whole-file writes that survive a kill, and which variable a stored token came from |
@@ -50,9 +50,10 @@ A failing service gets its own wait, one minute doubling to thirty (O-1). A rate
 | `hevy_private.py` | Hevy's private API, for Trainer only: the session and its refresh, the program, the preferences, the logged workouts |
 | `routines.py` | Which routines sync, what each is called, and each routine as a planned workout |
 | `trainer.py` | Trainer's program as planned workouts, and what is read when |
+| `previous.py` | Last time's working sets of each exercise, for the note on each set: the newest logged workout that holds it, from its public history once, then kept current by the workout events. In memory only |
 | `trainer_rules.py` | Trainer's arithmetic: the week, the next weight, warm-ups, rep ranges ([HEVY_TRAINER_RULES.md](HEVY_TRAINER_RULES.md)). No I/O |
 | `exercises.py` | The Garmin exercise for each Hevy exercise, and the log line that names it for a custom one |
-| `workout.py` | A planned workout as Garmin's workout JSON, its version hash, and the description that marks it as the app's. No I/O |
+| `workout.py` | A planned workout as Garmin's workout JSON, each set's note with last time's sets, its version hash, and the description that marks it as the app's. No I/O |
 | `garmin.py` | Garmin Connect through python-garminconnect: workouts, the calendar, Send to Device, saving the rotated token |
 | `sync.py` | Makes Garmin match the plan: what to create, update, delete, schedule and send |
 | `login.py` | The `login` command: one sign-in, and the value for `GARMIN_TOKEN` on stdout |
