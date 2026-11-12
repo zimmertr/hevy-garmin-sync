@@ -33,11 +33,12 @@ class _Json(logging.Formatter):
         return json.dumps(entry)
 
 
-def setup(level: str, log_format: str, stream: TextIO | None = None) -> None:
+def setup(level: str, log_format: str, stream: TextIO | None = None, buffer: logging.Handler | None = None) -> None:
+    """Log to `stream`, and to `buffer` too when given: the status page's copy of the last lines (W-6)."""
     handler = logging.StreamHandler(stream or sys.stderr)
     handler.setFormatter(_Json() if log_format == "json" else _Text())
     root = logging.getLogger()
-    root.handlers[:] = [handler]
+    root.handlers[:] = [handler, *([buffer] if buffer else [])]
     root.setLevel(level)
     # python-garminconnect logs every failed call with a traceback. The app
     # logs each failure once, with the fix, so the library only speaks at DEBUG.
