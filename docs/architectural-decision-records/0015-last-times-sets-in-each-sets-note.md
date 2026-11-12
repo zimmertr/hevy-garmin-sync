@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-11
 - Decider: TJ, on #3: the note's form (option A), which session counts, both kinds of workout, and the switch.
-- Issues and PRs: #3, #47
+- Issues and PRs: #3, #47, #55
 - Cited in code as: #3
 - Guide: [`CLAUDE.md`](../../CLAUDE.md), "Build to the spec"; spec F-30b, C-12, S-2, F-20a, F-12 and F-4 in [`docs/SPEC.md`](../SPEC.md)
 
