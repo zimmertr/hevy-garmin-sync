@@ -21,13 +21,13 @@ The workout events keep it current. An updated workout replaces an exercise's se
 
 ```
 4-6 reps
-Prev (lb):
+Previous (lb):
 65 x 6 @ 7
 65 x 6 @ 7.5
 65 x 5 @ 8
 ```
 
-The heading names the unit the weights go to Garmin in (F-21a), and is `Prev:` when no listed set has a weight. A line is the weight, rounded to one decimal, `x` and the reps, the time (`1m 30s`) or the distance (`25 m`, `27 yd`), then ` @ ` and the RPE when the set has one. A line of more than 8 digits drops the space after `x` and after `@`. A set logged with neither a weight nor an amount is left out. Warm-up sets keep their note as it was. `ENABLE_PREVIOUS_VALUES=false` reads no history and leaves every note as before.
+The heading names the unit the weights go to Garmin in (F-21a), and is `Previous:` when no listed set has a weight. It was `Prev (lb):` in the watch check; TJ chose the whole word on 2026-11-11, Hevy's own name for the column. `Previous sets (lb):` is 19 characters, and the watch wrapped a line of 18. `Previous (lb):` is 14, and has not been on the watch. A line is the weight, rounded to one decimal, `x` and the reps, the time (`1m 30s`) or the distance (`25 m`, `27 yd`), then ` @ ` and the RPE when the set has one. A line of more than 8 digits drops the space after `x` and after `@`. A set logged with neither a weight nor an amount is left out. Warm-up sets keep their note as it was. `ENABLE_PREVIOUS_VALUES=false` reads no history and leaves every note as before.
 
 ## Evidence
 

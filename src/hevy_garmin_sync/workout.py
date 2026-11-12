@@ -342,7 +342,8 @@ def _previous(logged: Sequence[LoggedSet], system: str | None) -> str:
     if not lines:
         return ""
     unit = (" (lb)" if pounds else " (kg)") if weighed else ""
-    return "\n".join([f"Prev{unit}:", *lines])
+    # "Previous" is Hevy's own word for the column, and 14 characters with the unit fit one line of the watch.
+    return "\n".join([f"Previous{unit}:", *lines])
 
 
 def _line(weight: str, amount: str, rpe: str, gap: str) -> str:

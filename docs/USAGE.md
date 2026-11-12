@@ -14,13 +14,13 @@ What you see when it runs, and what to do when it breaks.
 
   ```
   4-6 reps
-  Prev (lb):
+  Previous (lb):
   65 x 6 @ 7
   65 x 6 @ 7.5
   65 x 5 @ 8
   ```
 
-  The number after `@` is the RPE, and a set logged without one has none. An exercise with no weight has `Prev:` and lines such as `20 @ 7.5`; a timed one `45s`, a distance `25 m` or `27 yd`. A line with more than 8 digits loses the spaces after `x` and `@` (`1002.5 x12 @9.5`), so the watch doesn't break it in two. The screen shows about six lines and scrolls through the rest by itself. Last time is the last workout of any kind in the past 12 months that logged the exercise, whatever Hevy's "Previous Workout Values" setting says, so with "Same Routine" in Hevy the watch can show other numbers than the Hevy app for an exercise in two routines. An exercise not logged in 12 months has no block.
+  The number after `@` is the RPE, and a set logged without one has none. An exercise with no weight has `Previous:` and lines such as `20 @ 7.5`; a timed one `45s`, a distance `25 m` or `27 yd`. A line with more than 8 digits loses the spaces after `x` and `@` (`1002.5 x12 @9.5`), so the watch doesn't break it in two. The screen shows about six lines and scrolls through the rest by itself. Last time is the last workout of any kind in the past 12 months that logged the exercise, whatever Hevy's "Previous Workout Values" setting says, so with "Same Routine" in Hevy the watch can show other numbers than the Hevy app for an exercise in two routines. An exercise not logged in 12 months has no block.
 - Saving, editing or deleting a workout in Hevy changes those notes within a minute, in every workout that holds one of its exercises. Each of those workouts is rewritten and sent to the watch again. `ENABLE_PREVIOUS_VALUES=false` turns the notes off.
 - An exercise swapped in a Trainer workout reaches Garmin only when you answer "Replace permanently?" with Yes. A swap for that workout only (No) stays on your phone, and the watch keeps the old exercise ([issue 44](https://github.com/zimmertr/hevy-garmin-sync/issues/44)). To do the new exercise from the watch, answer Yes, and swap back after the session. Routines work the same way: only an edit to the routine itself reaches Garmin, not an exercise replaced in a workout you've started from it.
 - A unit set for one exercise in Hevy reaches Garmin at the next restart, at midnight, or after you save, edit or delete a workout, not within a minute. A restart is the quick way; the case for syncing by hand is in [issue 31](https://github.com/zimmertr/hevy-garmin-sync/issues/31).

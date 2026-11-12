@@ -618,8 +618,8 @@ class PreviousTest(AppCase):
             self.garmin_api.calls.clear()
 
         self.run_app(save)
-        self.assertEqual(before, [{"Prev (lb):\n132.3 x 8 @ 8"}])
-        self.assertEqual(self.notes(), {"Prev (lb):\n137.8 x 6 @ 8\n137.8 x 5 @ 8"})
+        self.assertEqual(before, [{"Previous (lb):\n132.3 x 8 @ 8"}])
+        self.assertEqual(self.notes(), {"Previous (lb):\n137.8 x 6 @ 8\n137.8 x 5 @ 8"})
         self.assertEqual(self.garmin_api.calls, ["update_workout", "push_workout_to_device"] * 2)
         # One history read, at startup; the events did the rest.
         self.assertEqual(sum(path.startswith("/exercise_history/") for path, _ in self.hevy_api.requests), 1)
