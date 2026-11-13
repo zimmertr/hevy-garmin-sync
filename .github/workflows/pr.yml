@@ -41,7 +41,7 @@ jobs:
   # renders below, on the Helm version the release packages with (record 0012).
   chart:
     name: Chart
-    uses: zimmertr/yggdrasil/.github/workflows/chart.yml@5e0beadd180895403b884af94c1fca0d613e32e7 # v1.2.8
+    uses: zimmertr/yggdrasil/.github/workflows/chart.yml@f805e7b874e54e661d8dc8ad528883228bfc567b # v1.2.9
     permissions:
       contents: read
     with:
@@ -72,7 +72,7 @@ jobs:
   # failure on any fixable Critical or High, as the release would refuse.
   docker-build:
     name: Docker Build
-    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@5e0beadd180895403b884af94c1fca0d613e32e7 # v1.2.8
+    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@f805e7b874e54e661d8dc8ad528883228bfc567b # v1.2.9
     permissions:
       contents: read
       pull-requests: write # the sticky scan comment
