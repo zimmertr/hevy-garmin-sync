@@ -31,7 +31,7 @@ make build
 docker run --rm -p 127.0.0.1:8080:8080 -v hevy-garmin-sync-data:/data --env-file .env hevy-garmin-sync:dev
 ```
 
-The `127.0.0.1:` keeps the status page on your own machine. Run straight from a clone with Python, it listens on your whole network.
+`docker run --env-file` keeps quotes as part of a value, unlike Compose, so write values there without the quotes the README's examples use. The `127.0.0.1:` keeps the status page on your own machine. Run straight from a clone with Python, it listens on your whole network.
 
 ## The live check
 
