@@ -56,16 +56,17 @@ Renovate recompiles a lock with the command in its header, so the header must ho
 
 ## The upstream check
 
-`upstream-check.yml` runs every Monday and can be started by hand. It is not a required check, and no yggdrasil module covers it, so it lives here. It runs `scripts/check_upstream.py`, which reads two public files with no sign-in and compares them with their copies in the repo:
+`upstream-check.yml` runs every Monday and can be started by hand. It is not a required check, and no yggdrasil module covers it, so it lives here. It runs `scripts/check_upstream.py`, which reads three public files with no sign-in and compares them with their copies in the repo:
 
 | Source | Copy | Keeps |
 |---|---|---|
 | Garmin's exercise list, `https://connect.garmin.com/web-data/exercises/Exercises.json` | `src/hevy_garmin_sync/data/garmin_exercises.json`, in the package because the app checks `CUSTOM_EXERCISE_MAP` against it | Each category key with its exercise keys (spec F-51, C-11) |
 | Hevy's API spec, inside `https://api.hevyapp.com/docs/swagger-ui-init.js` | `tests/data/hevy_api.json` | Each path with its methods, and the exercise type, equipment, muscle group and set type enums |
+| The Hevy app on the App Store, from Apple's public lookup `https://itunes.apple.com/lookup?id=1458862350&country=us` | `tests/data/hevy_app_version.json` | The version the Hevy Trainer rules were last checked against ([record 0018](architectural-decision-records/0018-the-weekly-check-watches-the-hevy-app-version.md)). Google Play has no such lookup, so the iPhone app's version stands in for both |
 
 1. `Compare` runs the script. The same copies pass and open nothing. A source it can't fetch or read fails the run.
-2. On a difference, `Issue` opens an issue titled "Garmin's exercise list or Hevy's API changed", labelled `P2`, `enhancement` and `ci`, with what was added and removed. While that issue is open, a later run comments on it instead of opening another.
-3. `PR` reads the sources again, rewrites the copies and opens a PR from the fixed branch `chore/upstream-copies`, or force-pushes the one already open. Its title is `test(upstream): update the copies of Garmin's exercise list and Hevy's API`, and it closes the issue. It uses `GH_PAT`, because a PR opened with `GITHUB_TOKEN` starts no workflows and its required checks would never report. When this job fails, the issue stays and the run fails.
+2. On a difference, `Issue` opens an issue titled "Garmin's exercise list, Hevy's API or the Hevy app changed", labelled `P2`, `enhancement` and `ci`, with what was added and removed. While that issue is open, a later run comments on it instead of opening another.
+3. `PR` reads the sources again, rewrites the copies and opens a PR from the fixed branch `chore/upstream-copies`, or force-pushes the one already open. Its title is `test(upstream): update the copies of Garmin's exercise list, Hevy's API and the Hevy app's version`, and it closes the issue. A new Hevy app version is merged only once the Hevy Trainer rules have been checked against it. It uses `GH_PAT`, because a PR opened with `GITHUB_TOKEN` starts no workflows and its required checks would never report. When this job fails, the issue stays and the run fails.
 
 Record: [0010](architectural-decision-records/0010-a-weekly-check-of-the-upstream-copies.md)
 

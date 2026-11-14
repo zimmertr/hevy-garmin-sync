@@ -40,3 +40,4 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0014](0014-renovate-under-yggdrasils-preset.md) | Renovate keeps dependencies current, under yggdrasil's shared preset | 2026-11-11 | Accepted. Supersedes 0002 in part |
 | [0015](0015-last-times-sets-in-each-sets-note.md) | Every set but a warm-up lists last time's working sets in its note, from the last workout of any kind that logged the exercise | 2026-11-11 | Accepted |
 | [0016](0016-a-status-page-and-manual-syncs-on-one-port.md) | The app serves a status page and its API on one port, takes manual syncs through it, and a rejected sign-in degrades its service instead of exiting | 2026-11-12 | Accepted. Supersedes 0007 |
+| [0018](0018-the-weekly-check-watches-the-hevy-app-version.md) | The weekly upstream check watches the Hevy app's version, and a new one waits for the rules to be checked | 2026-11-13 | Accepted |

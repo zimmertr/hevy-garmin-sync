@@ -15,7 +15,7 @@ CI is the test runner. Branch from the latest `main`, open a draft PR early, pus
 | `make build` | The image, tagged `hevy-garmin-sync:dev` |
 | `make scan` | The release scan's rules against that build |
 | `make lock` | Not a check: recompiles `requirements.txt` and `requirements-dev.txt` from the `.in` files, hashed. A pin change ships with its lock in the same PR |
-| `make upstream-check` | Not a check: the weekly upstream check ([CICD.md](CICD.md#the-upstream-check)). Reads Garmin's exercise list and Hevy's published API spec and prints what differs from the repo's copies of them. Exits 3 on a difference and 2 when a source can't be read |
+| `make upstream-check` | Not a check: the weekly upstream check ([CICD.md](CICD.md#the-upstream-check)). Reads Garmin's exercise list, Hevy's published API spec and the Hevy app's App Store version, and prints what differs from the repo's copies of them. Exits 3 on a difference and 2 when a source can't be read |
 | `make upstream-update` | Not a check: the same, then rewrites the copies that differ |
 | `make live-check` | Not a check: the one run against TJ's own accounts ([below](#the-live-check)) |
 | `make live-cleanup` | Not a check: deletes what `make live-check` made, and its saved Garmin token |

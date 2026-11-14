@@ -127,11 +127,30 @@ class CompareTest(unittest.TestCase):
         self.assertEqual(difference.added, ["enums > set_type > dropset"])
         self.assertEqual(difference.removed, ["paths > /v1/routines > post"])
 
+    def test_a_single_value_shows_with_its_key(self) -> None:
+        difference = cu.compare({"version": "3.2.5"}, {"version": "3.2.6"})
+        self.assertEqual((difference.added, difference.removed), (["version > 3.2.6"], ["version > 3.2.5"]))
+
     def test_a_key_left_empty_still_shows(self) -> None:
         self.assertEqual(cu.compare({}, {"CORE": [], "paths": {}}).added, ["CORE", "paths"])
 
     def test_the_same_copy_is_no_difference(self) -> None:
         self.assertFalse(cu.compare(HEVY, json.loads(json.dumps(HEVY))))
+
+
+class HevyAppTest(unittest.TestCase):
+    def test_keeps_the_version_alone(self) -> None:
+        self.assertEqual(cu.reduce_hevy_app(json.dumps(fixtures.app_store_lookup("3.2.6"))), {"version": "3.2.6"})
+
+    def test_a_reply_in_another_shape_is_a_source_error(self) -> None:
+        for text in ("not json", "{}", '{"results": []}', '{"results": [{}]}', '{"results": [7]}'):
+            with self.subTest(text=text), self.assertRaisesRegex(cu.SourceError, "no longer holds"):
+                cu.reduce_hevy_app(text)
+
+    def test_an_empty_or_odd_version_is_a_source_error(self) -> None:
+        for version in ("", None, 326):
+            with self.subTest(version=version), self.assertRaisesRegex(cu.SourceError, "holds no version"):
+                cu.reduce_hevy_app(json.dumps({"results": [{"version": version}]}))
 
 
 class MainTest(unittest.TestCase):
@@ -141,10 +160,12 @@ class MainTest(unittest.TestCase):
         self.root = Path(folder.name)
         self.garmin = self.root / "src/hevy_garmin_sync/data/garmin_exercises.json"
         self.hevy = self.root / "tests/data/hevy_api.json"
+        self.app = self.root / "tests/data/hevy_app_version.json"
         for path in (self.garmin, self.hevy):
             path.parent.mkdir(parents=True)
         self.garmin.write_text(cu.dump(GARMIN), encoding="utf-8")
         self.hevy.write_text(cu.dump(HEVY), encoding="utf-8")
+        self.app.write_text(cu.dump({"version": "3.2.5"}), encoding="utf-8")
         self.upstream = fixtures.FakeUpstream()
 
     def run_main(self, *argv: str) -> tuple[int, str]:
@@ -158,8 +179,20 @@ class MainTest(unittest.TestCase):
     def test_matching_copies_exit_0(self) -> None:
         code, out = self.run_main()
         self.assertEqual(code, cu.SAME)
-        self.assertEqual(out.count("No difference."), 2)
-        self.assertEqual([r.full_url for r in self.upstream.requests], [cu.GARMIN_URL, cu.HEVY_URL])
+        self.assertEqual(out.count("No difference."), 3)
+        self.assertEqual(
+            [r.full_url for r in self.upstream.requests], [cu.GARMIN_URL, cu.HEVY_URL, cu.HEVY_APP_URL]
+        )
+
+    def test_a_new_hevy_app_exits_3_and_write_moves_the_copy_to_it(self) -> None:
+        self.upstream.bodies[cu.HEVY_APP_URL] = json.dumps(fixtures.app_store_lookup("3.2.6")).encode()
+        code, out = self.run_main()
+        self.assertEqual(code, cu.DIFFERENT)
+        self.assertIn("## The Hevy app's version\n\n", out)
+        self.assertIn("Added (1):\n- `version > 3.2.6`\n", out)
+        self.assertIn("Removed (1):\n- `version > 3.2.5`\n", out)
+        self.assertEqual(self.run_main("--write")[0], cu.SAME)
+        self.assertEqual(json.loads(self.app.read_text(encoding="utf-8")), {"version": "3.2.6"})
 
     def test_a_key_missing_from_the_copy_exits_3_naming_it_in_the_report(self) -> None:
         self.drop_garmin_key()

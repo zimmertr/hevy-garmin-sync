@@ -10,7 +10,7 @@ Where each part of the app lives. The behaviour is specified in [SPEC.md](SPEC.m
 | `src/hevy_garmin_sync/web/` | The status page: `index.html`, `app.css`, `app.js`, the icon and the Barlow fonts. Served as they are, with no build step |
 | `src/hevy_garmin_sync/data/` | The two exercise tables the app ships, and the keys of Garmin's exercise list ([the exercise map](#the-exercise-map)) |
 | `tests/` | `unittest` suites, one fixtures module with every fake, and in `tests/data` the copy of Hevy's API spec and the recorded reply shapes the fakes are held to |
-| `scripts/` | `check_upstream.py`, the weekly upstream check: compares the copies of Garmin's list and Hevy's spec with their source ([CICD.md](CICD.md#the-upstream-check)). `live_check.py`, the run by hand against TJ's own accounts that records the shapes of Hevy's and Garmin's replies, puts a check workout on the watch and probes Garmin's step cap ([DEVELOPMENT.md](DEVELOPMENT.md#the-live-check)). Neither is in the image |
+| `scripts/` | `check_upstream.py`, the weekly upstream check: compares the copies of Garmin's list, Hevy's spec and the Hevy app's version with their source ([CICD.md](CICD.md#the-upstream-check)). `live_check.py`, the run by hand against TJ's own accounts that records the shapes of Hevy's and Garmin's replies, puts a check workout on the watch and probes Garmin's step cap ([DEVELOPMENT.md](DEVELOPMENT.md#the-live-check)). Neither is in the image |
 | `charts/hevy-garmin-sync-helm/` | The Helm chart: one Deployment, its PersistentVolumeClaim, Secret and Service |
 | `compose.yaml` | The same container for Docker Compose |
 | `Dockerfile` | The image: `python:3.15-slim`, the hashed lock, the package, `/data`, user 1000 |

@@ -1,10 +1,13 @@
-"""Compares Garmin's exercise list and Hevy's published API spec with the repo's copies of them.
+"""Compares Garmin's exercise list, Hevy's published API spec and the Hevy app's version with the repo's copies.
 
 The tests check every exercise map row against `src/hevy_garmin_sync/data/garmin_exercises.json`
 (spec F-51), which the app also reads to check CUSTOM_EXERCISE_MAP (C-11, #24), and read Hevy's
 enum values from `tests/data/hevy_api.json`, so a change upstream that nobody copied still passes
 CI. This is what notices: `.github/workflows/upstream-check.yml` runs it weekly, and
 `make upstream-check` and `make upstream-update` run it in Docker (#26, record 0010).
+
+The Hevy Trainer rules were read from one version of the Hevy app (docs/HEVY_TRAINER_RULES.md), so a
+new version is a difference too: someone checks the rules against it before the copy moves (record 0018).
 
 Exit codes: 0 when both copies match, 3 on a difference (printed, and written to --report), 2 when
 a source could not be fetched or read. With --write, a difference rewrites the copies and exits 0.
@@ -28,6 +31,8 @@ from typing import Any, Protocol
 ROOT = Path(__file__).resolve().parents[1]
 GARMIN_URL = "https://connect.garmin.com/web-data/exercises/Exercises.json"
 HEVY_URL = "https://api.hevyapp.com/docs/swagger-ui-init.js"
+# Apple's public lookup for one App Store app, here Hevy. Google Play has no such service.
+HEVY_APP_URL = "https://itunes.apple.com/lookup?id=1458862350&country=us"
 # Both sources are public. A request names no app, account or person, and carries no token or cookie.
 USER_AGENT = "Mozilla/5.0 (compatible; upstream-check)"
 TIMEOUT_SECONDS = 30
@@ -143,16 +148,30 @@ def reduce_hevy(text: str) -> dict[str, Any]:
     return {"enums": enums, "paths": dict(sorted(paths.items()))}
 
 
+def reduce_hevy_app(text: str) -> dict[str, Any]:
+    """The Hevy app's version on the App Store."""
+    try:
+        version = json.loads(text)["results"][0]["version"]
+    except (ValueError, KeyError, IndexError, TypeError) as error:
+        raise SourceError(f"Apple's lookup no longer holds the Hevy app's version: {error!r}") from error
+    if not isinstance(version, str) or not version:
+        raise SourceError(f"Apple's lookup holds no version for the Hevy app: {version!r}")
+    return {"version": version}
+
+
 SOURCES = (
     # In the package, since the app checks CUSTOM_EXERCISE_MAP against it at startup (#24).
     Source("Garmin's exercise list", GARMIN_URL, "src/hevy_garmin_sync/data/garmin_exercises.json", reduce_garmin),
     Source("Hevy's API spec", HEVY_URL, "tests/data/hevy_api.json", reduce_hevy),
+    # The version the Hevy Trainer rules were last checked against. A new one: check the rules, then merge.
+    Source("The Hevy app's version", HEVY_APP_URL, "tests/data/hevy_app_version.json", reduce_hevy_app),
 )
 
 
 def leaves(copy: Mapping[str, Any], path: tuple[str, ...] = ()) -> set[str]:
-    """Every value in a copy with the keys above it, so `BENCH_PRESS > BARBELL_BENCH_PRESS`; an empty
-    list or mapping is its own key, so a category that loses its last exercise still shows."""
+    """Every value in a copy with the keys above it, so `BENCH_PRESS > BARBELL_BENCH_PRESS` and
+    `version > 3.2.5`; an empty list or mapping is its own key, so a category that loses its last
+    exercise still shows."""
     found: set[str] = set()
     for key, value in copy.items():
         here = (*path, str(key))
@@ -160,6 +179,8 @@ def leaves(copy: Mapping[str, Any], path: tuple[str, ...] = ()) -> set[str]:
             found |= leaves(value, here)
         elif isinstance(value, list) and value:
             found |= {" > ".join((*here, str(item))) for item in value}
+        elif isinstance(value, str) and value:
+            found.add(" > ".join((*here, value)))
         else:
             found.add(" > ".join(here))
     return found
@@ -225,7 +246,7 @@ def main(argv: Sequence[str] | None = None, opener: Opener = urllib.request.urlo
     if failed:
         return UNCHECKED
     if args.write:
-        # Only once both sources were read, so a half-updated pair never reaches a PR.
+        # Only once every source was read, so a half-updated set never reaches a PR.
         for path, fetched in changed.items():
             path.write_text(dump(fetched), encoding="utf-8")
         return SAME
