@@ -278,9 +278,7 @@ def _set_step(exercise: Exercise, current: Set, system: str | None) -> Step:
         else:
             step["weightValue"] = float(current.weight_kg)
             step["weightUnit"] = {"unitId": 8, "unitKey": "kilogram"}
-    note = _note(current, exercise, system)
-    if note:
-        step["description"] = note
+    step["description"] = _note(current, exercise, system)
     return step
 
 
@@ -314,7 +312,7 @@ def _distance(meters: float, system: str | None) -> str:
     return f"{round(meters * _YARDS_PER_METER)} yd" if yards else f"{round(meters)} m"
 
 
-def _note(current: Set, exercise: Exercise, system: str | None) -> str | None:
+def _note(current: Set, exercise: Exercise, system: str | None) -> str:
     """The set as Garmin's own set-info screen shows it, under Hevy's name for the set type (F-30).
 
     The set-info screen is buried in the step list, while the note is one
