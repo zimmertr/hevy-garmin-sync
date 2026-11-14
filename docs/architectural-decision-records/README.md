@@ -41,3 +41,4 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0015](0015-last-times-sets-in-each-sets-note.md) | Every set but a warm-up lists last time's working sets in its note, from the last workout of any kind that logged the exercise | 2026-11-11 | Accepted. Superseded in part by 0017 |
 | [0016](0016-a-status-page-and-manual-syncs-on-one-port.md) | The app serves a status page and its API on one port, takes manual syncs through it, and a rejected sign-in degrades its service instead of exiting | 2026-11-12 | Accepted. Supersedes 0007 |
 | [0017](0017-each-sets-note-shows-the-set.md) | Each set's note shows the set as the watch's set-info screen does, with Hevy's name when Garmin's differs | 2026-11-13 | Accepted. Supersedes 0015 in part |
+| [0018](0018-every-hevy-app-release-is-checked.md) | Every Hevy app release is checked for changes to the Trainer rules, outside this repo | 2026-11-13 | Accepted |
