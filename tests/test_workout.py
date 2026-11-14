@@ -78,6 +78,7 @@ class SetStepTest(unittest.TestCase):
                                 "exerciseName": "SIDE_BEND",
                                 "weightValue": 40.0,
                                 "weightUnit": {"unitId": 7, "unitKey": "pound"},
+                                "description": "Normal Set\n12 Reps\n40 lbs",
                             },
                             {
                                 "type": "ExecutableStepDTO",
@@ -114,7 +115,7 @@ class SetStepTest(unittest.TestCase):
     def test_a_rep_range_targets_its_top_and_puts_the_range_in_the_note(self) -> None:
         (step, _) = steps(side_bend(Set(rep_range=(4, 6))))
         self.assertEqual((step["endCondition"], step["endConditionValue"]), (REPS, 6.0))
-        self.assertEqual(step["description"], "Goal: 4-6 reps")
+        self.assertEqual(step["description"], "Normal Set\n4-6 Reps")
 
     def test_a_set_with_no_rep_target_ends_on_a_button_press_and_keeps_its_weight(self) -> None:
         (step, _) = steps(side_bend(Set(kind="warmup", weight_kg=KG_40_LB)))
@@ -122,34 +123,69 @@ class SetStepTest(unittest.TestCase):
         self.assertIsNone(step["endConditionValue"])
         self.assertEqual(step["weightValue"], 40.0)
 
+    def test_a_warm_up_with_a_rep_range_targets_its_top_like_any_other_set(self) -> None:
+        (step, _) = steps(side_bend(Set(kind="warmup", rep_range=(4, 6), weight_kg=KG_40_LB)))
+        self.assertEqual((step["endCondition"], step["endConditionValue"]), (REPS, 6.0))
+        self.assertEqual(step["description"], "Warm Up Set\n4-6 Reps\n40 lbs")
+
     def test_a_warm_up_is_marked_and_noted(self) -> None:
         (step, _) = steps(side_bend(Set(kind="warmup", reps=10)))
         self.assertEqual(step["stepType"], {"stepTypeId": 1, "stepTypeKey": "warmup", "displayOrder": 1})
-        self.assertEqual(step["description"], "Warm-up")
+        self.assertEqual(step["description"], "Warm Up Set\n10 Reps")
 
-    def test_each_set_carries_the_one_note_the_spec_lists(self) -> None:
-        cases: list[tuple[Set, bool, str | None]] = [
-            (Set(reps=8), False, None),
-            (Set(rep_range=(8, 8)), False, None),
-            (Set(rep_range=(4, 6)), False, "Goal: 4-6 reps"),
-            (Set(kind="warmup"), False, "Warm-up"),
-            (Set(kind="warmup", rep_range=(8, 10)), False, "Warm-up\nGoal: 8-10 reps"),
-            (Set(kind="dropset", rep_range=(4, 6)), False, "Drop set\nGoal: 4-6 reps"),
-            (Set(kind="dropset", reps=6), False, "Drop set"),
-            (Set(kind="failure", rep_range=(4, 6)), False, "To failure\nGoal: 4-6 reps"),
-            (Set(kind="failure", reps=6), False, "To failure"),
-            (Set(reps=8), True, "Assisted"),
-            (Set(rep_range=(4, 6)), True, "Assisted\nGoal: 4-6 reps"),
-            (Set(kind="warmup", rep_range=(8, 10)), True, "Warm-up, assisted\nGoal: 8-10 reps"),
-            (Set(kind="dropset", reps=6), True, "Drop set, assisted"),
-            (Set(meters=20), False, "Goal: 22 yd"),
-            (Set(kind="warmup", meters=20), False, "Warm-up\nGoal: 22 yd"),
-            (Set(kind="dropset", meters=20), False, "Drop set\nGoal: 22 yd"),
+    def test_each_set_notes_its_type_target_and_weight_as_the_set_info_screen_does(self) -> None:
+        cases: list[tuple[Set, bool, str]] = [
+            (Set(reps=8), False, "Normal Set\n8 Reps"),
+            (Set(reps=1), False, "Normal Set\n1 Rep"),
+            (Set(rep_range=(8, 8)), False, "Normal Set\n8 Reps"),
+            (Set(rep_range=(4, 6)), False, "Normal Set\n4-6 Reps"),
+            (Set(), False, "Normal Set"),
+            (Set(kind="warmup"), False, "Warm Up Set"),
+            (Set(kind="warmup", rep_range=(8, 10)), False, "Warm Up Set\n8-10 Reps"),
+            (Set(kind="dropset", rep_range=(4, 6)), False, "Drop Set\n4-6 Reps"),
+            (Set(kind="failure", reps=6), False, "Failure Set\n6 Reps"),
+            (Set(reps=8, weight_kg=7.93787), False, "Normal Set\n8 Reps\n17.5 lbs"),
+            (Set(reps=8, weight_kg=15.8757), False, "Normal Set\n8 Reps\n35 lbs"),
+            (Set(reps=8), True, "Normal Set\n8 Reps\nAssisted"),
+            (Set(reps=8, weight_kg=KG_40_LB), True, "Normal Set\n8 Reps\nAssisted 40 lbs"),
+            (Set(seconds=30), False, "Normal Set\n0:30"),
+            (Set(seconds=90, weight_kg=KG_40_LB), False, "Normal Set\n1:30\n40 lbs"),
+            (Set(meters=20), False, "Normal Set\n22 yd"),
+            (Set(kind="dropset", seconds=45, meters=20), False, "Drop Set\n0:45\n22 yd"),
         ]
         for planned, assisted, note in cases:
             with self.subTest(set=planned, assisted=assisted):
-                (step, _) = steps(side_bend(planned, assisted=assisted))
-                self.assertEqual(step.get("description"), note)
+                (step, *_) = [s for s in steps(side_bend(planned, assisted=assisted)) if "exerciseName" in s]
+                self.assertEqual(step["description"], note)
+
+    def test_kilograms_are_whole_unless_hevy_has_a_fraction(self) -> None:
+        for kg, shown in ((20.0, "20 kg"), (22.5, "22.5 kg"), (1.25, "1.25 kg")):
+            with self.subTest(kg=kg):
+                (step, _) = steps(side_bend(Set(reps=5, weight_kg=kg)), system="metric")
+                self.assertEqual(step["description"], f"Normal Set\n5 Reps\n{shown}")
+
+    def test_hevys_name_goes_last_when_garmin_calls_the_exercise_something_else(self) -> None:
+        cases = [
+            ("Seal Row (Dumbbell)", "ROW", "CHEST_SUPPORTED_DUMBBELL_ROW"),
+            ("Push Press", "SHOULDER_PRESS", "BARBELL_PUSH_PRESS"),
+        ]
+        for title, category, name in cases:
+            with self.subTest(title=title):
+                (step, _) = steps(Exercise(title, category, name, (Set(reps=6),), 30))
+                self.assertEqual(step["description"], f"Normal Set\n6 Reps\nHevy: {title}")
+
+    def test_no_hevy_name_when_hevys_name_holds_every_word_of_garmins(self) -> None:
+        cases = [
+            ("Hammer Curl (Dumbbell)", "CURL", "DUMBBELL_HAMMER_CURL"),
+            ("Arnold Press (Dumbbell)", "SHOULDER_PRESS", "ARNOLD_PRESS"),
+            ("Bicep Curl (Dumbbell)", "CURL", "DUMBBELL_BICEPS_CURL"),
+            ("Bent Over Row (Dumbbell)", "ROW", "BENT_OVER_ROW_WITH_DUMBELL"),
+            ("Plank", "PLANK", ""),
+        ]
+        for title, category, name in cases:
+            with self.subTest(title=title):
+                (step, _) = steps(Exercise(title, category, name, (Set(reps=6),), 30))
+                self.assertEqual(step["description"], "Normal Set\n6 Reps")
 
     def test_a_drop_set_and_a_set_to_failure_are_normal_steps(self) -> None:
         for kind in ("dropset", "failure"):
@@ -315,7 +351,8 @@ class TimeAndDistanceTest(unittest.TestCase):
                 (step, _) = steps(carry, system=system)
                 self.assertEqual(step["endCondition"], LAP_BUTTON)
                 self.assertIsNone(step["endConditionValue"])
-                self.assertEqual(step["description"], f"Goal: {distance}")
+                weight = "50 lbs" if system == "statute_us" else "22.68 kg"
+                self.assertEqual(step["description"], f"Normal Set\n{distance}\n{weight}")
                 self.assertIn("weightValue", step)
 
     def test_a_timed_carry_counts_down_and_notes_its_distance(self) -> None:
@@ -323,81 +360,21 @@ class TimeAndDistanceTest(unittest.TestCase):
         (wait, step, _) = steps(carry)
         self.assertEqual(wait["description"], "Press Lap button to start 45s Farmer's Walk countdown")
         self.assertEqual((step["endCondition"], step["endConditionValue"]), (TIME, 45.0))
-        self.assertEqual(step["description"], "Goal: 22 yd")
+        self.assertEqual(step["description"], "Normal Set\n0:45\n22 yd")
 
 
-class PreviousTest(unittest.TestCase):
-    """Last time's working sets, one to a line, after the note every set but a warm-up carries (F-30b, #3)."""
-
-    def note(self, *logged: LoggedSet, planned: Set | None = None, system: str | None = "statute_us") -> str | None:
-        (step, _) = steps(side_bend(planned or Set(reps=6), previous=logged), system=system)
-        found: str | None = step.get("description")
-        return found
-
-    def test_the_block_follows_the_sets_own_note_and_names_the_unit_once(self) -> None:
-        last = (LoggedSet(65 / LB, 6, 7), LoggedSet(65 / LB, 6, 7.5), LoggedSet(65 / LB, 5, 8))
-        note = self.note(*last, planned=Set(rep_range=(4, 6)))
-        self.assertEqual(note, "Goal: 4-6 reps\nPrevious (lb):\n65 x 6 @ 7\n65 x 6 @ 7.5\n65 x 5 @ 8")
-
-    def test_it_is_the_whole_note_when_the_set_has_none(self) -> None:
-        self.assertEqual(self.note(LoggedSet(20, 8)), "Previous (lb):\n44.1 x 8")
-
-    def test_the_unit_is_the_one_the_weights_go_to_garmin_in(self) -> None:
-        for system in ("metric", "statute_uk", None):
-            with self.subTest(system=system):
-                note = self.note(LoggedSet(80.0, 5), LoggedSet(102.5, 3), system=system)
-                self.assertEqual(note, "Previous (kg):\n80 x 5\n102.5 x 3")
-
-    def test_a_set_with_no_weight_is_its_amount_and_the_heading_names_no_unit(self) -> None:
-        self.assertEqual(self.note(LoggedSet(reps=20, rpe=7.5), LoggedSet(reps=18)), "Previous:\n20 @ 7.5\n18")
-
-    def test_a_weight_with_no_amount_is_the_weight_alone(self) -> None:
-        self.assertEqual(self.note(LoggedSet(20, rpe=8), system="metric"), "Previous (kg):\n20 @ 8")
-
-    def test_a_time_is_spelled_as_the_countdown_is_and_a_distance_as_the_set_note_is(self) -> None:
-        last = (LoggedSet(seconds=45), LoggedSet(seconds=90, rpe=9), LoggedSet(20, meters=25))
-        self.assertEqual(self.note(*last, system="metric"), "Previous (kg):\n45s\n1m 30s @ 9\n20 x 25 m")
-        self.assertEqual(self.note(LoggedSet(meters=25), system="statute_uk"), "Previous:\n27 yd")
-
-    def test_reps_are_shown_before_a_time_and_a_time_before_a_distance(self) -> None:
-        last = (LoggedSet(reps=10, seconds=30, meters=20), LoggedSet(seconds=30, meters=20))
-        self.assertEqual(self.note(*last, system="metric"), "Previous:\n10\n30s")
-
-    def test_a_line_of_more_than_eight_digits_drops_the_spaces_after_x_and_at(self) -> None:
-        cases = [
-            (LoggedSet(102.5, 12, 9.5), "Previous (kg):\n102.5 x 12 @ 9.5"),
-            (LoggedSet(1002.5, 12, 9.5), "Previous (kg):\n1002.5 x12 @9.5"),
-            (LoggedSet(1002.5, 1000), "Previous (kg):\n1002.5 x1000"),
-            (LoggedSet(reps=123456789, rpe=8), "Previous:\n123456789 @8"),
-        ]
-        for logged, note in cases:
-            with self.subTest(note=note):
-                self.assertEqual(self.note(logged, system="metric"), note)
-
-    def test_a_set_logged_with_nothing_in_it_is_left_out(self) -> None:
-        self.assertEqual(self.note(LoggedSet(), LoggedSet(rpe=8), LoggedSet(reps=5)), "Previous:\n5")
-        self.assertIsNone(self.note(LoggedSet(rpe=8)))
-        self.assertIsNone(self.note())
-
-    def test_a_warm_up_keeps_its_own_note_and_every_other_set_gets_the_block(self) -> None:
-        found = steps(
-            side_bend(Set(kind="warmup", reps=10), Set(kind="dropset", reps=6), previous=(LoggedSet(reps=12),))
-        )
-        self.assertEqual([s.get("description") for s in found], ["Warm-up", None, "Drop set\nPrevious:\n12", None])
-
-    def test_matching_sets_still_share_one_repeat_group(self) -> None:
-        last = (LoggedSet(20, 12, 8), LoggedSet(20, 10, 9))
-        found = steps(side_bend(Set(kind="warmup", reps=12), *[Set(reps=12, weight_kg=KG_40_LB)] * 3, previous=last))
+class NoteRepeatTest(unittest.TestCase):
+    def test_matching_sets_get_matching_notes_and_share_one_repeat_group(self) -> None:
+        found = steps(side_bend(Set(kind="warmup", reps=12), *[Set(reps=12, weight_kg=KG_40_LB)] * 3))
         self.assertEqual(kinds(found), ["SIDE_BEND", "rest30", "repeat3(SIDE_BEND rest30)"])
-        self.assertEqual(found[2]["workoutSteps"][0]["description"], "Previous (lb):\n44.1 x 12 @ 8\n44.1 x 10 @ 9")
+        self.assertEqual(found[2]["workoutSteps"][0]["description"], "Normal Set\n12 Reps\n40 lbs")
 
-    def test_the_version_changes_with_last_times_sets_and_only_with_them(self) -> None:
+    def test_last_times_sets_never_reach_garmin(self) -> None:
         def version(*logged: LoggedSet) -> str:
             return workout.version(workout.build(routine(side_bend(Set(reps=12), previous=logged)), "statute_us"))
 
-        self.assertEqual(version(LoggedSet(20, 12)), version(LoggedSet(20, 12)))
-        self.assertNotEqual(version(LoggedSet(20, 12)), version(LoggedSet(20, 11)))
-        self.assertNotEqual(version(LoggedSet(20, 12)), version())
+        self.assertEqual(version(LoggedSet(20, 12)), version(LoggedSet(20, 11)))
+        self.assertEqual(version(LoggedSet(20, 12)), version())
 
 
 class OrderTest(unittest.TestCase):

@@ -88,7 +88,7 @@ A weight nothing can load gives no prescription.
 - One warm-up set: 60% of the working weight.
 - Two or more warm-up sets: 40%, then 60%. A third or later warm-up gets no weight.
 - Each is rounded to the nearest loadable weight.
-- A warm-up has no rep target.
+- A warm-up gets the working sets' rep range, as the Hevy app shows it on the warm-up rows.
 
 ## The next rep range
 
@@ -145,6 +145,7 @@ An exercise with no previous session in its template (after a rotation, say) sta
 | 2026-11-10 | The 14 exercises of both workouts of a two-workout program, as the running app worked them out | 12 weights with their warm-ups, one rep range, and one exercise with no weight | The same on all 14. TJ: "These look correct" (#22) |
 | 2026-11-11 | One exercise logged in the other unit, kilograms | 20 kg | 20 kg |
 | 2026-11-11 | One exercise swapped in permanently, weighted bodyweight (`bodyweight_weighted`) with no equipment, never logged in its template | No suggested weight, only the last session's numbers as placeholders | No prescription |
+| 2026-11-13 | Goblet Squat, two warm-ups, rep range 4-6 | 4-6 on both warm-ups and on the three working sets | 4-6 on all five |
 
 On 2026-11-10 the first run against a real account gave the same weight and warm-ups as hevy-trainer-sync, the tool these rules were first written for, on all 12 weighted exercises of a two-workout program, and the same rep range on the one logged by reps.
 

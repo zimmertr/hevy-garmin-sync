@@ -234,8 +234,8 @@ class Trainer:
         warmups_kg = prescription.warmups_kg if prescription else ()
 
         warmup_sets = [
-            # A warm-up carries a weight and no rep target, so it ends on a button press (F-22).
-            Set(kind="warmup", weight_kg=warmups_kg[i] if i < len(warmups_kg) else None)
+            # The Hevy app gives a warm-up the working sets' rep range too (TJ, 2026-11-13).
+            Set(kind="warmup", rep_range=rep_range, weight_kg=warmups_kg[i] if i < len(warmups_kg) else None)
             for i in range(int(planned.get("warmup_set_count") or 0))
         ]
         working = Set(rep_range=rep_range, weight_kg=weight_kg)

@@ -10,19 +10,17 @@ What you see when it runs, and what to do when it breaks.
 - Every routine is on today's calendar, so the watch offers them when you start a strength activity. Of the Trainer workouts, only the one Hevy says is next is on the calendar. When that changes in Hevy, because you logged one or reordered them, the calendar follows within a minute. The others stay in the watch's saved workouts.
 - With many workouts on today, the watch's prompt lists them all under "Dismiss" (eight, on 2026-11-10). Dismiss it and it comes back the next time you start a strength activity. Once you've done one of today's workouts, the prompt stops offering that one and keeps the others; it is still in the saved list. One evening the next Trainer workout was missing from the prompt as well, after another workout had been recorded that day (spec U-10); it was still in the saved list.
 - A change in Hevy reaches Garmin Connect within a minute, and the watch at its next sync with your phone.
-- A set's note says what the watch's own screens don't. The set's type gets a line: `Warm-up`, `Drop set`, `To failure` or `Assisted`. A rep range or a distance gets the next, as `Goal: 4-6 reps` or `Goal: 22 yd`. A normal set with a plain rep target has neither.
-- Each set but a warm-up shows last time's working sets in its note, after those lines:
+- Every set has a note, one page down from the main screen during the set. It shows what the watch's set-info screen shows, which is otherwise buried in the step list, under Hevy's name for the set type:
 
   ```
-  Goal: 4-6 reps
-  Previous (lb):
-  65 x 6 @ 7
-  65 x 6 @ 7.5
-  65 x 5 @ 8
+  Warm Up Set
+  4-6 Reps
+  35 lbs
+  Hevy: Seal Row (Dumbbell)
   ```
 
-  The number after `@` is the RPE, and a set logged without one has none. An exercise with no weight has `Previous:` and lines such as `20 @ 7.5`; a timed one `45s`, a distance `25 m` or `27 yd`. A line with more than 8 digits loses the spaces after `x` and `@` (`1002.5 x12 @9.5`), so the watch doesn't break it in two. The screen shows about six lines and scrolls through the rest by itself. Last time is the last workout of any kind in the past 12 months that logged the exercise, whatever Hevy's "Previous Workout Values" setting says, so with "Same Routine" in Hevy the watch can show other numbers than the Hevy app for an exercise in two routines. An exercise not logged in 12 months has no block.
-- Saving, editing or deleting a workout in Hevy changes those notes within a minute, in every workout that holds one of its exercises. Each of those workouts is rewritten and sent to the watch again. `ENABLE_PREVIOUS_VALUES=false` turns the notes off.
+  The type is `Warm Up Set`, `Normal Set`, `Failure Set` or `Drop Set`. The target is the reps, a time such as `0:30`, or a distance such as `22 yd`. A weight is whole unless Hevy has a fraction (`17.5 lbs`), and an assisted exercise's weight reads `Assisted 20 lbs`. The last line is Hevy's name for the exercise, only when Garmin's name has a word Hevy's doesn't: `Arnold Press` for Hevy's `Arnold Press (Dumbbell)` gets none.
+- A warm-up gets the same rep range as the sets after it, as the Hevy app shows it. Like every set with reps, it waits for the Lap press.
 - An exercise swapped in a Trainer workout reaches Garmin only when you answer "Replace permanently?" with Yes. A swap for that workout only (No) stays on your phone, and the watch keeps the old exercise ([issue 44](https://github.com/zimmertr/hevy-garmin-sync/issues/44)). To do the new exercise from the watch, answer Yes, and swap back after the session. Routines work the same way: only an edit to the routine itself reaches Garmin, not an exercise replaced in a workout you've started from it.
 - A unit set for one exercise in Hevy reaches Garmin at midnight, or after you save, edit or delete a workout, not within a minute. Press Sync now to send it at once.
 - A routine deleted in Hevy leaves Garmin Connect and the calendar. The copy in the watch's saved workout list stays until you delete it on the watch.
@@ -32,7 +30,7 @@ What you see when it runs, and what to do when it breaks.
 Open `http://localhost:8080` under Compose, or the Service's address under Kubernetes (`kubectl port-forward svc/hevy-garmin-sync 8080` if it has none outside the cluster). The page has no sign-in: anyone who can reach the port sees your workouts and can press its buttons.
 
 - **Sync now** reads Hevy and syncs all workouts to Garmin Connect. It writes what changed, tries again any workout Garmin refused, sends every workout to the watch again, and reads Hevy Trainer's preferences and logged workouts again. A hand edit in Garmin Connect stays.
-- **Force sync** reads Hevy and overwrites all workouts on Garmin Connect, which undoes any hand edit there. Each workout keeps its place on the calendar. It also reads last time's sets from Hevy again.
+- **Force sync** reads Hevy and overwrites all workouts on Garmin Connect, which undoes any hand edit there. Each workout keeps its place on the calendar. It also reads last time's sets for the status page from Hevy again.
 - From a terminal, the same with `sync` and `sync --force`: `docker compose exec hevy-garmin-sync python3 -m hevy_garmin_sync sync`, or `kubectl exec deploy/hevy-garmin-sync -- python3 -m hevy_garmin_sync sync`.
 - One sync a minute. Within a minute of the last one, the page and `sync` say how many seconds are left. A press while a sync runs joins it. While Garmin is making the app wait, the sync runs when the wait ends, and the page says so.
 - A sync costs about 3 Garmin calls per workout, and Garmin is known to block accounts that call too often. Use it when something looks wrong, not on a timer.

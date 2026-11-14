@@ -20,7 +20,7 @@ CI is the test runner. Branch from the latest `main`, open a draft PR early, pus
 | `make live-check` | Not a check: the one run against TJ's own accounts ([below](#the-live-check)) |
 | `make live-cleanup` | Not a check: deletes what `make live-check` made, and its saved Garmin token |
 | `make live-check-hevy` | Not a check: `make live-check`'s Hevy reads alone, with no Garmin sign-in ([below](#the-live-check)) |
-| `make live-check-notes` | Not a check: one workout on the watch whose notes hold last time's numbers, with no Hevy read ([below](#the-live-check)) |
+| `make live-check-notes` | Not a check: one workout on the watch with one note of each shape the app writes and a line of symbols, with no Hevy read ([below](#the-live-check)) |
 
 ## The live check
 
@@ -37,13 +37,13 @@ If `make live-check` stops partway, it says how many check workouts it left; `ma
 
 `make live-check-hevy` is the Hevy part of steps 1 and 2 alone: it asks for the same key and cookie, reads Hevy, prints the same Trainer edit lines, and writes `live-check/recorded-hevy.json`. It signs in to nothing else, makes nothing, never touches `recorded.json`, and runs even when an earlier `make live-check` wasn't cleaned up. With no routines in the account, the exercise template and its history come from a logged workout instead.
 
-`make live-check-notes` is for [#3](https://github.com/zimmertr/hevy-garmin-sync/issues/3), last time's numbers in a set's note. It asks for the Garmin sign-in only, reads nothing from Hevy, and makes `HGS check notes`: five exercises of one set each, to find a way to write one of last time's sets that fits on one line of the watch. In the first two, every line is the widest set a note is likely to hold. The numbers are made up.
+`make live-check-notes` checks each set's note as the app writes it (spec F-30). It asks for the Garmin sign-in only, reads nothing from Hevy, and makes `HGS check notes` with the app's own `workout.build`. The numbers are made up.
 
-1. Curl, the unit on every line: `102.5 kg x 12 @ 9.5`, `102.5kg x12 @9.5`, `102.5kg x12 9.5` and `1002.5kg x12 @9.5`.
-2. Squat, the unit once in a heading: `Prev (kg):`, then `102.5 x 12 @ 9.5`, `1002.5 x 12 @ 9.5` and `1002.5 x12 @9.5`.
-3. Row: a ruler of thirty digits, then the headings `kg x reps @ RPE` and `Prev: kg x reps @ RPE`.
-4. Lunge, a whole note with the unit on every line: the app's own `Goal: 4-6 reps`, `Prev:`, then `65lb x6 @7`, `65lb x6 @7.5` and `65lb x5 @8`.
-5. Crunch, a whole note with the unit in the heading: `Goal: 4-6 reps`, `Prev (lb):`, then `65 x 6 @ 7`, `65 x 6 @ 7.5` and `65 x 5 @ 8`.
+1. Chest Supported Dumbbell Row, Hevy's Seal Row (Dumbbell): a warm-up and a Normal Set, both 4-6 reps, so the warm-up's rep target and the `Hevy:` line show.
+2. Lying Dumbbell Pullover To Extension: a Failure Set of 8 at `17.5 lbs`.
+3. Dumbbell Hammer Curl: a Drop Set of 8-12 with no weight.
+4. Plank: a timed set, `0:30`.
+5. Crunch: a Normal Set whose note ends with a line of symbols (`×`, `•`, `→`, `✓`, `°`, `½`, `★`, `♥`, `⚠`, two emoji and others), to see which ones the watch draws.
 
 It reads the workout back and says whether Garmin stored every note whole. Then it puts the workout on today, sends it to the watch and prints the notes. Start it on the watch, photograph each note, and discard the activity. Then `make live-cleanup`, as after `make live-check`. It won't run while an earlier run's `live-check/created.json` is there.
 
