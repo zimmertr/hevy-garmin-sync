@@ -31,6 +31,9 @@ _ID_LABELS = {ROUTINE: "Hevy routine", TRAINER: "Hevy Trainer template"}
 _ID_LINE = re.compile(r"(Hevy routine|Hevy Trainer template): (\S+)")
 _VERSION_LINE = re.compile(r"Version: ([0-9a-f]{6})\b")
 _UPDATED_LINE = re.compile(r"Last updated: (\d{4}-\d{2}-\d{2} \d{2}:\d{2})")
+# The description's layout (F-12). It is part of the Version hash, so changing
+# it rewrites every workout once on the next sync (TJ, 2026-11-14).
+_NOTES = "{first}\nLast updated: {updated} | Version: {version}\n{label}: {source_id}"
 
 _POUNDS_PER_KG = 2.2046226218
 _YARDS_PER_METER = 1.0936133
@@ -126,20 +129,21 @@ def build(workout: Workout, measurement_system: str | None) -> Body:
 
 
 def version(body: Body) -> str:
-    """A short hash of the workout exactly as the app built it (F-12)."""
-    canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
+    """A short hash of the workout exactly as the app built it, and of the description's layout (F-12)."""
+    canonical = json.dumps(body, sort_keys=True, separators=(",", ":")) + "\n" + _NOTES
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:6]
 
 
 def stamped(body: Body, workout: Workout, now: datetime) -> Body:
     """The body with the ownership description (F-12). `now` is in the user's zone."""
-    lines = [
-        FIRST_LINE,
-        f"Last updated: {now.strftime('%Y-%m-%d %H:%M %Z')}",
-        f"{_ID_LABELS[workout.kind]}: {workout.source_id}",
-        f"Version: {version(body)}",
-    ]
-    return body | {"description": "\n".join(lines)}
+    description = _NOTES.format(
+        first=FIRST_LINE,
+        updated=now.strftime("%Y-%m-%d %H:%M %Z"),
+        version=version(body),
+        label=_ID_LABELS[workout.kind],
+        source_id=workout.source_id,
+    )
+    return body | {"description": description}
 
 
 def owner(description: str | None) -> Owner | None:

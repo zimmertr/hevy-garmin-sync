@@ -3,6 +3,7 @@
 import unittest
 from datetime import datetime
 from typing import Any
+from unittest import mock
 
 from hevy_garmin_sync import workout
 from hevy_garmin_sync.workout import Exercise, LoggedSet, Owner, Set, Workout
@@ -396,15 +397,14 @@ class OwnershipTest(unittest.TestCase):
         self.plan = routine(side_bend(Set(reps=12)))
         self.body = workout.build(self.plan, "statute_us")
 
-    def test_the_description_is_the_four_lines_the_spec_gives(self) -> None:
+    def test_the_description_is_the_three_lines_the_spec_gives(self) -> None:
         stamped = workout.stamped(self.body, self.plan, fixtures.NOW)
         self.assertEqual(
             stamped["description"].splitlines(),
             [
                 "Synced from Hevy: https://github.com/zimmertr/hevy-garmin-sync",
-                f"Last updated: {fixtures.NOW:%Y-%m-%d %H:%M} PST",
+                f"Last updated: {fixtures.NOW:%Y-%m-%d %H:%M} PST | Version: {workout.version(self.body)}",
                 "Hevy routine: routine-1",
-                f"Version: {workout.version(self.body)}",
             ],
         )
         self.assertEqual({k: v for k, v in stamped.items() if k != "description"}, self.body)
@@ -412,7 +412,7 @@ class OwnershipTest(unittest.TestCase):
     def test_a_trainer_workout_names_its_template(self) -> None:
         plan = Workout(workout.TRAINER, "template-9", "Hevy/Trainer: Upper (C2-W2)", self.plan.exercises)
         stamped = workout.stamped(workout.build(plan, "statute_us"), plan, fixtures.NOW)
-        self.assertIn("\nHevy Trainer template: template-9\n", stamped["description"])
+        self.assertTrue(stamped["description"].endswith("\nHevy Trainer template: template-9"))
         body = {k: v for k, v in stamped.items() if k != "description"}
         self.assertEqual(
             workout.owner(stamped["description"]),
@@ -431,6 +431,27 @@ class OwnershipTest(unittest.TestCase):
         in_pounds = workout.build(routine(side_bend(Set(reps=12, weight_kg=20))), "statute_us")
         in_kilograms = workout.build(routine(side_bend(Set(reps=12, weight_kg=20))), "metric")
         self.assertNotEqual(workout.version(in_pounds), workout.version(in_kilograms))
+
+    def test_the_version_changes_with_the_descriptions_layout(self) -> None:
+        # So a new layout rewrites every workout once, on the next sync (TJ, 2026-11-14).
+        before = workout.version(self.body)
+        with mock.patch.object(workout, "_NOTES", "{first}\n{label}: {source_id}\nVersion: {version}"):
+            self.assertNotEqual(workout.version(self.body), before)
+
+    def test_the_owner_reads_the_four_line_layout_from_before_2026_11_14(self) -> None:
+        # A workout keeps the old layout until its first sync after the upgrade, which rewrites it.
+        old = "\n".join(
+            [
+                workout.FIRST_LINE,
+                "Last updated: 2026-11-12 09:41 PST",
+                "Hevy routine: routine-1",
+                "Version: 3f9c1a",
+            ]
+        )
+        self.assertEqual(
+            workout.owner(old),
+            Owner(workout.ROUTINE, "routine-1", "3f9c1a", datetime(2026, 11, 12, 9, 41)),
+        )
 
     def test_the_owner_reads_back_from_the_description(self) -> None:
         stamped = workout.stamped(self.body, self.plan, fixtures.NOW)
