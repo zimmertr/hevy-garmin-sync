@@ -69,9 +69,8 @@ lock:
 	  pip-compile -q --generate-hashes --allow-unsafe --strip-extras --output-file=requirements-dev.txt requirements-dev.in"
 
 # Not checks: the weekly upstream-check.yml run, here. Both fetch Garmin's
-# exercise list, Hevy's published API spec and the Hevy app's App Store
-# version, which need no sign-in, and compare them with the copies in
-# src/hevy_garmin_sync/data and tests/data.
+# exercise list and Hevy's published API spec, which need no sign-in, and
+# compare them with the copies in src/hevy_garmin_sync/data and tests/data.
 # The first exits 3 on a
 # difference and 2 when a source can't be read; the second rewrites the copies.
 upstream-check:

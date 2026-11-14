@@ -4,9 +4,8 @@ name: Upstream Check
 # src/hevy_garmin_sync/data/garmin_exercises.json, which the app also reads to
 # check CUSTOM_EXERCISE_MAP (#24), and read Hevy's enums from
 # tests/data/hevy_api.json, so a change upstream that nobody copied still
-# passes CI. The Hevy Trainer rules match one version of the Hevy app, kept in
-# tests/data/hevy_app_version.json (record 0018). Every week this compares the
-# three copies with their source (scripts/check_upstream.py). On a difference it opens one issue, or
+# passes CI. Every week this compares both copies with their
+# source (scripts/check_upstream.py). On a difference it opens one issue, or
 # comments on the one still open, and opens or updates one PR that rewrites the
 # copies, so the PR's tests show any map row the change broke. A source it can't
 # read fails the run, and GitHub emails. Not a required check. #26, record 0010.
@@ -80,7 +79,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      TITLE: Garmin's exercise list, Hevy's API or the Hevy app changed
+      TITLE: Garmin's exercise list or Hevy's API changed
       REPORT: ${{ needs.check.outputs.report }}
       RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
@@ -91,7 +90,7 @@ jobs:
             echo "The weekly upstream check found a source that no longer matches its copy in the repo: $RUN"
             echo
             printf '%s\n' "$REPORT"
-            echo "The same run opens or updates a PR from the \`chore/upstream-copies\` branch that rewrites the copies. Its tests show any exercise map row the change broke. A new Hevy app version needs the Hevy Trainer rules checked against it before the PR merges."
+            echo "The same run opens or updates a PR from the \`chore/upstream-copies\` branch that rewrites the copies. Its tests show any exercise map row the change broke."
           } > "$body"
           number=$(gh issue list --state open --limit 500 --json number,title --jq 'map(select(.title == env.TITLE)) | first | .number // empty')
           if [ -n "$number" ]; then
@@ -114,7 +113,7 @@ jobs:
     permissions:
       contents: read # the checkout; the push and the PR use GH_PAT
     env:
-      TITLE: "test(upstream): update the copies of Garmin's exercise list, Hevy's API and the Hevy app's version"
+      TITLE: "test(upstream): update the copies of Garmin's exercise list and Hevy's API"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -138,7 +137,6 @@ jobs:
           add-paths: |
             src/hevy_garmin_sync/data/garmin_exercises.json
             tests/data/hevy_api.json
-            tests/data/hevy_app_version.json
           commit-message: ${{ env.TITLE }}
           title: ${{ env.TITLE }}
           body: |
@@ -149,7 +147,6 @@ jobs:
 
             - Fix any exercise map row the tests flag, in `src/hevy_garmin_sync/data/exercise_map.csv` or `custom_exercise_map.csv` (spec F-51).
             - Add the change, dated, to `docs/DATA.md`.
-            - For a new Hevy app version: check the Hevy Trainer rules against it (`docs/HEVY_TRAINER_RULES.md`), and move that page's version to the new one.
 
             The next weekly run force-pushes this branch while the difference stays, so a commit added here by hand is lost unless the PR merges first.
 

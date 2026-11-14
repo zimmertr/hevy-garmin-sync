@@ -25,7 +25,7 @@ from requests.structures import CaseInsensitiveDict
 from hevy_garmin_sync.exercises import ExerciseMap, GarminExercise
 from hevy_garmin_sync.trainer_rules import DEFAULT_WEIGHTS
 from hevy_garmin_sync.workout import step_count
-from scripts.check_upstream import GARMIN_URL, HEVY_APP_URL, HEVY_URL
+from scripts.check_upstream import GARMIN_URL, HEVY_URL
 
 ZONE = ZoneInfo("America/Los_Angeles")
 # A winter afternoon, so the zone's abbreviation is PST.
@@ -1159,20 +1159,14 @@ def hevy_docs_script(spec: dict[str, Any] | None = None) -> str:
     )
 
 
-def app_store_lookup(version: str) -> dict[str, Any]:
-    """Apple's lookup reply for one app, cut to the keys around the one the check reads."""
-    return {"resultCount": 1, "results": [{"trackName": "Hevy", "version": version}]}
-
-
 class FakeUpstream:
-    """urllib's `urlopen` over Garmin's exercise list, Hevy's docs script and Apple's lookup of the Hevy
-    app, the three public files scripts/check_upstream.py reads."""
+    """urllib's `urlopen` over Garmin's exercise list and Hevy's docs script, the two public files
+    scripts/check_upstream.py reads."""
 
     def __init__(self) -> None:
         self.bodies: dict[str, bytes] = {
             GARMIN_URL: json.dumps(garmin_exercise_list()).encode(),
             HEVY_URL: hevy_docs_script().encode(),
-            HEVY_APP_URL: json.dumps(app_store_lookup("3.2.5")).encode(),
         }
         self.requests: list[Request] = []
         self.timeouts: list[float] = []

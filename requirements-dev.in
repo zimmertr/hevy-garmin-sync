@@ -4,7 +4,7 @@
 -c requirements.txt
 -r requirements.in
 # Line and branch coverage, reported in CI.
-coverage==7.17.2
+coverage==7.17.3
 # The Python Lint job and the Makefile's lint and typecheck targets.
 ruff==0.17.5
 mypy==2.4.1

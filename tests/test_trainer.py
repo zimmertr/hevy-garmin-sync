@@ -115,8 +115,8 @@ class ProgramTest(TrainerCase):
                     "SQUAT",
                     "GOBLET_SQUAT",
                     (
-                        Set(kind="warmup", weight_kg=30 / LB),
-                        Set(kind="warmup", weight_kg=50 / LB),
+                        Set(kind="warmup", rep_range=(4, 6), weight_kg=30 / LB),
+                        Set(kind="warmup", rep_range=(4, 6), weight_kg=50 / LB),
                         *[Set(rep_range=(4, 6), weight_kg=80 / LB)] * 3,
                     ),
                     rest_seconds=90,
@@ -447,15 +447,15 @@ class WeightTest(TrainerCase):
                 self.private.units = reply
                 self.assertEqual(self.said()[-1], "Side Bend (Dumbbell): 40 lbs (up)")
 
-    def test_warm_ups_carry_a_weight_and_no_rep_target_and_a_third_one_has_neither(self) -> None:
+    def test_warm_ups_carry_the_rep_range_and_a_weight_and_a_third_one_no_weight(self) -> None:
         self.one(trainer_exercise("T-SIDE-BEND", warmups=3))
         self.log(TUESDAY, {"T-SIDE-BEND": [logged_set(40, 10)] * 3})
         self.assertEqual(
             self.sets()[:4],
             (
-                Set(kind="warmup", weight_kg=15 / LB),
-                Set(kind="warmup", weight_kg=25 / LB),
-                Set(kind="warmup"),
+                Set(kind="warmup", rep_range=(10, 12), weight_kg=15 / LB),
+                Set(kind="warmup", rep_range=(10, 12), weight_kg=25 / LB),
+                Set(kind="warmup", rep_range=(10, 12)),
                 Set(rep_range=(10, 12), weight_kg=40 / LB),
             ),
         )
@@ -465,7 +465,7 @@ class WeightTest(TrainerCase):
         self.assertEqual(self.said(), ["Lying Leg Raise: 10-12 reps (new exercise)"])
         self.log(TUESDAY, {"T-LEG-RAISE": [logged_set(None, 5)] * 3})
         self.assertEqual(self.said(), ["Lying Leg Raise: 8-12 reps (down)"])
-        self.assertEqual(self.sets(), (Set(kind="warmup"), *[Set(rep_range=(8, 12))] * 3))
+        self.assertEqual(self.sets(), (Set(kind="warmup", rep_range=(8, 12)), *[Set(rep_range=(8, 12))] * 3))
 
     def test_rest_is_the_programs_and_zero_is_none(self) -> None:
         self.one(trainer_exercise("T-SIDE-BEND", rest_seconds=0), trainer_exercise("T-GOBLET", rest_seconds=150))
@@ -558,7 +558,10 @@ class NewExerciseTest(TrainerCase):
         self.public.history["T-BENCH"] = [self.lifted(100, 5, 30), self.lifted(90, 5, 10), self.lifted(140, 5, 200)]
         self.assertEqual(self.said(), ["Bench Press (Barbell): 200 lbs (new exercise), warm-ups 120"])
         self.assertEqual(
-            self.sets(), (Set(kind="warmup", weight_kg=120 / LB), *[Set(rep_range=(4, 6), weight_kg=200 / LB)] * 3)
+            self.sets(), (
+                Set(kind="warmup", rep_range=(4, 6), weight_kg=120 / LB),
+                *[Set(rep_range=(4, 6), weight_kg=200 / LB)] * 3,
+            ),
         )
 
     def test_with_nothing_in_three_months_the_last_twelve_count(self) -> None:
@@ -588,7 +591,7 @@ class NewExerciseTest(TrainerCase):
         self.public.history["T-BENCH"] = [self.lifted(200, 5, 10, "warmup"), self.lifted(100, 0, 10)]
         (said,) = self.said()
         self.assertTrue(said.endswith("(it is new to this workout and nothing gives it a starting weight)"), said)
-        self.assertEqual(self.sets(), (Set(kind="warmup"), *[Set(rep_range=(4, 6))] * 3))
+        self.assertEqual(self.sets(), (Set(kind="warmup", rep_range=(4, 6)), *[Set(rep_range=(4, 6))] * 3))
 
     def test_a_rep_range_trainer_has_no_share_for_gets_no_weight(self) -> None:
         self.one(trainer_exercise("T-BENCH", rep_range=(15, 20)))

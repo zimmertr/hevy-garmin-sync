@@ -45,7 +45,8 @@ _TIME = {"conditionTypeId": 2, "conditionTypeKey": "time", "displayOrder": 2, "d
 _ITERATIONS = {"conditionTypeId": 7, "conditionTypeKey": "iterations", "displayOrder": 7, "displayable": False}
 _REPS = {"conditionTypeId": 10, "conditionTypeKey": "reps", "displayOrder": 10, "displayable": True}
 _NO_TARGET = {"workoutTargetTypeId": 1, "workoutTargetTypeKey": "no.target", "displayOrder": 1}
-_SET_LABELS = {"warmup": "Warm-up", "dropset": "Drop set", "failure": "To failure"}
+# Hevy's own names for its set types (TJ, 2026-11-13).
+_SET_LABELS = {"normal": "Normal Set", "warmup": "Warm Up Set", "dropset": "Drop Set", "failure": "Failure Set"}
 
 
 @dataclass(frozen=True)
@@ -60,7 +61,7 @@ class Set:
 
 @dataclass(frozen=True)
 class LoggedSet:
-    """A working set as Hevy logged it, for the note's lines of last time's numbers (previous.py)."""
+    """A working set as Hevy logged it, for the status page's line of last time's numbers (previous.py)."""
 
     weight_kg: float | None = None
     reps: int | None = None
@@ -71,17 +72,17 @@ class LoggedSet:
 
 @dataclass(frozen=True)
 class Exercise:
-    title: str  # Hevy's title, for the note on a timed set's wait step
+    title: str  # Hevy's title, for the notes when it differs from Garmin's name
     category: str  # Garmin's exercise category key
     name: str  # Garmin's exercise key
     sets: tuple[Set, ...]
     rest_seconds: int | None = None
     superset: int | None = None
     assisted: bool = False
-    previous: tuple[LoggedSet, ...] = ()  # the working sets of the last session that logged it
     # For the status page only, never sent to Garmin (spec W-2), so they take no part in
-    # comparing plans: what chose the Garmin exercise, and Hevy Trainer's direction, or
-    # why it gave no weight.
+    # comparing plans: the working sets of the last session that logged it, what chose the
+    # Garmin exercise, and Hevy Trainer's direction, or why it gave no weight.
+    previous: tuple[LoggedSet, ...] = field(default=(), compare=False)
     chosen_by: str = field(default="", compare=False)
     direction: str | None = field(default=None, compare=False)
     no_weight: str | None = field(default=None, compare=False)
@@ -277,9 +278,7 @@ def _set_step(exercise: Exercise, current: Set, system: str | None) -> Step:
         else:
             step["weightValue"] = float(current.weight_kg)
             step["weightUnit"] = {"unitId": 8, "unitKey": "kilogram"}
-    note = _note(current, exercise, system)
-    if note:
-        step["description"] = note
+    step["description"] = _note(current, exercise, system)
     return step
 
 
@@ -313,61 +312,57 @@ def _distance(meters: float, system: str | None) -> str:
     return f"{round(meters * _YARDS_PER_METER)} yd" if yards else f"{round(meters)} m"
 
 
-def _note(current: Set, exercise: Exercise, system: str | None) -> str | None:
-    """The one note a set carries: its type, its rep range or distance (F-30), then last time's sets (F-30b).
+def _note(current: Set, exercise: Exercise, system: str | None) -> str:
+    """The set as Garmin's own set-info screen shows it, under Hevy's name for the set type (F-30).
 
-    Each on a line of its own, so the watch breaks none of them in two: it
-    wrapped `Drop set: 4-6 reps`, 18 characters, and left `reps` on a line by
-    itself (TJ, 2026-11-11, #3).
+    The set-info screen is buried in the step list, while the note is one
+    page down during the set (TJ, 2026-11-13). Each part has a line of its
+    own, so the watch breaks none of them in two, and Hevy's exercise name goes
+    last, where a long one can wrap. Matching sets get matching notes, so they
+    still share a repeat group (F-20a).
     """
-    label = _SET_LABELS.get(current.kind, "")
-    if exercise.assisted:
-        label = f"{label}, assisted" if label else "Assisted"
-    goal = ""
+    lines = [_SET_LABELS.get(current.kind, "Normal Set")]
+    if current.rep_range or current.reps:
+        low, high = current.rep_range or (current.reps or 0, current.reps or 0)
+        count = f"{low}-{high}" if low != high else str(high)
+        lines.append(f"{count} {'Rep' if count == '1' else 'Reps'}")
+    if current.seconds:
+        lines.append(_clock(current.seconds))
     if current.meters:
-        goal = f"Goal: {_distance(current.meters, system)}"
-    elif current.rep_range and current.rep_range[0] != current.rep_range[1]:
-        goal = f"Goal: {current.rep_range[0]}-{current.rep_range[1]} reps"
-    # Every working set of an exercise gets the same block, so matching sets still share a repeat group (F-20a).
-    previous = "" if current.kind == "warmup" else _previous(exercise.previous, system)
-    return "\n".join(part for part in (label, goal, previous) if part) or None
+        lines.append(_distance(current.meters, system))
+    if current.weight_kg:
+        weight = _weight(current.weight_kg, system)
+        lines.append(f"Assisted {weight}" if exercise.assisted else weight)
+    elif exercise.assisted:
+        lines.append("Assisted")
+    # Only when Garmin's name says something Hevy's doesn't: `Arnold Press` for `Arnold Press (Dumbbell)` is no news.
+    if not _words(garmin_name(exercise.category, exercise.name)) <= _words(exercise.title):
+        lines.append(f"Hevy: {exercise.title}")
+    return "\n".join(lines)
 
 
-def _previous(logged: Sequence[LoggedSet], system: str | None) -> str:
-    """Last time's working sets, one to a line under a heading that names the unit once, or "" for none.
+def _clock(total: int) -> str:
+    """A duration as the watch counts it down: 0:30, 1:30."""
+    minutes, seconds = divmod(total, 60)
+    return f"{minutes}:{seconds:02d}"
 
-    The form was settled on a Fenix 8 (TJ, 2026-11-11, #3): a line holds 14
-    digits and wraps at a space, so a line of more than 8 digits drops the
-    spaces after `x` and `@` to stay whole.
+
+def _weight(kg: float, system: str | None) -> str:
+    """`35 lbs`, `17.5 lbs` or `1.25 kg`: whole unless Hevy has a fraction, in the unit sent to Garmin (F-21a)."""
+    if system == STATUTE_US:
+        return f"{round(kg * _POUNDS_PER_KG, 2):g} lbs"
+    return f"{round(kg, 2):g} kg"
+
+
+def garmin_name(category: str, name: str) -> str:
+    """Garmin's key as words: BARBELL_BACK_SQUAT is Barbell Back Squat."""
+    return (name or category).replace("_", " ").title()
+
+
+def _words(title: str) -> set[str]:
+    """A name's words, any order and singular, so `Bicep Curl (Dumbbell)` holds Garmin's `Dumbbell Biceps Curl`.
+
+    Garmin spells dumbbell `DUMBELL` in some keys, and joins words with `WITH`.
     """
-    pounds = system == STATUTE_US  # the unit the weights go to Garmin in (F-21a)
-    lines = []
-    weighed = False
-    for done in logged:
-        weight = ""
-        if done.weight_kg:
-            weight = f"{round(done.weight_kg * _POUNDS_PER_KG if pounds else done.weight_kg, 1):g}"
-        amount = ""
-        if done.reps:
-            amount = str(done.reps)
-        elif done.seconds:
-            amount = _length(done.seconds)
-        elif done.meters:
-            amount = _distance(done.meters, system)
-        if not (weight or amount):
-            continue  # a set logged with nothing in it has nothing to show
-        weighed = weighed or bool(weight)
-        rpe = f"{done.rpe:g}" if done.rpe else ""
-        spaced = _line(weight, amount, rpe, " ")
-        lines.append(spaced if sum(c.isdigit() for c in spaced) <= 8 else _line(weight, amount, rpe, ""))
-    if not lines:
-        return ""
-    unit = (" (lb)" if pounds else " (kg)") if weighed else ""
-    # "Previous" is Hevy's own word for the column, and 14 characters with the unit fit one line of the watch.
-    return "\n".join([f"Previous{unit}:", *lines])
-
-
-def _line(weight: str, amount: str, rpe: str, gap: str) -> str:
-    """`65 x 6 @ 7.5` with `gap` a space, `65 x6 @7.5` with it empty."""
-    line = f"{weight} x{gap}{amount}" if weight and amount else weight or amount
-    return f"{line} @{gap}{rpe}" if rpe else line
+    words = {w.replace("dumbell", "dumbbell") for w in re.findall(r"[a-z0-9]+", title.lower())}
+    return {w[:-1] if len(w) > 3 and w.endswith("s") else w for w in words} - {"with"}
