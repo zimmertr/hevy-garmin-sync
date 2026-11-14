@@ -27,7 +27,7 @@ What you see when it runs, and what to do when it breaks.
 
 ## On the status page
 
-Open `http://localhost:8080` under Compose, or the Service's address under Kubernetes (`kubectl port-forward svc/hevy-garmin-sync 8080` if it has none outside the cluster). The page has no sign-in: anyone who can reach the port sees your workouts and can press its buttons.
+Open `http://localhost:8080` under Compose, or the Service's address under Kubernetes (`kubectl port-forward svc/hevy-garmin-sync 8080` if it has none outside the cluster). TJ's is at http://atlas.sol.milkyway. The page has no sign-in: anyone who can reach the port sees your workouts and can press its buttons.
 
 - **Sync now** reads Hevy and syncs all workouts to Garmin Connect. It writes what changed, tries again any workout Garmin refused, sends every workout to the watch again, and reads Hevy Trainer's preferences and logged workouts again. A hand edit in Garmin Connect stays.
 - **Force sync** reads Hevy and overwrites all workouts on Garmin Connect, which undoes any hand edit there. Each workout keeps its place on the calendar. It also reads last time's sets for the status page from Hevy again.
@@ -79,6 +79,10 @@ Open `http://localhost:8080` under Compose, or the Service's address under Kuber
 
 - A GitHub release `v<version>`, an image `ghcr.io/zimmertr/hevy-garmin-sync:<version>` and a chart `ghcr.io/zimmertr/hevy-garmin-sync-helm` `<version>` that pins the image's digest.
 - A PR in Kubernetes-Manifests titled `chore(hevy-garmin-sync): bump chart to <version>`, which merges itself. When it merges, Argo CD replaces the pod with the new release.
+
+## Before a merge
+
+Each of your PRs gets a preview once Argo CD syncs: the PR's code at `http://pr-<N>.atlas.sol.milkyway`, linked from a comment on the PR. A red banner names the PR and the commit. Its Hevy, Hevy Trainer and Garmin are made up and live in the pod, so its buttons are safe to press and nothing reaches your watch: five routines in two folders, a Trainer program, and one routine, Everything Day, that its Garmin refuses. It goes when the PR closes. A Renovate PR gets no preview until you add the `create pr container` label.
 
 | You see | Do |
 |---|---|
