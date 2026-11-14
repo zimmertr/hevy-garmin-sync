@@ -19,7 +19,7 @@
   },
   "packageRules": [
     {
-      "description": "compose.yaml runs this repo's own image. A bump there would merge itself, release a new version and be proposed again, so that version moves by hand, with the README's.",
+      "description": "compose.yaml runs this repo's own image. A bump there would merge itself, release a new version and be proposed again, compose.yaml takes the version from .env now, so this stays only as a guard.",
       "matchPackageNames": [
         "ghcr.io/zimmertr/hevy-garmin-sync"
       ],

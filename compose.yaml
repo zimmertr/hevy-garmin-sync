@@ -3,8 +3,9 @@
 services:
   hevy-garmin-sync:
     # Releases are tagged with their version only; there is no `latest`.
+    # The version is set in .env, so this file never goes stale.
     # https://github.com/zimmertr/hevy-garmin-sync/releases has the newest.
-    image: ghcr.io/zimmertr/hevy-garmin-sync:0.3.0
+    image: ghcr.io/zimmertr/hevy-garmin-sync:${HEVY_GARMIN_SYNC_VERSION:?set HEVY_GARMIN_SYNC_VERSION in .env to the newest release}
     restart: unless-stopped
     env_file: .env
     # The app writes only to /data (spec O-4), so a write anywhere else fails

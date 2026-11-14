@@ -4,24 +4,24 @@ Every setting, and where it is set. The app reads environment variables only (sp
 
 ## Environment variables
 
-| Variable | Default | Does |
-|---|---|---|
-| `HEVY_API_KEY` | required | The Hevy public API key, from https://hevy.com/settings?developer. Needs Hevy Pro (C-1) |
-| `GARMIN_TOKEN` | required on the first start | The value the `login` command prints. Later starts use the copy in `DATA_DIR`, which the app keeps current as Garmin rotates it. Set a new value to replace that copy (C-2, A-4) |
-| `INCLUDE_HEVY_FOLDERS` | unset: every routine | Comma-separated routine folder ids or titles. An id is tried before a title. Routines outside these folders, and routines in no folder, are left out. A name that matches no folder exits at startup, after the folder list is logged. Does not apply to Hevy Trainer (C-3) |
-| `CUSTOM_EXERCISE_MAP` | unset: by muscle group and equipment | The Garmin exercise for your own Hevy exercises, as comma-separated `title-or-id=CATEGORY/NAME` entries: `My Cable Raise=LATERAL_RAISE/CABLE_FRONT_RAISE,a1b2c3d4=CURL/CURL`. An id is tried before a title. A title matches exactly, capitals included, once spaces around it are trimmed. An entry splits on its last `=`, so a title may hold one. A title with a comma in it can't be written here: use the exercise's template id. The pair is Garmin's category and exercise keys from [`garmin_exercises.json`](../src/hevy_garmin_sync/data/garmin_exercises.json); the log line `Custom Hevy exercise ...` shows what each custom exercise gets now. A pair Garmin doesn't have, or an entry not in this form, exits at startup. An entry for a built-in Hevy exercise is ignored with a warning: fix those in the exercise map. Applies to Hevy Trainer too (C-11) |
-| `ENABLE_SCHEDULED_WORKOUTS` | `true` | `true` puts every routine, and Hevy Trainer's next workout, on today's Garmin calendar. `false` keeps the app off the calendar and removes the entries it made (C-4) |
-| `ENABLE_PREVIOUS_VALUES` | `true` | `true` shows last time's working sets for each exercise on the status page, for routines and Hevy Trainer workouts alike. Last time is the newest workout logged in the last 12 months that holds the exercise, whichever workout it was. It reads each exercise's history from the public API once, and the workout events every poll. `false` reads neither (unless Hevy Trainer needs the events). Nothing of it reaches Garmin (C-12) |
-| `HEVY_SESSION` | unset: Hevy Trainer off | The `auth2.0-token` cookie from hevy.com. Setting it turns Hevy Trainer on. Unsetting it turns Trainer off, removes its Garmin workouts and deletes the stored session (C-5) |
-| `HEVY_POLL_INTERVAL_SECONDS` | `60` | How often Hevy is read. A whole number, 10 or more (C-6) |
-| `TZ` | the Garmin profile's time zone | Decides "today", midnight, and the start of Trainer's week. A name such as `America/Los_Angeles`. If it is unset and Garmin gives none, UTC with a warning (C-7) |
-| `DATA_DIR` | `/data` in the image, `data` from a clone | The one folder the app writes: the rotated Garmin token and Hevy session (C-8) |
-| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. `DEBUG` adds per-workout detail and the call count of each poll (C-9) |
-| `LOG_FORMAT` | `text` | `text` or `json`, one object per line (C-10) |
-| `HTTP_PORT` | `8080` | The port of the status page and its API, on every interface. A whole number from 1 to 65535. The page has no sign-in (C-13, W-1) |
-| `PREVIEW_PR` | unset: the live app | A pull request's number, for its preview. Set, the app runs on made-up Hevy, Hevy Trainer and Garmin accounts and never calls the real ones; `HEVY_API_KEY`, `GARMIN_TOKEN` and `HEVY_SESSION` are ignored and not required. The page shows a red banner with the number (C-14, W-10) |
-| `PREVIEW_COMMIT` | unset | The commit a preview runs, for its banner. Hex digits (C-15) |
-| `APP_VERSION` | `0.0.0+dev` | Baked into the image by the release. The version `--version` and the startup log report |
+| Variable | Default | Required | Description |
+|---|---|---|---|
+| `HEVY_API_KEY` |  | Yes | The Hevy public API key, from https://hevy.com/settings?developer. Needs Hevy Pro (C-1) |
+| `GARMIN_TOKEN` |  | Yes | Needed on the first start. The value the `login` command prints. Later starts use the copy in `DATA_DIR`, which the app keeps current as Garmin rotates it. Set a new value to replace that copy (C-2, A-4) |
+| `INCLUDE_HEVY_FOLDERS` | unset: every routine |  | Comma-separated routine folder ids or titles. An id is tried before a title. Routines outside these folders, and routines in no folder, are left out. A name that matches no folder exits at startup, after the folder list is logged. Does not apply to Hevy Trainer (C-3) |
+| `CUSTOM_EXERCISE_MAP` | unset: by muscle group and equipment |  | The Garmin exercise for your own Hevy exercises, as comma-separated `title-or-id=CATEGORY/NAME` entries: `My Cable Raise=LATERAL_RAISE/CABLE_FRONT_RAISE,a1b2c3d4=CURL/CURL`. An id is tried before a title. A title matches exactly, capitals included, once spaces around it are trimmed. An entry splits on its last `=`, so a title may hold one. A title with a comma in it can't be written here: use the exercise's template id. The pair is Garmin's category and exercise keys from [`garmin_exercises.json`](../src/hevy_garmin_sync/data/garmin_exercises.json); the log line `Custom Hevy exercise ...` shows what each custom exercise gets now. A pair Garmin doesn't have, or an entry not in this form, exits at startup. An entry for a built-in Hevy exercise is ignored with a warning: fix those in the exercise map. Applies to Hevy Trainer too (C-11) |
+| `ENABLE_SCHEDULED_WORKOUTS` | `true` |  | `true` puts every routine, and Hevy Trainer's next workout, on today's Garmin calendar. `false` keeps the app off the calendar and removes the entries it made (C-4) |
+| `ENABLE_PREVIOUS_VALUES` | `true` |  | `true` shows last time's working sets for each exercise on the status page, for routines and Hevy Trainer workouts alike. Last time is the newest workout logged in the last 12 months that holds the exercise, whichever workout it was. It reads each exercise's history from the public API once, and the workout events every poll. `false` reads neither (unless Hevy Trainer needs the events). Nothing of it reaches Garmin (C-12) |
+| `HEVY_SESSION` | unset: Hevy Trainer off |  | The `auth2.0-token` cookie from hevy.com. Setting it turns Hevy Trainer on. Trainer is read from an API Hevy doesn't document, which Hevy can change at any time, and Hevy's terms allow suspending accounts for unauthorized use. Unsetting it turns Trainer off, removes its Garmin workouts and deletes the stored session (C-5) |
+| `HEVY_POLL_INTERVAL_SECONDS` | `60` |  | How often Hevy is read. A whole number, 10 or more (C-6) |
+| `TZ` | the Garmin profile's time zone |  | Decides "today", midnight, and the start of Trainer's week. A name such as `America/Los_Angeles`. If it is unset and Garmin gives none, UTC with a warning (C-7) |
+| `DATA_DIR` | `/data` in the image, `data` from a clone |  | The one folder the app writes: the rotated Garmin token and Hevy session (C-8) |
+| `LOG_LEVEL` | `INFO` |  | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. `DEBUG` adds per-workout detail and the call count of each poll (C-9) |
+| `LOG_FORMAT` | `text` |  | `text` or `json`, one object per line (C-10) |
+| `HTTP_PORT` | `8080` |  | The port of the status page and its API, on every interface. A whole number from 1 to 65535. The page has no sign-in (C-13, W-1) |
+| `PREVIEW_PR` | unset: the live app |  | A pull request's number, for its preview. Set, the app runs on made-up Hevy, Hevy Trainer and Garmin accounts and never calls the real ones; `HEVY_API_KEY`, `GARMIN_TOKEN` and `HEVY_SESSION` are ignored and not required. The page shows a red banner with the number (C-14, W-10) |
+| `PREVIEW_COMMIT` | unset |  | The commit a preview runs, for its banner. Hex digits (C-15) |
+| `APP_VERSION` | `0.0.0+dev` |  | Baked into the image by the release. The version `--version` and the startup log report |
 
 The startup log lists the effective value of each, with the three secrets shown only as set or unset (O-3c), and `CUSTOM_EXERCISE_MAP` only as set with its number of entries, since the entries are your own exercise titles.
 
@@ -65,4 +65,13 @@ The chart sets `DATA_DIR` to `/data` itself. The container's port follows `env.H
 
 ## Compose
 
-`compose.yaml` runs the same image with a named volume on `/data` and a read-only root filesystem, and reads the variables from a `.env` file beside it. `.env` is ignored by git. It publishes the status page on `127.0.0.1:8080`, this machine only; drop the `127.0.0.1:` to reach it from your network.
+`compose.yaml` runs the same image with a named volume on `/data` and a read-only root filesystem, and reads the variables from a `.env` file beside it. `.env` is ignored by git. `HEVY_GARMIN_SYNC_VERSION` in `.env` picks the image's release, such as `0.12.3`, so `compose.yaml` names no version and never goes stale; Compose stops with a message when it is empty. The app doesn't read it. It publishes the status page on `127.0.0.1:8080`, this machine only; drop the `127.0.0.1:` to reach it from your network.
+
+Without a clone, download the two files into an empty folder:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/zimmertr/hevy-garmin-sync/main/compose.yaml
+curl -fsSL https://raw.githubusercontent.com/zimmertr/hevy-garmin-sync/main/.env.example -o .env
+```
+
+To move to a new release, set `HEVY_GARMIN_SYNC_VERSION` to it and run `docker compose up -d` again. Under Helm, `helm upgrade hevy-garmin-sync oci://ghcr.io/zimmertr/hevy-garmin-sync-helm -f values.yaml` moves to the newest chart.
