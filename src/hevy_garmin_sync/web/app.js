@@ -120,10 +120,21 @@ function render() {
   const version = $("#version");
   version.textContent = `Version ${status.version}`;
   if (/^\d+\.\d+\.\d+$/.test(status.version)) version.href = `${REPO}/releases/tag/v${status.version}`;
+  renderPreview();
   renderControl();
   renderServices();
   renderWorkouts();
   renderSettings();
+}
+
+// A preview's red banner (W-10). Plain text: both values are checked at startup, and textContent escapes anyway.
+function renderPreview() {
+  const banner = $("#preview");
+  banner.hidden = !status.preview;
+  if (status.preview) {
+    const commit = status.preview.commit ? ` | Commit: ${status.preview.commit}` : "";
+    banner.textContent = `You are viewing a preview release of hevy-garmin-sync | PR: ${status.preview.pr}${commit}`;
+  }
 }
 
 function level() {

@@ -11,7 +11,7 @@ CI is the test runner. Branch from the latest `main`, open a draft PR early, pus
 | `make lint` | ruff |
 | `make typecheck` | mypy, strict |
 | `make lint-docker` | hadolint on the Dockerfile |
-| `make chart` | `helm lint` and two renders, as the `Chart / Chart` check does |
+| `make chart` | `helm lint`, a render, and the helm-unittest suites, as the `Chart / Chart` check does |
 | `make build` | The image, tagged `hevy-garmin-sync:dev` |
 | `make scan` | The release scan's rules against that build |
 | `make lock` | Not a check: recompiles `requirements.txt` and `requirements-dev.txt` from the `.in` files, hashed. A pin change ships with its lock in the same PR |
@@ -51,8 +51,9 @@ It reads the workout back and says whether Garmin stored every note whole. Then 
 
 - Every change ships with tests. Coverage aims at 100% of lines and branches, CI reports it, and a gap gets a test or a written reason. A test asserts on behaviour; one that only runs a line is deleted.
 - `unittest` and `unittest.mock`. No test touches the network or a real account.
-- Fakes come from one module, `tests/fixtures.py`: a fake Hevy public API, a fake Hevy private API and a fake Garmin, answering in the shapes the real services answer in, with every name, id and token made up (spec D-10). Each can be told to fail the way the real service fails. A test never builds its own fake.
+- Fakes come from one module, `tests/fixtures.py`: a fake Hevy public API, a fake Hevy private API and a fake Garmin, answering in the shapes the real services answer in, with every name, id and token made up (spec D-10). They build on the preview's accounts in `src/hevy_garmin_sync/preview.py` (W-10), and add a record of every call and the ability to fail the way the real service fails. A shape or a builder changes in `preview.py`. A test never builds its own fake.
 - Time is fixed: tests pin the clock and the time zone. The pinned dates live in `tests/fixtures.py`; a test spells its own only when the date is the point, such as a clock change or the Hevy Trainer cases checked against the app.
 - `tests/test_exercise_data.py` checks both exercise tables against `src/hevy_garmin_sync/data/garmin_exercises.json`, the keys of Garmin's own exercise list, which ships in the package so the app can check `CUSTOM_EXERCISE_MAP` too. A row naming an exercise Garmin doesn't have fails it. It reads Hevy's muscle groups and equipment from `tests/data/hevy_api.json`. Both copies are written by `make upstream-update`; don't edit them by hand.
 - `tests/test_recorded_shapes.py` runs the live check over the fakes and compares what it records with `tests/data/recorded_shapes.json`, the shapes the live checks recorded (keys and types, no values). A fake that drifts from a real reply fails it, naming the field. When a new live check records a reply differently, put its shape from the live check's file in place of the old one, and fix whatever builder the test then names.
 - A test that reads files fails when it can't find them, instead of skipping.
+- The chart's checks are helm-unittest suites in `charts/hevy-garmin-sync-helm/tests/`, and the image's are container-structure-test checks in `tests/structure-test.yaml`. yggdrasil's modules run both (its record 0060). Never a shell script of `grep` or `docker run` in a workflow; a check neither tool can hold goes to TJ first.

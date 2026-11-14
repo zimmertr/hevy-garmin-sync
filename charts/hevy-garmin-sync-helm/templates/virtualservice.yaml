@@ -1,0 +1,20 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hgs.labels" . | nindent 4 }}
+spec:
+  hosts:
+    {{- toYaml .Values.ingress.hosts | nindent 4 }}
+  gateways:
+    - {{ .Release.Name }}
+  http:
+    - route:
+        - destination:
+            host: {{ .Release.Name }}
+            port:
+              number: {{ .Values.service.port }}
+{{- end }}

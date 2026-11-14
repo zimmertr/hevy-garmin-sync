@@ -32,10 +32,12 @@ class Config:
     log_level: str
     log_format: str
     http_port: int = 8080  # C-13
+    preview_pr: str | None = None  # C-14
+    preview_commit: str | None = None  # C-15
 
     def summary(self) -> dict[str, str]:
         """The effective configuration for the startup log, secrets redacted (O-3c)."""
-        return {
+        summary = {
             "HEVY_API_KEY": "set",
             "GARMIN_TOKEN": "set" if self.garmin_token else "unset (using the token in DATA_DIR)",
             "INCLUDE_HEVY_FOLDERS": ", ".join(self.include_folders) or "unset (all routines)",
@@ -55,14 +57,29 @@ class Config:
             "LOG_FORMAT": self.log_format,
             "HTTP_PORT": str(self.http_port),
         }
+        if self.preview_pr:
+            summary |= dict.fromkeys(("HEVY_API_KEY", "GARMIN_TOKEN", "HEVY_SESSION"), "ignored (a preview)") | {
+                "PREVIEW_PR": self.preview_pr,
+                "PREVIEW_COMMIT": self.preview_commit or "unset",
+            }
+        return summary
 
 
 def load(env: Mapping[str, str]) -> Config:
     def get(name: str) -> str:
         return env.get(name, "").strip()
 
+    # A preview runs on made-up accounts and ignores every credential, so one copied into it by mistake
+    # can't sign the live app out (C-14, W-10).
+    preview_pr = get("PREVIEW_PR") or None
+    if preview_pr and not (preview_pr.isascii() and preview_pr.isdigit()):
+        raise ConfigError("PREVIEW_PR must be a pull request's number, such as 63")
+    preview_commit = get("PREVIEW_COMMIT").lower() or None
+    if preview_commit and not (preview_commit.isascii() and all(c in "0123456789abcdef" for c in preview_commit)):
+        raise ConfigError("PREVIEW_COMMIT must be a commit's hash, such as 7bc73bc")
+
     api_key = get("HEVY_API_KEY")
-    if not api_key:
+    if not api_key and not preview_pr:
         raise ConfigError("HEVY_API_KEY is required: create a key at https://hevy.com/settings?developer (Hevy Pro)")
 
     scheduled = get("ENABLE_SCHEDULED_WORKOUTS").lower() or "true"
@@ -97,13 +114,13 @@ def load(env: Mapping[str, str]) -> Config:
         raise ConfigError("HTTP_PORT must be a whole number from 1 to 65535")
 
     return Config(
-        hevy_api_key=api_key,
-        garmin_token=get("GARMIN_TOKEN") or None,
+        hevy_api_key="" if preview_pr else api_key,
+        garmin_token=None if preview_pr else get("GARMIN_TOKEN") or None,
         include_folders=tuple(part.strip() for part in get("INCLUDE_HEVY_FOLDERS").split(",") if part.strip()),
         custom_exercises=_custom_exercises(get("CUSTOM_EXERCISE_MAP")),
         scheduled=scheduled == "true",
         previous_values=previous_values == "true",
-        hevy_session=get("HEVY_SESSION") or None,
+        hevy_session=None if preview_pr else get("HEVY_SESSION") or None,
         poll_seconds=int(poll),
         zone=zone,
         # The image sets DATA_DIR=/data; a run from a clone keeps its tokens beside the code.
@@ -111,6 +128,8 @@ def load(env: Mapping[str, str]) -> Config:
         log_level=level,
         log_format=log_format,
         http_port=int(port),
+        preview_pr=preview_pr,
+        preview_commit=preview_commit,
     )
 
 

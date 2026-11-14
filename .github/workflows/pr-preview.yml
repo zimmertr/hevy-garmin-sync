@@ -1,0 +1,34 @@
+name: PR Preview
+
+# Each PR's preview image, from yggdrasil's pr-preview module: pushed to
+# ghcr.io/zimmertr/hevy-garmin-sync-pr as pr-<N>-<head sha>, where the Argo CD
+# pull request generator in Kubernetes-Manifests misc/hevy-garmin-sync-pr/
+# finds it. TJ's own PRs get the `create pr container` label, which starts the
+# preview, and a comment with its address (spec W-10, issue #62).
+#
+# `pull_request`, never `pull_request_target`: a fork's run gets no write token
+# and no secret (yggdrasil record 0010).
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  preview:
+    name: PR Preview
+    uses: zimmertr/yggdrasil/.github/workflows/pr-preview.yml@60088d4f7cc03c82288314b672ff30399210c5ed # v1.5.0
+    permissions:
+      contents: read
+      packages: write # the preview image
+      pull-requests: write # the label and the comment
+    with:
+      image: ghcr.io/zimmertr/hevy-garmin-sync-pr
+      url: http://pr-${{ github.event.pull_request.number }}.atlas.sol.milkyway
+      title: hevy-garmin-sync preview

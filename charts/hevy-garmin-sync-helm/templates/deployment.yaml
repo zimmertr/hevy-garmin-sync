@@ -65,8 +65,14 @@ spec:
           {{- end }}
       volumes:
         - name: data
+          {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
             claimName: {{ include "hgs.claim" . }}
+          {{- else }}
+          # A preview's accounts are made up, so nothing it keeps needs to outlive the pod (spec W-10).
+          emptyDir:
+            sizeLimit: {{ .Values.persistence.size }}
+          {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

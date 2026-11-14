@@ -1,0 +1,45 @@
+suite: resources
+tests:
+  # kustomize 5.8, which Argo CD runs, adds no namespace to a chart's output.
+  - it: states the namespace on every resource
+    templates:
+      - deployment.yaml
+      - pvc.yaml
+      - secret.yaml
+      - service.yaml
+      - gateway.yaml
+      - virtualservice.yaml
+    release:
+      namespace: check
+    set:
+      ingress.enabled: true
+      ingress.hosts: [hevy-garmin-sync.example.com]
+    asserts:
+      - equal:
+          path: metadata.namespace
+          value: check
+
+  - it: makes no Secret when given one
+    template: secret.yaml
+    set:
+      existingSecret: made-up
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  # A preview keeps its data in the pod (spec W-10).
+  - it: makes no claim without persistence
+    template: pvc.yaml
+    set:
+      persistence.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  # The page is where a rejected sign-in's fix is shown (spec W-8).
+  - it: keeps the page reachable while the pod is unready
+    template: service.yaml
+    asserts:
+      - equal:
+          path: spec.publishNotReadyAddresses
+          value: true

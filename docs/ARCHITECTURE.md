@@ -9,9 +9,9 @@ Where each part of the app lives. The behaviour is specified in [SPEC.md](SPEC.m
 | `src/hevy_garmin_sync/` | The Python package ([the modules](#the-modules)) |
 | `src/hevy_garmin_sync/web/` | The status page: `index.html`, `app.css`, `app.js`, the icon and the Barlow fonts. Served as they are, with no build step |
 | `src/hevy_garmin_sync/data/` | The two exercise tables the app ships, and the keys of Garmin's exercise list ([the exercise map](#the-exercise-map)) |
-| `tests/` | `unittest` suites, one fixtures module with every fake, and in `tests/data` the copy of Hevy's API spec and the recorded reply shapes the fakes are held to |
+| `tests/` | `unittest` suites, one fixtures module that adds recording and failures to the fakes in `preview.py`, and in `tests/data` the copy of Hevy's API spec and the recorded reply shapes the fakes are held to |
 | `scripts/` | `check_upstream.py`, the weekly upstream check: compares the copies of Garmin's list and Hevy's spec with their source ([CICD.md](CICD.md#the-upstream-check)). `live_check.py`, the run by hand against TJ's own accounts that records the shapes of Hevy's and Garmin's replies, puts a check workout on the watch and probes Garmin's step cap ([DEVELOPMENT.md](DEVELOPMENT.md#the-live-check)). Neither is in the image |
-| `charts/hevy-garmin-sync-helm/` | The Helm chart: one Deployment, its PersistentVolumeClaim, Secret and Service |
+| `charts/hevy-garmin-sync-helm/` | The Helm chart: one Deployment, its PersistentVolumeClaim, Secret and Service, and an optional Istio Gateway and VirtualService |
 | `compose.yaml` | The same container for Docker Compose |
 | `Dockerfile` | The image: `python:3.15-slim`, the hashed lock, the package, `/data`, user 1000 |
 | `.github/ISSUE_TEMPLATE/` | Copies of yggdrasil's shared issue templates, plus `exercise-match.yml`, which the status page's "Report this match" opens (spec W-5) |
@@ -63,6 +63,7 @@ A failing service gets its own wait, one minute doubling to thirty (O-1). A rate
 | `workout.py` | A planned workout as Garmin's workout JSON, each set's note, its version hash, and the description that marks it as the app's. No I/O |
 | `garmin.py` | Garmin Connect through python-garminconnect: workouts, the calendar, Send to Device, saving the rotated token |
 | `sync.py` | Makes Garmin match the plan: what to create, update, delete, schedule and send, and a report of each workout for the page |
+| `preview.py` | Made-up Hevy, Hevy Trainer and Garmin accounts in memory, in the shapes the services answer in. With `PREVIEW_PR` set, `main` hands them to the real clients, so a preview runs the real loop and calls nothing outside the pod (W-10). The tests' fakes build on the same classes |
 | `login.py` | The `login` command: one sign-in, and the value for `GARMIN_TOKEN` on stdout |
 
 `routines.py` and `trainer.py` each return a `Plans`: the workouts one source wants in Garmin. `sync.py` takes both and knows nothing about Hevy.
@@ -88,8 +89,10 @@ Built by the release for `linux/amd64` and `linux/arm64`, tagged with the versio
 
 ## The chart
 
-`hevy-garmin-sync-helm`, published with every release to `oci://ghcr.io/zimmertr` under the same version as the image, whose digest it pins (record 0006). One replica with the `Recreate` strategy, so two copies never run at once and fight over the rotating Garmin token (spec D-4). The container's root filesystem is read-only, so the data volume is the one place it can write (O-4, record [0008](architectural-decision-records/0008-read-only-root-filesystem-by-default.md)). A Service for the status page, `ClusterIP` unless the values say otherwise, which keeps the page reachable while the pod is unready. A liveness probe on `/healthz` and a readiness probe on `/readyz` (W-7). Values are in [CONFIGURATION.md](CONFIGURATION.md#chart-values).
+`hevy-garmin-sync-helm`, published with every release to `oci://ghcr.io/zimmertr` under the same version as the image, whose digest it pins (record 0006). One replica with the `Recreate` strategy, so two copies never run at once and fight over the rotating Garmin token (spec D-4). The container's root filesystem is read-only, so the data volume is the one place it can write (O-4, record [0008](architectural-decision-records/0008-read-only-root-filesystem-by-default.md)). A Service for the status page, `ClusterIP` unless the values say otherwise, which keeps the page reachable while the pod is unready. A liveness probe on `/healthz` and a readiness probe on `/readyz` (W-7). An optional Istio `Gateway` and `VirtualService` serve the page by hostname through an ingress gateway that already runs, and `persistence.enabled: false` swaps the volume for an `emptyDir`, for a preview. Values are in [CONFIGURATION.md](CONFIGURATION.md#chart-values).
 
 ## Where it runs for TJ
 
-Kubernetes-Manifests `misc/hevy-garmin-sync` holds the chart version each release bumps, the values (the hand-made Secret and the volume's storage class) and the namespace. The misc ApplicationSet deploys it, so the bump PR is the deploy (spec D-7, record [0005](architectural-decision-records/0005-releases-deploy-through-the-live-folder.md)). It replaced hevy2garmin and hevy-trainer-sync on 2026-11-10.
+Kubernetes-Manifests `misc/hevy-garmin-sync` holds the chart version each release bumps, the values (the hand-made Secret and the volume's storage class) and the namespace. The misc ApplicationSet deploys it, so the bump PR is the deploy (spec D-7, record [0005](architectural-decision-records/0005-releases-deploy-through-the-live-folder.md)). It replaced hevy2garmin and hevy-trainer-sync on 2026-11-10. The page is at `atlas.sol.milkyway`, through the cluster's shared Istio gateway.
+
+Each of TJ's PRs gets a preview: `misc/hevy-garmin-sync-pr/` holds an `ApplicationSet` whose pull request generator runs the chart for every PR labelled `create pr container`, from the preview image `ghcr.io/zimmertr/hevy-garmin-sync-pr:pr-<N>-<head sha>`, with `PREVIEW_PR` and `PREVIEW_COMMIT`, no Secret and no volume, at `pr-<N>.atlas.sol.milkyway`. Argo CD removes it when the PR closes (spec D-12).

@@ -1,0 +1,43 @@
+# The page by hostname, through a shared Istio ingress gateway (issue #62).
+suite: ingress
+templates:
+  - gateway.yaml
+  - virtualservice.yaml
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: serves the hosts it is given on port 80
+    set:
+      ingress.enabled: true
+      ingress.hosts: [hevy-garmin-sync.example.com]
+    asserts:
+      - isKind:
+          of: Gateway
+        template: gateway.yaml
+      - equal:
+          path: spec.servers[0].hosts
+          value: [hevy-garmin-sync.example.com]
+        template: gateway.yaml
+      - equal:
+          path: spec.selector
+          value: {istio: gateway}
+        template: gateway.yaml
+      - equal:
+          path: spec.hosts
+          value: [hevy-garmin-sync.example.com]
+        template: virtualservice.yaml
+      - equal:
+          path: spec.http[0].route[0].destination
+          value: {host: RELEASE-NAME, port: {number: 8080}}
+        template: virtualservice.yaml
+
+  - it: refuses to render without hosts
+    set:
+      ingress.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: ingress.hosts is required
+        template: gateway.yaml

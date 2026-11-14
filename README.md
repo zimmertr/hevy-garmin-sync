@@ -95,6 +95,8 @@ To turn it on, open a private browser window, sign in at hevy.com, and copy the 
 | `LOG_LEVEL` | `INFO` | `DEBUG` for more |
 | `LOG_FORMAT` | `text` | Or `json` |
 | `HTTP_PORT` | `8080` | The status page's port |
+| `PREVIEW_PR` | off | Runs on made-up workouts for a pull request's preview, and ignores your keys |
+| `PREVIEW_COMMIT` | none | The commit a preview's banner shows |
 
 [docs/CONFIGURATION.md](docs/CONFIGURATION.md) has the detail on each.
 

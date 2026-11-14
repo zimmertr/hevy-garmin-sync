@@ -60,12 +60,18 @@ class Facts:
     reports: Sequence[Report]
     system: str | None  # Garmin's measurement system, so weights show in the unit Garmin got them in
     settings: Mapping[str, str]
+    preview_pr: str | None = None  # W-10
+    preview_commit: str | None = None
 
 
 def build(facts: Facts) -> Json:
     unit = "lb" if facts.system == STATUTE_US else "kg"
     return {
         "version": facts.version,
+        # The banner a preview shows (W-10): its pull request, and the commit it runs, short as GitHub shows it.
+        "preview": (
+            {"pr": facts.preview_pr, "commit": (facts.preview_commit or "")[:7]} if facts.preview_pr else None
+        ),
         "time_zone": facts.zone,
         "started": _time(facts.started),
         "poll_seconds": facts.poll_seconds,

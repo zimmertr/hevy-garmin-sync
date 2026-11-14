@@ -18,10 +18,12 @@ flowchart LR
 |---|---|---|
 | `test.yml` | `test` | The suite under coverage, with the line and branch table in the run summary |
 | `pr.yml` | `Python Lint` | ruff and mypy, from the hashed dev lock |
-| `pr.yml` | `Chart / Chart` | yggdrasil's chart module: `helm lint`, the chart rendered with the defaults, then this repo's renders: with an existing Secret, with a namespace, with a digest, and the read-only root filesystem |
-| `pr.yml` | `Docker Build / Docker Build` | yggdrasil's docker-build module: hadolint, the amd64 image built, a Trivy table in a sticky comment, the smoke test, and a failure on any fixable Critical or High |
+| `pr.yml` | `Chart / Chart` | yggdrasil's chart module: `helm lint`, the chart rendered with the defaults, then the helm-unittest suites in `charts/hevy-garmin-sync-helm/tests/`: the digest, the read-only root filesystem, `HTTP_PORT`, an existing Secret, the namespace on every resource, the Gateway and VirtualService only when asked, and no claim without persistence |
+| `pr.yml` | `Docker Build / Docker Build` | yggdrasil's docker-build module: hadolint, the amd64 image built, a Trivy table in a sticky comment, the container-structure-test checks in `tests/structure-test.yaml` (the entry point, user 1000, the license, the imports, the page's files, and a preview run to its first sync), and a failure on any fixable Critical or High |
 | `lint.yml` | `Lint / actionlint`, `Lint / zizmor`, `Lint / semgrep` | yggdrasil's lint module over the workflows and the Dockerfile |
 | `pr-title.yml` | `PR Title / PR Title` | yggdrasil's pr-title module: the title must be `type(scope): summary` |
+
+`pr-preview.yml` runs yggdrasil's pr-preview module on every PR from this repo's branches, as `PR Preview / Preview Image`. It pushes the PR's head as `ghcr.io/zimmertr/hevy-garmin-sync-pr:pr-<N>-<head sha>`, and on TJ's own PRs adds the `create pr container` label and a comment with the preview's address. It runs on `pull_request`, so a fork's PR gets no write token, and it isn't a required check (spec D-12, yggdrasil record 0059). Renovate's PRs get the image but no label, so no preview starts; add the label by hand to start one.
 
 The default-branch ruleset requires every check above. Renaming or adding a check needs a PR in zimmertr/yggdrasil that changes this repo's `required_checks`, merged together with the rename; otherwise PRs wait forever on the old name.
 
@@ -41,7 +43,8 @@ Every merge to main is a release (`release.yml`), one at a time. After the test,
 Renovate opens the update PRs, titled `chore(deps): update ...`. `.github/renovate.json` extends zimmertr/yggdrasil's shared preset, which holds the rules every repo of TJ's uses (record [0014](architectural-decision-records/0014-renovate-under-yggdrasils-preset.md)):
 
 - A release waits seven days before Renovate proposes it. yggdrasil's own modules don't wait, and neither does anything whose registry gives no publish date.
-- Everything below a major merges itself once the required checks pass, and that merge is a release. A major waits for TJ, and so does a Python minor (3.15 to 3.16), which can break code. Renovate's PR for one moves only the workflows: the `Dockerfile`, the `Makefile`'s `PYTHON_IMAGE`, `mypy.ini` and both locks move with them by hand, in one PR.
+- Everything below a major merges itself once the required checks pass, and that merge is a release. A major waits for TJ, and so does a Python minor (3.15 to 3.16), which can break code. Renovate moves a Python minor in one PR: the `Dockerfile`, the workflows, the `Makefile`'s `PYTHON_IMAGE`, `mypy.ini` and both locks' headers. Nothing moves by hand.
+- The `Makefile`'s images are pinned by tag and digest, as `NAME := image:tag@sha256:...`, the one form the preset's Makefile rule reads (yggdrasil record 0060). A pin without its digest never moves.
 
 What this repo adds:
 
@@ -50,6 +53,8 @@ What this repo adds:
 | `pip-compile` reads `requirements.txt` and `requirements-dev.txt` | Renovate bumps the pin in the `.in` file and recompiles every lock that depends on it, hashes included. A pin in `requirements.in` moves both locks in one PR |
 | `pip-compile`'s `lockFileMaintenance` is off | On by default for this manager, it opens a "Refresh pip-compile outputs" PR that recompiles both locks to move every indirect pin to its newest release, with no seven-day wait. An indirect pin moves when a direct pin's update needs it, or by hand |
 | `pip_requirements` is off | It would bump a lock's pin without recompiling its hashes |
+| A Python minor is one group, `Python` | Without it each file's move is its own PR, and the image, the workflows and mypy would disagree on Python until the last one merged |
+| `mypy.ini`'s `python_version` and each lock header's Python are read as `python` | No Renovate manager reads either. The header's Python is the one Renovate recompiles that lock under, so the next recompile after a Python minor runs on the new one |
 | `ghcr.io/zimmertr/hevy-garmin-sync` is off | `compose.yaml` runs this repo's own image. A bump would merge, release a new version and be proposed again |
 
 Renovate recompiles a lock with the command in its header, so the header must hold only options Renovate knows. pip-tools 7.5.3 wrote `--no-index` there, which Renovate refuses; `make lock` pins 7.6.2, which doesn't.

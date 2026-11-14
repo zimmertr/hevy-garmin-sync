@@ -16,6 +16,7 @@
 - The manager's `lockFileMaintenance` is off (TJ, 2026-11-11). It would open a PR that moves every indirect pin to its newest release at once, with no seven-day wait.
 - `make lock` pins pip-tools 7.6.2, and both locks are recompiled with it.
 - `ghcr.io/zimmertr/hevy-garmin-sync` is off, so the version in `compose.yaml` moves by hand with the README's.
+- A Python minor moves in one PR, the `Python` group, and still waits for TJ (TJ, 2026-11-13: "I will never update anything by hand"). Two regex rules read the versions no Renovate manager does: `python_version` in `mypy.ini`, and the Python in each lock's header, which is the one Renovate recompiles that lock under. The `Makefile`'s images move through the preset's Makefile rule (yggdrasil record 0060).
 - `.github/dependabot.yml` and `dependabot-auto-merge.yml` are gone. Dependabot's alerts and security updates stay on.
 
 ## Evidence
@@ -23,6 +24,7 @@
 - 2026-11-11: Renovate's `pip-compile` manager refuses a header option it doesn't know (`Option --no-index not supported (yet)`, in its `common.ts`). Both locks carried `--no-index`. In `python:3.14-slim`, pip-tools 7.5.3 with click 8.5.1 wrote it; pip-tools 7.6.2 with pip 26.3 didn't, and the rest of each lock came out the same, byte for byte.
 - 2026-11-11: Renovate 44.221.6, run against this repo in its own image with `--platform=local`, listed `requirements.in` with the lock files `requirements.txt` and `requirements-dev.txt`, and `requirements-dev.in` with `requirements-dev.txt`. It held ruff 0.17.4, six days old, as pending. That run looks updates up and opens nothing, so a recompiled lock from Renovate itself is still unseen.
 - The same run proposed `compose.yaml`'s image from 0.3.0 to 0.8.3 as a minor, which would merge itself.
+- 2026-11-13: Renovate 44.200.0's full dry run, over a copy with every Python pin set back to 3.14, put nine updates to 3.15 on one branch, `renovate/python`: the `Dockerfile`, four `setup-python` versions in three workflows, the `Makefile`, `mypy.ini` and both lock headers. In a local run, the `setup-python` versions are looked up only with `GITHUB_COM_TOKEN` set.
 
 ## Alternatives rejected
 
@@ -36,3 +38,4 @@
 - A lock compiled with an older pip-tools gets `--no-index` back, and `test_renovate_can_read_each_locks_header` fails it.
 - A Renovate merge is a release that deploys, as a Dependabot merge was ([0005](0005-releases-deploy-through-the-live-folder.md)).
 - The `AUTO_MERGE_PAT` secret is unused.
+- The Python group's PR changes each lock's header but none of its pins. Its checks build and test on the new Python, and the locks are recompiled under it the next time a pin in them moves.
