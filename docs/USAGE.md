@@ -6,7 +6,7 @@ What you see when it runs, and what to do when it breaks.
 
 - One strength workout per Hevy routine: `Hevy: {routine}` for a routine in no folder, `Hevy/{folder}: {routine}` for one in a folder.
 - With Hevy Trainer on, one per Trainer workout: `Hevy/Trainer: Upper (C2-W2)`, with the cycle and week the Hevy app shows.
-- Each has a four-line description that marks it as the app's. Don't edit it: without it the app no longer knows the workout and makes a new one.
+- Each has a three-line description that marks it as the app's. Don't edit it: without it the app no longer knows the workout and makes a new one.
 - Every routine is on today's calendar, so the watch offers them when you start a strength activity. Of the Trainer workouts, only the one Hevy says is next is on the calendar. When that changes in Hevy, because you logged one or reordered them, the calendar follows within a minute. The others stay in the watch's saved workouts.
 - With many workouts on today, the watch's prompt lists them all under "Dismiss" (eight, on 2026-11-10). Dismiss it and it comes back the next time you start a strength activity. Once you've done one of today's workouts, the prompt stops offering that one and keeps the others; it is still in the saved list. One evening the next Trainer workout was missing from the prompt as well, after another workout had been recorded that day (spec U-10); it was still in the saved list.
 - A change in Hevy reaches Garmin Connect within a minute, and the watch at its next sync with your phone.

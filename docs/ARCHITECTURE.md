@@ -70,7 +70,7 @@ A failing service gets its own wait, one minute doubling to thirty (O-1). A rate
 
 ## How a workout is recognised
 
-The app keeps no database. Each Garmin workout it makes carries four lines in its description: a first line that marks it as the app's, when it was last updated, the Hevy routine id or Trainer template id, and a six-character version hash of its contents (F-12). At a full run the app reads Garmin's workout list and matches on those. A workout without them is never touched. A workout is rewritten only when its version hash changes.
+The app keeps no database. Each Garmin workout it makes carries three lines in its description: a first line that marks it as the app's, then when it was last updated and a six-character version hash of its contents and of the description's layout, then the Hevy routine id or Trainer template id (F-12). At a full run the app reads Garmin's workout list and matches on those. A workout without them is never touched. A workout is rewritten only when its version hash changes.
 
 ## The exercise map
 
