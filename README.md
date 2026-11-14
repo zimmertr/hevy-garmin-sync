@@ -139,7 +139,7 @@ A collection of environment variables are available that can configure how the t
 | `PREVIEW_PR` | off | | Runs on made-up workouts for a pull request's preview, and ignores your keys |
 | `PREVIEW_COMMIT` | none | | The commit a preview's banner shows |
 
-### Only some folders
+### Syncing a subset of folders
 
 By default, every routine you have in Hevy gets synced. If you only want some of them, set `INCLUDE_HEVY_FOLDERS` to a comma-separated list of folder names or ids. The app logs every folder it finds, along with its id, when it starts up:
 
@@ -154,11 +154,9 @@ For example - this syncs both of those folders, one by name and one by id:
 INCLUDE_HEVY_FOLDERS=Push Pull Legs,43
 ```
 
-Keep in mind that once this is set, routines that aren't in a folder get skipped too.
+### Disabling scheduled workouts
 
-### Keep it off the calendar
-
-By default, every routine (and your next Hevy Trainer workout) gets added to today's Garmin calendar so your watch offers them to you when you start a strength activity. If you'd rather keep your calendar clean, turn it off:
+By default, every routine (and your next Hevy Trainer workout) gets added to today's Garmin calendar so your watch offers them to you when you start a strength activity. If you'd rather keep them off your calendar, you can turn this off:
 
 ```sh
 ENABLE_SCHEDULED_WORKOUTS=false
@@ -166,7 +164,7 @@ ENABLE_SCHEDULED_WORKOUTS=false
 
 The workouts are still available on your watch under Workouts, and any calendar entries the app already made get removed.
 
-### Your time zone
+### Setting a time zone
 
 The app decides when "today" starts based on the time zone in your Garmin profile. That matters for the calendar and for Hevy Trainer's week. If you want to override it, set `TZ`:
 
@@ -174,9 +172,9 @@ The app decides when "today" starts based on the time zone in your Garmin profil
 TZ=America/Los_Angeles
 ```
 
-### Your own exercises
+### Mapping custom exercises
 
-If you created your own exercises in Hevy, the app picks the closest Garmin exercise for each one based on the muscle group and equipment you set in Hevy. The log tells you which one it picked:
+If you created custom exercises in Hevy, the app picks the closest Garmin exercise for each one based on the muscle group and equipment you set in Hevy. The is logged when it occurs:
 
 ```
 Custom Hevy exercise 'My Cable Raise' (muscle group shoulders, equipment machine) is Garmin's SHOULDER_PRESS / SMITH_MACHINE_OVERHEAD_PRESS, by muscle group and equipment
@@ -188,11 +186,9 @@ In this case a cable raise got a Smith machine press. If you don't like its pick
 CUSTOM_EXERCISE_MAP=My Cable Raise=LATERAL_RAISE/CABLE_FRONT_RAISE
 ```
 
-### Turn on Hevy Trainer
+### Enable Hevy Trainer integration
 
-Hevy doesn't expose Hevy Trainer in its public API, so your API key can't see it. Instead, the app reads it from the private API that the Hevy app itself uses. Hevy doesn't document that API and could change it at any time, and Hevy's terms allow them to suspend accounts for unauthorized use. So it's off by default.
-
-To turn it on:
+Hevy Trainier is not officially supported in Hevy's official API yet so you cannot use the API key to interact with it. However, there is an undocumeted API that can be used with a session cookie instead. 
 
 1. Open a private browser window and sign in at hevy.com.
 2. Open developer tools, go to Application, then Cookies, and copy the value of the `auth2.0-token` cookie.
@@ -229,8 +225,8 @@ Additional documentation is available in [`./docs/`](docs/).
 - **Permanent vs Temporary Exercise Replacement** - Hevy allows you to swap exercises out in a Workout permanently or for a single workout. When you choose permanently, Hevy will remember and this change will become available on workouts that sync to your watch. However, if you choose temporarily, this information is not updated server-side. Therefore, there is no way for this tool to know about that change and it will not be synced. If you want the swap on your watch, choose permanently (it reaches Garmin within about a minute) and swap it back after your session ([#44](https://github.com/zimmertr/hevy-garmin-sync/issues/44)).
 - **Inconsistent exercise names & availability** - Hevy and Garmin maintain their own exercise lists and names, and Strava shows whatever name Garmin sends it. So this tool maintains a [CSV file](src/hevy_garmin_sync/data/exercise_map.csv) that makes an attempt at correlating Hevy's exercises with Garmin's. If an exercise shows up under the wrong name on the watch, feel free to raise an [issue](https://github.com/zimmertr/hevy-garmin-sync/issues/new?template=exercise-match.yml) or a PR. Additionally, if you create a custom exercise in Hevy it won't be in the platform mapping. So it will show as the closest Garmin exercise the app can find, based on the muscle group and equipment set in Hevy. For example, an exercise targeting biceps that used dumbbells would show up as Dumbbell Biceps Curl. However, you can [provide your own custom exercise map via env var](#your-own-exercises) with `CUSTOM_EXERCISE_MAP`.
 - **Trainer Weight Progression Syncing** - Hevy's servers don't send Hevy Trainer's weights. Your phone works them out based on whether or not you met the last session's weight and rep goals. So the app works them out itself, using the same rules the Hevy app follows ([docs/HEVY_TRAINER_RULES.md](docs/HEVY_TRAINER_RULES.md)). It makes an effort at keeping this up to date for you, but it can drift as Hevy changes the underlying algorithm. If a weight on your watch doesn't match the Hevy app, feel free to raise an issue.
-- **Deleted Routines Stay on the Watch** - When you delete a routine in Hevy, it gets removed from Garmin Connect and your calendar. But there's no known way for the app to remove the copy saved on your watch, so it stays under Workouts until you delete it on the watch yourself.
-- **Workout Descriptions** - Each workout the app creates in Garmin Connect has a short description with a marker in it. That marker is how the app knows the workout is its own, since it never touches workouts it didn't make. If you edit or delete that description, the app no longer recognizes the workout and creates a new one, leaving the old one behind for you to delete. Most people will never notice it, but leave the descriptions alone.
+- **Deleted Routines Remain on the Watch** - When you delete a routine in Hevy, it is immediatly removed from Garmin Connect and your calendar. However, Garmin Connect doesn't then retroactively remove the generated workout from your watch. So it stays under Workouts until you delete it on the watch yourself.
+- **Workout Description Metadata** - Each workout the app creates in Garmin Connect has a short description with a marker in it. That marker is how the app knows that it owns the workout. If you edit or delete that description, the app will no longer recognize the workout and will create a new one; leaving the old one dangling behind. 
 - **Hevy to Garmin, and only planned workouts** - This app is only meant to sync your routines from Hevy to Garmin as planned workouts. Copying finished workouts between the two is intentionally out of scope. So a workout you log in Hevy doesn't become a Garmin activity, and an activity you record on your watch doesn't get sent back to Hevy. It also doesn't decide which routine you should do next. Every routine goes on today's calendar, except with Hevy Trainer, where only the workout Hevy says is next gets added.
 
 <hr>
