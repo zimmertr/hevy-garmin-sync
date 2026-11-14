@@ -129,10 +129,11 @@ code { font: .86em var(--mono); background: var(--panel-2); border: 1px solid va
 .chev { width: 18px; height: 18px; color: var(--muted); transition: transform .15s; }
 .log[open] .chev { transform: rotate(180deg); }
 .log[open] .latest { visibility: hidden; }
-.lines { border-top: 1px solid var(--line); height: 20rem; overflow: auto; padding: 6px 0 8px; font: .8rem/1.5 var(--mono); }
+/* contain: a scroll that reaches the log's top or bottom stops there instead of moving the page. */
+.lines { border-top: 1px solid var(--line); height: 20rem; overflow: auto; overscroll-behavior: contain; padding: 6px 0 8px; font: .8rem/1.5 var(--mono); }
 .older { display: block; margin: 4px auto 8px; font: 600 .82rem var(--sans); color: var(--blue); background: none; border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; cursor: pointer; }
 .start { text-align: center; font: italic .8rem var(--sans); color: var(--faint); padding: 4px 0 8px; }
-.lines .l { display: grid; grid-template-columns: 4.6rem 4.4rem minmax(0, 1fr); gap: 10px; padding: 1px 18px; }
+.lines .l { display: grid; grid-template-columns: 6rem 4.4rem minmax(0, 1fr); gap: 10px; padding: 1px 18px; }
 .lines time { color: var(--faint); }
 .lines .lv { color: var(--faint); }
 .lines .WARNING .lv { color: var(--wait); }
@@ -248,7 +249,7 @@ td .report { font-size: .76rem; margin-left: 6px; }
   .buttons { grid-template-columns: 1fr; }
   .links { grid-template-columns: 1fr 1fr; }
   .kv div { grid-template-columns: 1fr; gap: 2px; }
-  .lines .l { grid-template-columns: 4.2rem minmax(0, 1fr); }
+  .lines .l { grid-template-columns: 6rem minmax(0, 1fr); }
   .lines .lv { display: none; }
   .dhead h3 { font-size: 1.3rem; }
 }
