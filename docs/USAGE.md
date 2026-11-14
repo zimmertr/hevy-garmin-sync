@@ -74,21 +74,3 @@ Open `http://localhost:8080` under Compose, or the Service's address under Kuber
 | `CUSTOM_EXERCISE_MAP names '...', a built-in Hevy exercise, and is ignored for it` | The variable is for your own exercises only. Remove the entry; if the built-in's Garmin exercise is wrong, open an issue |
 | `sync` says `The app isn't running here: nothing answers on port 8080.` | Run it inside the app's container, as above. If the app runs, `HTTP_PORT` names another port there |
 | Two copies of a workout in the watch's saved list | An old copy from before a delete. Remove it on the watch |
-
-## After a merge
-
-- A GitHub release `v<version>`, an image `ghcr.io/zimmertr/hevy-garmin-sync:<version>` and a chart `ghcr.io/zimmertr/hevy-garmin-sync-helm` `<version>` that pins the image's digest.
-- A PR in Kubernetes-Manifests titled `chore(hevy-garmin-sync): bump chart to <version>`, which merges itself. When it merges, Argo CD replaces the pod with the new release.
-
-## Before a merge
-
-Each of your PRs gets a preview once Argo CD syncs: the PR's code at `http://pr-<N>.atlas.sol.milkyway`, linked from a comment on the PR. A red banner names the PR and the commit. Its Hevy, Hevy Trainer and Garmin are made up and live in the pod, so its buttons are safe to press and nothing reaches your watch: five routines in two folders, a Trainer program, and one routine, Everything Day, that its Garmin refuses. It goes when the PR closes. A Renovate PR gets no preview until you add the `create pr container` label.
-
-| You see | Do |
-|---|---|
-| The release stopped at a scan | A fixable Critical or High is in the image. The fix is the next release, usually a Renovate digest PR for the base image |
-| `Release / Push Chart` failed | Re-run the failed jobs, not all jobs; a chart already pushed is skipped |
-| `Release / Deploy Bump` failed on its `yq` step | The file or the chart entry is missing in Kubernetes-Manifests; restore it, then re-run the failed job |
-| The weekly image scan failed | Same as a release scan: ship a fix in the next release |
-| An issue "Garmin's exercise list or Hevy's API changed", and a PR `test(upstream): update the copies of Garmin's exercise list and Hevy's API` | The weekly upstream check found a difference. Read the issue for what changed. In the PR, fix any map row its tests flag, add the change, dated, to `docs/DATA.md`, then merge it. The next Monday run force-pushes the PR's branch, so merge before then or keep your fixes in a PR of your own |
-| The weekly upstream check failed with no issue | It couldn't fetch or read Garmin's list or Hevy's spec. The run's log says which. Re-run it; if it keeps failing, the source has moved or changed shape, and `scripts/check_upstream.py` needs a fix |

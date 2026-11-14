@@ -22,6 +22,17 @@ CI is the test runner. Branch from the latest `main`, open a draft PR early, pus
 | `make live-check-hevy` | Not a check: `make live-check`'s Hevy reads alone, with no Garmin sign-in ([below](#the-live-check)) |
 | `make live-check-notes` | Not a check: one workout on the watch with one note of each shape the app writes and a line of symbols, with no Hevy read ([below](#the-live-check)) |
 
+## From a clone
+
+To run your own build, fill in `.env` from [.env.example](../.env.example) (leave `HEVY_GARMIN_SYNC_VERSION` empty; it's for Compose), then:
+
+```sh
+make build
+docker run --rm -p 127.0.0.1:8080:8080 -v hevy-garmin-sync-data:/data --env-file .env hevy-garmin-sync:dev
+```
+
+The `127.0.0.1:` keeps the status page on your own machine. Run straight from a clone with Python, it listens on your whole network.
+
 ## The live check
 
 `scripts/live_check.py` records the shapes of Hevy's and Garmin's real replies, so the fakes in `tests/fixtures.py` can follow them (spec D-10; they go into `tests/data/recorded_shapes.json`, below), and checks what the fakes can't know: how Garmin stores a repeat group, how many steps it takes in one workout, and what a recorded set looks like. TJ runs it by hand, from a clone, with his OK each time. CI never does.

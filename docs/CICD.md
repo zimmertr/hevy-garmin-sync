@@ -38,6 +38,24 @@ Every merge to main is a release (`release.yml`), one at a time. After the test,
 
 `image-scan.yml` re-scans the latest release every Monday and sends the findings to the Security tab. Its first run fails until a release exists.
 
+## After a merge
+
+- A GitHub release `v<version>`, an image `ghcr.io/zimmertr/hevy-garmin-sync:<version>` and a chart `ghcr.io/zimmertr/hevy-garmin-sync-helm` `<version>` that pins the image's digest.
+- A PR in Kubernetes-Manifests titled `chore(hevy-garmin-sync): bump chart to <version>`, which merges itself. When it merges, Argo CD replaces the pod with the new release.
+
+## Before a merge
+
+Each of your PRs gets a preview once Argo CD syncs: the PR's code at `http://pr-<N>.atlas.sol.milkyway`, linked from a comment on the PR. A red banner names the PR and the commit. Its Hevy, Hevy Trainer and Garmin are made up and live in the pod, so its buttons are safe to press and nothing reaches your watch: five routines in two folders, a Trainer program, and one routine, Everything Day, that its Garmin refuses. It goes when the PR closes. A Renovate PR gets no preview until you add the `create pr container` label.
+
+| You see | Do |
+|---|---|
+| The release stopped at a scan | A fixable Critical or High is in the image. The fix is the next release, usually a Renovate digest PR for the base image |
+| `Release / Push Chart` failed | Re-run the failed jobs, not all jobs; a chart already pushed is skipped |
+| `Release / Deploy Bump` failed on its `yq` step | The file or the chart entry is missing in Kubernetes-Manifests; restore it, then re-run the failed job |
+| The weekly image scan failed | Same as a release scan: ship a fix in the next release |
+| An issue "Garmin's exercise list or Hevy's API changed", and a PR `test(upstream): update the copies of Garmin's exercise list and Hevy's API` | The weekly upstream check found a difference. Read the issue for what changed. In the PR, fix any map row its tests flag, add the change, dated, to `docs/DATA.md`, then merge it. The next Monday run force-pushes the PR's branch, so merge before then or keep your fixes in a PR of your own |
+| The weekly upstream check failed with no issue | It couldn't fetch or read Garmin's list or Hevy's spec. The run's log says which. Re-run it; if it keeps failing, the source has moved or changed shape, and `scripts/check_upstream.py` needs a fix |
+
 ## Dependency updates
 
 Renovate opens the update PRs, titled `chore(deps): update ...`. `.github/renovate.json` extends zimmertr/yggdrasil's shared preset, which holds the rules every repo of TJ's uses (record [0014](architectural-decision-records/0014-renovate-under-yggdrasils-preset.md)):
@@ -55,7 +73,7 @@ What this repo adds:
 | `pip_requirements` is off | It would bump a lock's pin without recompiling its hashes |
 | A Python minor is one group, `Python` | Without it each file's move is its own PR, and the image, the workflows and mypy would disagree on Python until the last one merged |
 | `mypy.ini`'s `python_version` and each lock header's Python are read as `python` | No Renovate manager reads either. The header's Python is the one Renovate recompiles that lock under, so the next recompile after a Python minor runs on the new one |
-| `ghcr.io/zimmertr/hevy-garmin-sync` is off | `compose.yaml` runs this repo's own image. A bump would merge, release a new version and be proposed again |
+| `ghcr.io/zimmertr/hevy-garmin-sync` is off | `compose.yaml` runs this repo's own image. It takes the version from `.env`, so there is nothing to bump, but a bump would merge, release a new version and be proposed again, so the rule stays as a guard |
 
 Renovate recompiles a lock with the command in its header, so the header must hold only options Renovate knows. pip-tools 7.5.3 wrote `--no-index` there, which Renovate refuses; `make lock` pins 7.6.2, which doesn't.
 

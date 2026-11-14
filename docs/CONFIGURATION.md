@@ -65,4 +65,4 @@ The chart sets `DATA_DIR` to `/data` itself. The container's port follows `env.H
 
 ## Compose
 
-`compose.yaml` runs the same image with a named volume on `/data` and a read-only root filesystem, and reads the variables from a `.env` file beside it. `.env` is ignored by git. It publishes the status page on `127.0.0.1:8080`, this machine only; drop the `127.0.0.1:` to reach it from your network.
+`compose.yaml` runs the same image with a named volume on `/data` and a read-only root filesystem, and reads the variables from a `.env` file beside it. `.env` is ignored by git. `HEVY_GARMIN_SYNC_VERSION` in `.env` picks the image's release, such as `0.12.3`, so `compose.yaml` names no version and never goes stale; Compose stops with a message when it is empty. The app doesn't read it. It publishes the status page on `127.0.0.1:8080`, this machine only; drop the `127.0.0.1:` to reach it from your network.
