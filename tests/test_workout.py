@@ -351,7 +351,8 @@ class TimeAndDistanceTest(unittest.TestCase):
                 (step, _) = steps(carry, system=system)
                 self.assertEqual(step["endCondition"], LAP_BUTTON)
                 self.assertIsNone(step["endConditionValue"])
-                self.assertEqual(step["description"], f"Normal Set\n{distance}\n{'50 lbs' if system == 'statute_us' else '22.68 kg'}")
+                weight = "50 lbs" if system == "statute_us" else "22.68 kg"
+                self.assertEqual(step["description"], f"Normal Set\n{distance}\n{weight}")
                 self.assertIn("weightValue", step)
 
     def test_a_timed_carry_counts_down_and_notes_its_distance(self) -> None:

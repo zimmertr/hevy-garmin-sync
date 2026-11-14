@@ -516,8 +516,9 @@ class NotesTest(LiveCheckCase):
         self.assertEqual(self.tokens, [TOKEN])
         self.assertIsNone(workout.owner(stored["description"]))
         self.assertIn(f"{lc.NOTES_WORKOUT} is on today's calendar and on its way to the watch", out)
-        self.assertIn("1. Chest Supported Dumbbell Row: Warm Up Set / 4-6 Reps / 35 lbs / Hevy: Seal Row (Dumbbell)\n", out)
-        self.assertIn("2. Chest Supported Dumbbell Row: Normal Set / 4-6 Reps / 90 lbs / Hevy: Seal Row (Dumbbell)\n", out)
+        row = "Chest Supported Dumbbell Row"
+        self.assertIn(f"1. {row}: Warm Up Set / 4-6 Reps / 35 lbs / Hevy: Seal Row (Dumbbell)\n", out)
+        self.assertIn(f"2. {row}: Normal Set / 4-6 Reps / 90 lbs / Hevy: Seal Row (Dumbbell)\n", out)
         self.assertIn("6. Crunch: Normal Set / 10 Reps / x \u00d7", out)
         self.assertIn("\U0001f3cb\nGarmin stored every note whole.\n", out)
         self.assertIn("Which symbols in the last note does the watch draw?", out)

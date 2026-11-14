@@ -8,6 +8,7 @@ import unittest
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import garminconnect
@@ -672,9 +673,8 @@ class PreviousTest(AppCase):
         minute = hevy._utc(started + timedelta(seconds=60))
         self.assertEqual(self.events_asked(), [hevy._utc(started), hevy._utc(started), minute, minute])
 
-    def test_with_it_off_the_notes_are_as_before_and_no_history_or_event_is_read(self) -> None:
+    def test_with_it_off_no_history_or_event_is_read(self) -> None:
         self.run_app(None, ENABLE_PREVIOUS_VALUES="false")
-        self.assertEqual(self.notes(), {None})
         asked = {path for path, _ in self.hevy_api.requests}
         self.assertEqual(asked, {"/routine_folders", "/routines", "/exercise_templates"})
 

@@ -57,10 +57,10 @@ A failing service gets its own wait, one minute doubling to thirty (O-1). A rate
 | `hevy_private.py` | Hevy's private API, for Trainer only: the session and its refresh, the program, the preferences, the logged workouts |
 | `routines.py` | Which routines sync, what each is called, and each routine as a planned workout |
 | `trainer.py` | Trainer's program as planned workouts, and what is read when |
-| `previous.py` | Last time's working sets of each exercise, for the note on each set: the newest logged workout that holds it, from its public history once, then kept current by the workout events. In memory only |
+| `previous.py` | Last time's working sets of each exercise, for the status page: the newest logged workout that holds it, from its public history once, then kept current by the workout events. In memory only |
 | `trainer_rules.py` | Trainer's arithmetic: the week, the next weight, warm-ups, rep ranges ([HEVY_TRAINER_RULES.md](HEVY_TRAINER_RULES.md)). No I/O |
 | `exercises.py` | The Garmin exercise for each Hevy exercise, and the log line that names it for a custom one |
-| `workout.py` | A planned workout as Garmin's workout JSON, each set's note with last time's sets, its version hash, and the description that marks it as the app's. No I/O |
+| `workout.py` | A planned workout as Garmin's workout JSON, each set's note, its version hash, and the description that marks it as the app's. No I/O |
 | `garmin.py` | Garmin Connect through python-garminconnect: workouts, the calendar, Send to Device, saving the rotated token |
 | `sync.py` | Makes Garmin match the plan: what to create, update, delete, schedule and send, and a report of each workout for the page |
 | `login.py` | The `login` command: one sign-in, and the value for `GARMIN_TOKEN` on stdout |

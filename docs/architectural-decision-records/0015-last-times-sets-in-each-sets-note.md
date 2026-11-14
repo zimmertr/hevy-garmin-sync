@@ -1,6 +1,6 @@
 # 0015. Every set but a warm-up lists last time's working sets in its note, from the last workout of any kind that logged the exercise
 
-- Status: Accepted
+- Status: Accepted. Superseded in part by 0017
 - Date: 2026-11-11
 - Decider: TJ, on #3: the note's form (option A), which session counts, both kinds of workout, and the switch.
 - Issues and PRs: #3, #47, #55

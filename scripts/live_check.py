@@ -127,7 +127,11 @@ CHECK_NOTES = (
     Exercise("Crunch", "CRUNCH", "CRUNCH", (Set(reps=10),)),
 )
 # Appended to the last note: which of these the watch draws decides whether a note can use them.
-SYMBOLS = "x \u00d7 \u2022 \u2192 \u2713 \u00b0 \u00bd\n\u2605 \u2665 \u26a0 \u2013 \u2026 \u2265\n\U0001f4aa \U0001f3cb"
+SYMBOLS = (
+    "x \u00d7 \u2022 \u2192 \u2713 \u00b0 \u00bd\n"  # x, times, bullet, arrow, check, degree, half
+    "\u2605 \u2665 \u26a0 \u2013 \u2026 \u2265\n"  # star, heart, warning, en dash, ellipsis, at least
+    "\U0001f4aa \U0001f3cb"  # flexed biceps, weight lifter
+)
 STEP_SIZES = (250, 100, 50)  # the step probe's sizes, largest first; it stops at the first Garmin takes
 # Rep targets no two rounds in a row share, so no repeat group shortens the probe.
 _PROBE_REPS = (8, 10, 12, 10, 8)

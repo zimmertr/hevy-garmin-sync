@@ -87,7 +87,7 @@ To turn it on, open a private browser window, sign in at hevy.com, and copy the 
 | `INCLUDE_HEVY_FOLDERS` | every routine | Only these routine folders, by id or title, comma-separated |
 | `CUSTOM_EXERCISE_MAP` | by muscle group | The Garmin exercise for your own Hevy exercises, as `title-or-id=CATEGORY/NAME`, comma-separated |
 | `ENABLE_SCHEDULED_WORKOUTS` | `true` | Put every routine, and Hevy Trainer's next workout, on today's Garmin calendar |
-| `ENABLE_PREVIOUS_VALUES` | `true` | Show last time's sets in each set's note on the watch |
+| `ENABLE_PREVIOUS_VALUES` | `true` | Show last time's sets for each exercise on the status page |
 | `HEVY_SESSION` | off | Turns Hevy Trainer on |
 | `HEVY_POLL_INTERVAL_SECONDS` | `60` | How often Hevy is checked |
 | `TZ` | your Garmin profile's time zone | Decides when "today" starts |
@@ -104,7 +104,7 @@ To turn it on, open a private browser window, sign in at hevy.com, and copy the 
 - A routine you delete in Hevy leaves Garmin Connect, but the copy in the watch's saved workouts stays until you delete it on the watch.
 - Don't edit the description of a workout it made. That's how it knows the workout is its own.
 - Weights go to Garmin in the unit your Garmin Connect account uses. The watch shows them in its own weight unit, which is a separate setting on the watch.
-- Each set's note on the watch lists what you did last time, one set to a line, like `65 x 6 @ 7.5` under `Previous (lb):`. The number after `@` is the RPE. Last time is the last workout you logged that exercise in, any workout, in the past 12 months. It doesn't follow Hevy's "Previous Workout Values" setting. Warm-ups are left out. `ENABLE_PREVIOUS_VALUES=false` turns it off.
+- Each set's note on the watch is one page down during the set. It shows the set the way the watch's set-info screen does, under Hevy's name for the set type: `Warm Up Set`, `4-6 Reps`, `35 lbs`. When Garmin calls the exercise something else, Hevy's name is the last line, like `Hevy: Seal Row (Dumbbell)`.
 - If Hevy or Garmin rejects a sign-in, the app keeps running and the status page says what to fix. With a rejected `HEVY_SESSION`, routines keep syncing.
 - A sync costs about 3 Garmin calls per workout, and Garmin blocks accounts that call too often. Press Sync now when something looks wrong, not on a timer.
 - If an exercise shows up under the wrong name on the watch, the fix is one line in [the exercise map](src/hevy_garmin_sync/data/exercise_map.csv). Open an issue or a PR. On the status page, an exercise it had to guess has a "Report this match" link that fills the issue in for you.
