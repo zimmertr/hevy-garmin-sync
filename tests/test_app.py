@@ -614,7 +614,7 @@ class TrainerTest(AppCase):
 
 
 class PreviousTest(AppCase):
-    """Last time's working sets in each set's note, kept current by the workout events (#3)."""
+    """Last time's working sets for the status page, kept current by the workout events (#3)."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -628,19 +628,24 @@ class PreviousTest(AppCase):
     def events_asked(self) -> list[str]:
         return [params["since"] for path, params in self.hevy_api.requests if path == "/workouts/events"]
 
-    def test_every_workout_with_the_exercise_shows_a_saved_workouts_sets_on_the_next_poll(self) -> None:
+    def test_a_saved_workout_changes_last_times_sets_but_no_note_so_garmin_is_left_alone(self) -> None:
         before: list[set[str | None]] = []
+        lasts: list[set[tuple[Any, ...]]] = []
+
+        def last_sets() -> set[tuple[Any, ...]]:
+            return {e.previous for plans in self.app._plans or [] for w in plans.workouts for e in w.exercises}
 
         def save() -> None:
             sets = [fixtures.hevy_logged_set(weight_kg=62.5, reps=6), fixtures.hevy_logged_set(weight_kg=62.5, reps=5)]
             self.hevy_api.events = [fixtures.hevy_workout_event("w-new", "T-BENCH", "Bench Press (Barbell)", sets)]
             before.append(self.notes())
+            lasts.append(last_sets())
             self.garmin_api.calls.clear()
 
         self.run_app(save)
-        self.assertEqual(before, [{"Previous (lb):\n132.3 x 8 @ 8"}])
-        self.assertEqual(self.notes(), {"Previous (lb):\n137.8 x 6 @ 8\n137.8 x 5 @ 8"})
-        self.assertEqual(self.garmin_api.calls, ["update_workout", "push_workout_to_device"] * 2)
+        self.assertEqual(self.notes(), before[0])
+        self.assertNotEqual(last_sets(), lasts[0])
+        self.assertEqual(self.garmin_api.calls, [])
         # One history read, at startup; the events did the rest.
         self.assertEqual(sum(path.startswith("/exercise_history/") for path, _ in self.hevy_api.requests), 1)
 

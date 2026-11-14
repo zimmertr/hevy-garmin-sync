@@ -4,7 +4,7 @@ import json
 import unittest
 from datetime import timedelta
 
-from hevy_garmin_sync import status
+from hevy_garmin_sync import status, workout
 from hevy_garmin_sync.sync import Counts, Report
 from hevy_garmin_sync.workout import ROUTINE, STATUTE_US, TRAINER, Exercise, LoggedSet, Set, Workout
 from tests import fixtures
@@ -140,8 +140,8 @@ class TextTest(unittest.TestCase):
                 self.assertEqual(status.last_text(logged, "lb"), text)
 
     def test_garmins_key_reads_as_words(self) -> None:
-        self.assertEqual(status.garmin_name("SQUAT", "BARBELL_BACK_SQUAT"), "Barbell Back Squat")
-        self.assertEqual(status.garmin_name("CURL", ""), "Curl")
+        self.assertEqual(workout.garmin_name("SQUAT", "BARBELL_BACK_SQUAT"), "Barbell Back Squat")
+        self.assertEqual(workout.garmin_name("CURL", ""), "Curl")
 
 
 if __name__ == "__main__":

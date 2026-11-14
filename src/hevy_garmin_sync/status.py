@@ -12,7 +12,7 @@ from datetime import date, datetime
 from typing import Any
 
 from .sync import Counts, Report
-from .workout import ROUTINE, STATUTE_US, Exercise, LoggedSet
+from .workout import ROUTINE, STATUTE_US, Exercise, LoggedSet, garmin_name
 
 Json = dict[str, Any]
 
@@ -137,11 +137,6 @@ def _exercise(exercise: Exercise, unit: str, system: str | None) -> Json:
         "warmups": ", ".join(warmups) or None,
         "no_weight": exercise.no_weight,
     }
-
-
-def garmin_name(category: str, name: str) -> str:
-    """Garmin's key as words: BARBELL_BACK_SQUAT is Barbell Back Squat."""
-    return (name or category).replace("_", " ").title()
 
 
 def _weight(kg: float | None, unit: str) -> str:

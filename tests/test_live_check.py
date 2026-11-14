@@ -516,45 +516,39 @@ class NotesTest(LiveCheckCase):
         self.assertEqual(self.tokens, [TOKEN])
         self.assertIsNone(workout.owner(stored["description"]))
         self.assertIn(f"{lc.NOTES_WORKOUT} is on today's calendar and on its way to the watch", out)
-        self.assertIn("1. Curl: 102.5 kg x 12 @ 9.5 / 102.5kg x12 @9.5 / 102.5kg x12 9.5 / 1002.5kg x12 @9.5\n", out)
-        self.assertIn("2. Squat: Prev (kg): / 102.5 x 12 @ 9.5 / 1002.5 x 12 @ 9.5 / 1002.5 x12 @9.5\n", out)
-        self.assertIn(f"3. Row: {lc.RULER} / kg x reps @ RPE / Prev: kg x reps @ RPE\n", out)
-        self.assertIn("4. Lunge: Goal: 4-6 reps / Prev: / 65lb x6 @7 / 65lb x6 @7.5 / 65lb x5 @8\n", out)
-        self.assertIn("5. Crunch: Goal: 4-6 reps / Prev (lb): / 65 x 6 @ 7 / 65 x 6 @ 7.5 / 65 x 5 @ 8\n", out)
-        self.assertIn("@ 8\nGarmin stored every note whole.\n", out)
-        self.assertIn("how many digits of the ruler", out)
+        self.assertIn("1. Chest Supported Dumbbell Row: Warm Up Set / 4-6 Reps / 35 lbs / Hevy: Seal Row (Dumbbell)\n", out)
+        self.assertIn("2. Chest Supported Dumbbell Row: Normal Set / 4-6 Reps / 90 lbs / Hevy: Seal Row (Dumbbell)\n", out)
+        self.assertIn("6. Crunch: Normal Set / 10 Reps / x \u00d7", out)
+        self.assertIn("\U0001f3cb\nGarmin stored every note whole.\n", out)
+        self.assertIn("Which symbols in the last note does the watch draw?", out)
 
-    def test_each_exercise_is_one_set_with_its_lines(self) -> None:
+    def test_each_note_is_the_apps_own_and_the_last_ends_with_the_symbols(self) -> None:
         body = lc.notes_body("statute_us")
-        steps = body["workoutSegments"][0]["workoutSteps"]
-        self.assertEqual([s["type"] for s in steps], ["ExecutableStepDTO"] * 10)
         found = list(lc.sets(body))
-        self.assertEqual([s["exerciseName"] for s in found], ["CURL", "SQUAT", "ROW", "LUNGE", "CRUNCH"])
         self.assertEqual(
-            [s["description"].split("\n") for s in found],
+            [s["description"] for s in found],
             [
-                # The widest likely set, its unit on every line, from the roomiest form to the tightest.
-                ["102.5 kg x 12 @ 9.5", "102.5kg x12 @9.5", "102.5kg x12 9.5", "1002.5kg x12 @9.5"],
-                # The unit once, in the heading.
-                ["Prev (kg):", "102.5 x 12 @ 9.5", "1002.5 x 12 @ 9.5", "1002.5 x12 @9.5"],
-                ["123456789012345678901234567890", "kg x reps @ RPE", "Prev: kg x reps @ RPE"],
-                # Whole notes, each after the app's own note for a rep range (F-30).
-                ["Goal: 4-6 reps", "Prev:", "65lb x6 @7", "65lb x6 @7.5", "65lb x5 @8"],
-                ["Goal: 4-6 reps", "Prev (lb):", "65 x 6 @ 7", "65 x 6 @ 7.5", "65 x 5 @ 8"],
+                "Warm Up Set\n4-6 Reps\n35 lbs\nHevy: Seal Row (Dumbbell)",
+                "Normal Set\n4-6 Reps\n90 lbs\nHevy: Seal Row (Dumbbell)",
+                "Failure Set\n8 Reps\n17.5 lbs\nHevy: Pullover (Dumbbell)",
+                "Drop Set\n8-12 Reps",
+                "Normal Set\n0:30",
+                f"Normal Set\n10 Reps\n{lc.SYMBOLS}",
             ],
         )
+        self.assertEqual(found[0]["endCondition"]["conditionTypeKey"], "reps")
 
     def test_a_note_garmin_cut_short_is_said_with_both_lengths(self) -> None:
         sent = lc.notes_body("statute_us")
         stored = lc.notes_body("statute_us")
         cut, dropped = list(lc.sets(stored))[1:3]
-        cut["description"] = cut["description"][:40]
+        cut["description"] = cut["description"][:20]
         del dropped["description"]
         self.assertEqual(
             lc.notes_kept(sent, stored),
             [
-                "Garmin stored 40 of the 61 characters of exercise 2's note.",
-                "Garmin stored 0 of the 68 characters of exercise 3's note.",
+                "Garmin stored 20 of the 52 characters of exercise 2's note.",
+                "Garmin stored 0 of the 53 characters of exercise 3's note.",
             ],
         )
 
