@@ -17,10 +17,13 @@ from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from datetime import time as clock_time
-from typing import Any, TextIO
+from typing import Any, TextIO, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from . import __version__, logs, server, status
+import garminconnect
+import requests
+
+from . import __version__, logs, preview, server, status
 from . import config as configuration
 from .config import Config
 from .errors import ConfigError, RateLimited, Refused, Rejected, ServiceError, Stopped
@@ -501,6 +504,8 @@ class App:
                 reports=self._sync.report(),
                 system=self._sync.system,
                 settings=self._config.summary(),
+                preview_pr=self._config.preview_pr,
+                preview_commit=self._config.preview_commit,
             )
         )
 
@@ -539,17 +544,27 @@ def main(env: Mapping[str, str] = os.environ, err: TextIO = sys.stderr) -> int:
         return stop.is_set()
 
     store = Store(config.data_dir)
-    try:
-        garmin = Garmin.open(config.garmin_token, store, stopping=stop.is_set)
-        hevy_private = HevyPrivate.open(config.hevy_session, store) if config.hevy_session else None
-    except ConfigError as e:
-        log.error("%s", e)
-        return 1
-    if hevy_private is None:
-        # Only the variable turns Hevy Trainer on; a session left in the data folder goes (section 6).
-        store.remove(SESSION)
-        store.remove(f"{SESSION}.seed")
-    hevy = Hevy(config.hevy_api_key)
+    if config.preview_pr:
+        # The real clients over made-up accounts: the loop runs as it does live and never leaves the pod (W-10).
+        log.info("A preview of pull request %s: Hevy, Hevy Trainer and Garmin are made up", config.preview_pr)
+        made_up = preview.accounts(datetime.now(UTC))
+        # The fakes stand in for the library and the HTTP sessions, as they do in the tests.
+        garmin = Garmin(cast(garminconnect.Garmin, made_up.garmin), store, stopping=stop.is_set)
+        session = cast(requests.Session, made_up.hevy_private)
+        hevy_private: HevyPrivate | None = HevyPrivate(preview.session_tokens(), store, session)
+        hevy = Hevy("preview", cast(requests.Session, made_up.hevy))
+    else:
+        try:
+            garmin = Garmin.open(config.garmin_token, store, stopping=stop.is_set)
+            hevy_private = HevyPrivate.open(config.hevy_session, store) if config.hevy_session else None
+        except ConfigError as e:
+            log.error("%s", e)
+            return 1
+        if hevy_private is None:
+            # Only the variable turns Hevy Trainer on; a session left in the data folder goes (section 6).
+            store.remove(SESSION)
+            store.remove(f"{SESSION}.seed")
+        hevy = Hevy(config.hevy_api_key)
     exercises = ExerciseMap.load(overrides=config.custom_exercises)
     app = App(config, hevy, garmin, exercises, hevy_private=hevy_private, wait=wait, nudge=wake.set)
     httpd = server.start(config.http_port, app, buffer)

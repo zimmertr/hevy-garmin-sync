@@ -23,6 +23,9 @@ env: {}
 
 # The data folder: the app keeps its rotated sign-in tokens here (spec A-4).
 persistence:
+  # false keeps the folder in the pod instead, gone when it goes: for a
+  # preview, whose accounts are made up (spec W-10).
+  enabled: true
   size: 64Mi
   storageClassName: ""
   # Use a PersistentVolumeClaim you made yourself instead of a new one.
@@ -34,6 +37,16 @@ service:
   type: ClusterIP
   port: 8080
   annotations: {}
+
+# The page by hostname, through an Istio ingress gateway: a Gateway and a
+# VirtualService for these hosts, on port 80. Off by default.
+ingress:
+  enabled: false
+  # The labels of the gateway's pods.
+  gatewaySelector:
+    istio: gateway
+  hosts: []
+#   - hevy-garmin-sync.example.com
 
 resources: {}
 

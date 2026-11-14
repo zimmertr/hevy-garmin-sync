@@ -1,0 +1,21 @@
+{{- if .Values.ingress.enabled }}
+# The page by hostname, through the cluster's shared ingress gateway: one
+# Gateway per app on the one gateway, as bluebird-helm's are (issue #62).
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hgs.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- toYaml .Values.ingress.gatewaySelector | nindent 4 }}
+  servers:
+    - hosts:
+        {{- toYaml (required "ingress.hosts is required when ingress.enabled" .Values.ingress.hosts) | nindent 8 }}
+      port:
+        name: http
+        number: 80
+        protocol: HTTP
+{{- end }}

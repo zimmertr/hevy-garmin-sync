@@ -66,6 +66,16 @@ jobs:
         # The status page stays reachable while a rejected sign-in makes the
         # pod unready: it's where the fix is shown (spec W-8).
         helm template hevy-garmin-sync "$CHART" | grep '^  publishNotReadyAddresses: true$' >/dev/null
+        # The Gateway and VirtualService render only when asked, for the hosts
+        # given (issue #62).
+        test "$(helm template hevy-garmin-sync "$CHART" | grep -c '^kind: Gateway$')" -eq 0
+        INGRESS=(--set ingress.enabled=true --set 'ingress.hosts[0]=hevy-garmin-sync.example.com')
+        test "$(helm template hevy-garmin-sync "$CHART" "${INGRESS[@]}" | grep -cE '^kind: (Gateway|VirtualService)$')" -eq 2
+        helm template hevy-garmin-sync "$CHART" "${INGRESS[@]}" | grep '^        - hevy-garmin-sync.example.com$' >/dev/null
+        # A preview keeps its data folder in the pod: no claim, an emptyDir
+        # (spec W-10).
+        test "$(helm template hevy-garmin-sync "$CHART" --set persistence.enabled=false | grep -c '^kind: PersistentVolumeClaim$')" -eq 0
+        helm template hevy-garmin-sync "$CHART" --set persistence.enabled=false | grep '^          emptyDir:$' >/dev/null
 
   # yggdrasil's docker-build module: hadolint, the linux/amd64 image built but
   # not pushed, a Trivy table in a sticky comment, the smoke test, then a
@@ -96,3 +106,19 @@ jobs:
         test "$(docker run --rm --entrypoint id "$IMAGE" -u)" = 1000
         docker run --rm --entrypoint test "$IMAGE" -s /app/LICENSE
         docker run --rm --entrypoint python3 "$IMAGE" -c 'from hevy_garmin_sync import server; [server._file(name) for name, _ in server._FILES.values()]'
+        # A preview runs its loop on the made-up accounts with no network at
+        # all, and no credential (spec W-10).
+        docker run -d --name preview --network none --read-only --tmpfs /data:uid=1000,gid=1000 -e PREVIEW_PR=1 -e PREVIEW_COMMIT=0123456 "$IMAGE"
+        for _ in $(seq 120); do
+          docker logs preview > preview.log 2>&1
+          grep 'Sync: ' preview.log >/dev/null && break
+          sleep 1
+        done
+        docker rm -f preview >/dev/null
+        cat preview.log
+        grep 'A preview of pull request 1' preview.log >/dev/null
+        grep 'Sync: ' preview.log >/dev/null
+        # The one workout the made-up Garmin refuses, and nothing else wrong.
+        grep "Garmin refused 'Everything Day'" preview.log >/dev/null
+        test "$(grep -c ' ERROR ' preview.log)" -eq 1
+        ! grep Traceback preview.log
