@@ -2,92 +2,67 @@
 
 <img src="src/hevy_garmin_sync/web/icon.svg" alt="" width="96">
 
-Puts your Hevy routines on your Garmin watch as strength workouts.
-
 ## Summary
 
-I plan my lifting in Hevy and record it on a Garmin watch. This keeps one Garmin Connect workout for every Hevy routine, and for Hevy Trainer's workouts too if you use Trainer, and sends them to the watch. Start a strength activity from one of them and the watch records the right exercises, sets and weights. Garmin then forwards that recording to Strava, so Strava gets them right too, which is what I was after.
+I use Hevy to plan my strength training workouts and use my Garmin Fenix smartwatch to record them. However, Hevy lacks the ability to create custom Garmin workouts which means two things:
 
-It reads Hevy and writes Garmin, nothing else: it never writes to Hevy, never touches a Garmin workout it didn't make, and never talks to Strava. [docs/SPEC.md](docs/SPEC.md) has the full design.
+1. My watch attempts (and mostly fails) to detect the exercises I'm doing based on my movements which results in junk data. 
+2. My Strava activities originate from either Hevy and lack the biometrics my watch collects or from Garmin Connect and lack accurate workout details.
+
+Hevy Garmin Sync lets you to sync your Hevy routines to your Garmin smartwatch as strength workouts. That way your Garmin Connect history has accurate workout information and your (if relevant) uploaded Strava activities contain the information that originates from both platforms. 
 
 ![The status page, with five routines, a Hevy Trainer program and one workout Garmin refused](docs/screenshot.png)
 
 ## How It Works
 
-It runs as one container. Every minute it checks Hevy for changes, and when something changes it updates the matching Garmin workout and sends it to the watch, which picks it up at its next sync with your phone.
+Every minute your routines are read from Hevy and, when something changes, they are automatically updated in Garmin Connect and available on your watch the next time it syncs. 
 
 ### Routines and folders
 
-Every Hevy routine becomes one Garmin Connect workout: `Hevy: Full Body` for a routine in no folder, `Hevy/Push Pull Legs: Push` for one in a folder. Every routine also sits on today's Garmin calendar, so the watch offers them when you start a strength activity. You can sync only some folders, or keep it off the calendar ([Configuration](#configuration)).
-
-A routine you delete in Hevy leaves Garmin Connect and the calendar. Each workout's description marks it as the app's, so don't edit it: without it the app no longer knows the workout and makes a new one.
+By default, each Hevy routine becomes a workout that is named after the one in Hevy. For example - `Hevy: Full Body` for a routine without a folder and `Hevy/Push Pull Legs: Push` for one in a folder. A routine you delete in Hevy is also then automatically removed from Garmin Connect. Since Hevy lacks scheduling capabilities, each routine is also added to the current day's Garmin calendar. This enables the watch to offer them to you automatically when you start a strength activity. You can choose to sync all folders, a subset of them, and to keep them off the calendar ([Configuration](#configuration)). 
 
 ### Hevy Trainer
 
-If you turn Trainer on, every workout in your Trainer program becomes one too, named like the Hevy app shows it: `Hevy/Trainer: Upper (C2-W2)`, with the cycle and the week. Only the one Hevy says is next goes on today's calendar. When that changes in Hevy, because you logged one or reordered them, the calendar follows within a minute. The others are in the watch's saved workouts.
-
-Trainer's weights aren't in anything Hevy publishes, so the app works them out the way the Hevy app does, from the rules in [docs/HEVY_TRAINER_RULES.md](docs/HEVY_TRAINER_RULES.md). That's a best guess. Hevy can change its rules in any update, and the weights would drift. If a weight or rep range on the watch doesn't match the Hevy app, open an issue with both.
-
-### Exercises
-
-Garmin only takes exercises from its own list, so every Hevy exercise is matched to a Garmin one. For Hevy's built-in exercises the match is a row in [the exercise map](src/hevy_garmin_sync/data/exercise_map.csv). For your own Hevy exercises it's the closest Garmin exercise by the muscle group and equipment you set in Hevy (more under [Known Limitations and Problems](#known-limitations-and-problems)).
-
-If an exercise shows up under the wrong name on the watch, the fix is one line in the map. Open an issue or a PR. On the status page, an exercise it had to guess has a "Report this match" link that fills the issue in for you.
+If you Hevy Trainer every workout in your program will also get synced to Garmin Connect. For example - `Hevy/Trainer: Upper (C2-W2)` where `C2` represents the cycle you're on and `W2` equals the week. Only the workout you are planned to do next gets added to your calendar. Whenever that changes in Hevy, like when you finish one or reorder them, the calendar updates accordingly. The others still remain available as non-scheduled workouts on your watch.
 
 ### The notes screen
 
-Each set has a note on the watch, one page down from the main screen during the set. It shows the set the way the watch's set-info screen does, under Hevy's name for the set type:
-
-```
-Warm Up Set
-4-6 Reps
-35 lbs
-Hevy: Seal Row (Dumbbell)
-```
-
-The type is `Warm Up Set`, `Normal Set`, `Failure Set` or `Drop Set`. The target is the reps, a time such as `0:30`, or a distance. The last line is Hevy's name for the exercise, only when Garmin calls it something else.
-
-Weights go to Garmin in the unit your Garmin Connect account uses. The watch shows them in its own weight unit, which is a separate setting on the watch.
+Each workout also includes a note for each set that includes the type of set, target reps, weight, and (if different) the name that Hevy uses for the exercise.
 
 ## Requirements
 
-- Hevy Pro, for the API key.
-- A Garmin watch that runs strength workouts.
-- Docker, or a Kubernetes cluster with Helm.
+- [Hevy Pro](https://help.hevyapp.com/hc/en-us/articles/35119778922263-Hevy-Pro-Subscription-How-to-get-Pro-and-What-Does-It-Include) to enable API access (and support the developers!)
+- A Garmin watch that supports strength workouts.
+- A way to run Hevy Garmin Sync (Docker, Kubernetes, Linux, etc)
 
 ## Instructions
 
-### 1. Get a Hevy API key
+### 1. Authenticate with Hevy & Garmin
 
-Make one at https://hevy.com/settings?developer. That's `HEVY_API_KEY`.
+Create and save an API Key from Hevy at https://hevy.com/settings?developer. That's your `HEVY_API_KEY`.
 
-### 2. Sign in to Garmin once
-
-Set `VERSION` to the newest release on the [Releases page](https://github.com/zimmertr/hevy-garmin-sync/releases), then:
+Afterwards, authenticate to Garmin:
 
 ```sh
-VERSION=x.y.z
+VERSION=x.y.z # https://github.com/zimmertr/hevy-garmin-sync/releases
 docker run --rm -it "ghcr.io/zimmertr/hevy-garmin-sync:$VERSION" login
 ```
 
-It asks for your Garmin email, password and 2FA code, and prints one long value. That's `GARMIN_TOKEN`. The password is used once and saved nowhere. Run this at home even if you host the app in the cloud: Garmin blocks sign-ins from a lot of cloud IPs. After the first start the app keeps the token current in its data folder, so you only do this again if Garmin signs you out.
+`login` will ask for your Garmin email, password and 2FA code and print a long string. That's your `GARMIN_TOKEN`. This token is only used once. Afterwards, the app will keep it refreshed and stored in its data folder, so you only need to do this again if Garmin signs you out.
 
-### 3. Run it
+### 2. Run Hevy Garmin Sync
 
-With Docker Compose, download [compose.yaml](compose.yaml) and [.env.example](.env.example) into an empty folder:
+**Docker Compose**
 
-```sh
-curl -fsSLO https://raw.githubusercontent.com/zimmertr/hevy-garmin-sync/main/compose.yaml
-curl -fsSL https://raw.githubusercontent.com/zimmertr/hevy-garmin-sync/main/.env.example -o .env
-```
-
-In `.env`, set `HEVY_GARMIN_SYNC_VERSION` to the newest release, fill in the two values, and start it:
+In `.env`, set `HEVY_GARMIN_SYNC_VERSION` to the newest [release](https://github.com/zimmertr/hevy-garmin-sync/releases), fill in the two values, and start it:
 
 ```sh
 docker compose up -d
 ```
 
-With Helm, put the two values in a Secret, and the rest in a values file:
+**Helm**
+
+Put the two values in a Secret, and the rest in a values file:
 
 ```sh
 kubectl create secret generic hevy-garmin-sync \
@@ -104,57 +79,44 @@ persistence:
   size: 64Mi
 ```
 
+And then install the Helm chart:
+
 ```sh
 helm install hevy-garmin-sync oci://ghcr.io/zimmertr/hevy-garmin-sync-helm -f values.yaml
 ```
 
 With no `--version`, Helm installs the newest release. [docs/CONFIGURATION.md](docs/CONFIGURATION.md#chart-values) has every chart value.
 
-Run one copy only. Two would refresh the same Garmin token and lock each other out. Keep the data volume: it holds the tokens.
+Only run one replica to avoid conflicts and persist the data volume since it holds your authentication tokens.
 
-### 4. Check it works
+### 3. Validate the Install
 
-`docker compose logs -f`, or `kubectl logs -f deploy/hevy-garmin-sync`. Within a minute you should see each of your routine folders, then a summary of the first sync:
+After initlization, the app should sync immediatly. To validate, run`docker compose logs -f`, or `kubectl logs -f deploy/hevy-garmin-sync`. Within about a minute you should see each of your routine folders and a summary of the first sync:
 
-```
+```bash
 INFO hevy_garmin_sync.routines Hevy routine folder: id 42, title 'Push Pull Legs'
 INFO hevy_garmin_sync.app Sync: created 6, updated 0, deleted 0, scheduled 5, unscheduled 0, failed 0
 ```
 
-The workouts are in Garmin Connect now. Sync your watch with your phone, start a strength activity, and your routines are there.
+If everything went right, the workouts should be in Garmin Connect now. Sync your watch with your phone, start a strength activity, and your routines should be there as Workouts. 
 
-### The status page
+### 4. The status page
 
-Open http://localhost:8080. It shows every workout and what it became in Garmin, which Garmin exercise each Hevy exercise got, the weights, whether Hevy and Garmin are working, and the log. With Helm it's a ClusterIP Service unless you set `service.type`; `kubectl port-forward svc/hevy-garmin-sync 8080` gets you there either way.
+The app hosts a small web application over HTTP/8080. It shows all of the workouts it finds, their sync status in Garmin, how the exercises mapped together, each exercise's sets/reps/weights, whether Hevy and Garmin are accessible, a rolling log, the app configuration, etc. It also exposes two buttons:
 
-**Sync now** reads Hevy and syncs all workouts to Garmin Connect, and sends them all to the watch again. **Force sync** also overwrites every workout on Garmin Connect, so anything you edited there is gone. You get one a minute. From a terminal it's `sync` (or `sync --force`) inside the container:
+* **Sync now** read Hevy and sync all workouts to Garmin Connect, and sends them all to the watch again. 
+* **Force sync** The same as `Sync Now`, but it also also overwrites every workout on Garmin Connect. So if you manually edited anything there it gets overwritten for you. 
 
-```sh
-docker compose exec hevy-garmin-sync python3 -m hevy_garmin_sync sync
-```
-
-A sync costs about 3 Garmin calls per workout, and Garmin blocks accounts that call too often. Press Sync now when something looks wrong, not on a timer.
-
-There's no sign-in. Anyone who can reach the port can see your workouts and press the buttons. Compose only publishes it on your own machine, and Helm with a ClusterIP Service doesn't publish it at all.
-
-### Keeping it running
-
-To move to a new release with Compose, set `HEVY_GARMIN_SYNC_VERSION` in `.env` to it and run `docker compose up -d` again. With Helm:
-
-```sh
-helm upgrade hevy-garmin-sync oci://ghcr.io/zimmertr/hevy-garmin-sync-helm -f values.yaml
-```
-
-If Hevy or Garmin rejects a sign-in, the app keeps running and the status page says what to fix. When it's Garmin, run `login` again (step 2), set `GARMIN_TOKEN` to the new value, and restart the app. With a rejected `HEVY_SESSION`, routines keep syncing.
-
-[docs/USAGE.md](docs/USAGE.md) has every log line and what to do about each.
+Each sync uses ~3 Garmin calls **per workout**, and Garmin does rate limit accounts that call too often. So avoid spamming these functions or you account might get locked out.
 
 ## Configuration
+
+A collection of envronment variables are available that can configure how the tool works.
 
 | Variable | Default | Does |
 |---|---|---|
 | `HEVY_API_KEY` | required | Your Hevy API key |
-| `GARMIN_TOKEN` | required on the first start | What `login` printed |
+| `GARMIN_TOKEN` | on first init | Your Garmin auth token |
 | `INCLUDE_HEVY_FOLDERS` | every routine | Only these routine folders, by id or title, comma-separated |
 | `CUSTOM_EXERCISE_MAP` | by muscle group | The Garmin exercise for your own Hevy exercises, as `title-or-id=CATEGORY/NAME`, comma-separated |
 | `ENABLE_SCHEDULED_WORKOUTS` | `true` | Put every routine, and Hevy Trainer's next workout, on today's Garmin calendar |
@@ -168,8 +130,6 @@ If Hevy or Garmin rejects a sign-in, the app keeps running and the status page s
 | `HTTP_PORT` | `8080` | The status page's port |
 | `PREVIEW_PR` | off | Runs on made-up workouts for a pull request's preview, and ignores your keys |
 | `PREVIEW_COMMIT` | none | The commit a preview's banner shows |
-
-With Compose they go in `.env`. With Helm the three secrets go in the Secret and the rest under `env:` in `values.yaml`. [docs/CONFIGURATION.md](docs/CONFIGURATION.md) has the detail on each.
 
 ### Only some folders
 
@@ -224,6 +184,8 @@ To turn it on, open a private browser window, sign in at hevy.com, and copy the 
 
 ## Docs
 
+Additional documentation is available in `./docs/`.
+
 | Doc | What's in it |
 |---|---|
 | [docs/SPEC.md](docs/SPEC.md) | The design, requirement by requirement |
@@ -237,11 +199,10 @@ To turn it on, open a private browser window, sign in at hevy.com, and copy the 
 
 ## Known Limitations and Problems
 
-- **An exercise swapped for one session doesn't reach the watch.** When you replace an exercise in Hevy and answer "Replace permanently?" with No, Hevy keeps that swap on your phone until you save the workout, so the watch keeps the old exercise ([#44](https://github.com/zimmertr/hevy-garmin-sync/issues/44)). To do the new exercise from the watch, answer Yes, which reaches Garmin within a minute, and swap back after the session.
-- **Your own Hevy exercises don't keep their names.** Garmin only takes exercises from its own list, so the name you gave one in Hevy can't reach the watch, Garmin Connect or Strava. It shows as the closest Garmin exercise by the muscle group and equipment you set in Hevy: a biceps exercise with dumbbells shows as Dumbbell Biceps Curl, and one with a muscle group the app doesn't know shows as Core. `CUSTOM_EXERCISE_MAP` picks a different one ([Your own exercises](#your-own-exercises)).
-- **Trainer's weights are worked out, not read.** They can drift when Hevy changes its rules ([Hevy Trainer](#hevy-trainer)).
+- **Permanent vs Temporary Exercise Replacement** - Hevy allows you to swap exercises out in a Workout permanently or for a single workout. When you choose permanently, Hevy will remember and this change will beecome available on workouts that sync to your watch. However, if you choose temporarily, this information is not updated server-side. Therefore, there is no way for this tool to know about that change and it will not be synced. 
+- **Inconsistent exercise names & availability** - Hevy, Garmin, and Strava all maintain their own exercise lists and names. So this tool maintains a [CSV file](src/hevy_garmin_sync/data/exercise_map.csv) that makes an attempt at correlating them between platforms. If an exercise shows up under the wrong name on the watch, feel free to raise an [issue](https://github.com/zimmertr/hevy-garmin-sync/issues/new?template=exercise-match.yml) or a PR. Additionally, if you create a custom exercise in Hevy it won't be in the platform mapping. So it will show as the closest exercise Garmin could identify based on the muscle groups and equipment set in Hevy. For example, an exercise targeting biceps that used dumbells would be detected as Dumbbell Biceps Curl. However, you can provide your own custom exericse map via env var with `CUSTOM_EXERCISE_MAP`. ([Your own exercises](#your-own-exercises)).
+- **Trainer Weight Progression Syncing** - Hevy Trainer does not store weight progression server-side. It is calculated on your phone based on whether or not you met the last sessions weight and rep goals. Therefore, like temporary exercise replacements, it is not available for Hevy Garmin Sync. The app makes an effort and keeping this information up to date for you, but it can drift as Hevy changes the underlying algorithm. ([Hevy Trainer](#hevy-trainer)).
 - **A deleted routine stays on the watch.** It leaves Garmin Connect, but the copy in the watch's saved workouts stays until you delete it on the watch.
-- **The watch only gets changes when it syncs.** A change in Hevy is in Garmin Connect within a minute, and on the watch at its next sync with your phone.
 - **It doesn't copy finished workouts** from Hevy to Garmin, and it doesn't pick which routine is next. For Hevy Trainer, today's calendar gets just the workout Hevy says is next.
 
 ## Support
