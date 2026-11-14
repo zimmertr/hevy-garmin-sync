@@ -54,6 +54,7 @@ __all__ = [
     "HEVY_SESSION_TOKENS",
     "LBS_PER_KG",
     "PROGRAM_START",
+    "FakeResponse",
     "garmin_error",
     "hevy_deleted_event",
     "hevy_exercise",

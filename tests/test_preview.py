@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
+import garminconnect
 import requests
 
 from hevy_garmin_sync import app, config, garmin, hevy, preview
@@ -143,6 +144,33 @@ class AccountsTest(unittest.TestCase):
         assert made_up.hevy_private.program is not None
         used |= {e["exercise_template_id"] for t in made_up.hevy_private.program["templates"] for e in t["exercises"]}
         self.assertLessEqual(used, ids)
+
+
+class RefusalTest(unittest.TestCase):
+    """The made-up services refuse what the real ones refuse, as recorded (spec D-10)."""
+
+    def setUp(self) -> None:
+        self.made_up = preview.accounts(fixtures.NOW)
+
+    def test_garmin_has_no_workout_by_an_unknown_id(self) -> None:
+        with self.assertRaises(garminconnect.GarminConnectConnectionError) as caught:
+            self.made_up.garmin.get_workout_by_id(1)
+        self.assertEqual(caught.exception.response.status_code, 404)
+
+    def test_hevy_answers_an_unknown_path_with_404(self) -> None:
+        self.assertEqual(self.made_up.hevy.get("https://api.hevyapp.com/v1/nothing").status_code, 404)
+
+    def test_the_private_api_refuses_a_refresh_without_a_bearer(self) -> None:
+        reply = self.made_up.hevy_private.post("https://api.hevyapp.com/auth/refresh_token", json={})
+        self.assertEqual(reply.status_code, 400)
+
+    def test_the_private_api_pages_workouts_by_one_or_three_only(self) -> None:
+        reply = self.made_up.hevy_private.get(
+            "https://api.hevyapp.com/user_workouts_paged",
+            headers={"Authorization": "Bearer hevy-access-1"},
+            params={"limit": 2, "offset": 0},
+        )
+        self.assertEqual(reply.status_code, 400)
 
 
 if __name__ == "__main__":
