@@ -2,7 +2,7 @@
 
 Hevy's servers send a Trainer program without weights, warm-up weights or a week number. The Hevy app works those out on the phone. This page writes down the rules this app follows to get the same answers, so the watch shows what the Hevy app shows. `src/hevy_garmin_sync/trainer_rules.py` is the code, and spec section 6 (F-40 to F-48) is the requirement.
 
-The rules match Hevy app 3.2.5. Nothing checks for a newer app that changes them: a difference between the watch and the app is how a change shows (F-48). Report one as an issue.
+The rules match Hevy app 3.2.5, and no release through 3.2.7 changed them. Every new release is checked outside this repo, and a changed rule comes back as an issue (F-48, record 0018). A difference between the watch and the app is still worth an issue.
 
 ## What is read
 
