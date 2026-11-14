@@ -46,7 +46,7 @@ Open `http://localhost:8080` under Compose, or the Service's address under Kuber
 | `Sync: created 2, updated 0, deleted 0, scheduled 2, unscheduled 0, failed 0` | One per full run, and one per poll that changed something |
 | `Nothing changed in the last hour (60 polls)` | The app is alive and Hevy didn't change |
 | `Hevy routine folder: id 42, title 'Push Pull Legs'` | At startup, every folder, for `INCLUDE_HEVY_FOLDERS` |
-| `Custom Hevy exercise 'My Cable Raise' (muscle group shoulders, equipment cable) is Garmin's TOTAL_BODY / TOTAL_BODY, by muscle group and equipment` | The Garmin exercise one of your own Hevy exercises got, logged the first time it syncs and when that changes. Ends `from CUSTOM_EXERCISE_MAP` when the variable chose it |
+| `Custom Hevy exercise 'My Cable Raise' (muscle group shoulders, equipment machine) is Garmin's SHOULDER_PRESS / SMITH_MACHINE_OVERHEAD_PRESS, by muscle group and equipment` | The Garmin exercise one of your own Hevy exercises got, logged the first time it syncs and when that changes. Ends `from CUSTOM_EXERCISE_MAP` when the variable chose it |
 | `Hevy Trainer: Side Bend (Dumbbell): 40 lbs (up)` | A Trainer prescription, logged when it is first worked out and when it changes |
 | `Hevy Trainer: ...: no prescription (...)` | Trainer gives that exercise no weight, and why |
 | `Manual sync asked for (forced: every workout is rewritten)` | Sync now, Force sync or `sync` started a run. A plain one ends at `asked for` |
@@ -58,6 +58,7 @@ Open `http://localhost:8080` under Compose, or the Service's address under Kuber
 |---|---|
 | It exits at startup naming a variable | Fix that variable. The message says how |
 | The status page shows a sign-in rejected, or the pod isn't ready (`0/1`) | A sign-in was rejected. The app keeps running and leaves that service alone; the page and the log say which one, and the rows below say what to do. Set the new value, then restart the app |
+| `login` says `Sign-in failed` and names a cloud server | Garmin blocks sign-ins from a lot of cloud IPs. Run `login` at home, even if the app runs in the cloud, and set `GARMIN_TOKEN` there |
 | `Garmin rejected the app's credentials` | Nothing reaches Garmin until it is fixed. Run `login` again and set `GARMIN_TOKEN` to the new value |
 | `Hevy rejected the app's credentials; check HEVY_API_KEY` | Nothing is read from Hevy until it is fixed. Make a new key at https://hevy.com/settings?developer. The key needs Hevy Pro |
 | `Hevy Trainer rejected the app's credentials` | Copy the `auth2.0-token` cookie from hevy.com again, in a private window you then close without logging out, and set `HEVY_SESSION` to it. Routines keep syncing meanwhile, and the Trainer workouts stay in Garmin as they were |
