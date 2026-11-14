@@ -18,8 +18,8 @@ flowchart LR
 |---|---|---|
 | `test.yml` | `test` | The suite under coverage, with the line and branch table in the run summary |
 | `pr.yml` | `Python Lint` | ruff and mypy, from the hashed dev lock |
-| `pr.yml` | `Chart / Chart` | yggdrasil's chart module: `helm lint`, the chart rendered with the defaults, then this repo's renders: with an existing Secret, with a namespace, with a digest, the read-only root filesystem, the Gateway and VirtualService only when asked, and no claim without persistence |
-| `pr.yml` | `Docker Build / Docker Build` | yggdrasil's docker-build module: hadolint, the amd64 image built, a Trivy table in a sticky comment, the smoke test (a preview included, run with no network until its first sync), and a failure on any fixable Critical or High |
+| `pr.yml` | `Chart / Chart` | yggdrasil's chart module: `helm lint`, the chart rendered with the defaults, then the helm-unittest suites in `charts/hevy-garmin-sync-helm/tests/`: the digest, the read-only root filesystem, `HTTP_PORT`, an existing Secret, the namespace on every resource, the Gateway and VirtualService only when asked, and no claim without persistence |
+| `pr.yml` | `Docker Build / Docker Build` | yggdrasil's docker-build module: hadolint, the amd64 image built, a Trivy table in a sticky comment, the container-structure-test checks in `tests/structure-test.yaml` (the entry point, user 1000, the license, the imports, the page's files, and a preview run to its first sync), and a failure on any fixable Critical or High |
 | `lint.yml` | `Lint / actionlint`, `Lint / zizmor`, `Lint / semgrep` | yggdrasil's lint module over the workflows and the Dockerfile |
 | `pr-title.yml` | `PR Title / PR Title` | yggdrasil's pr-title module: the title must be `type(scope): summary` |
 

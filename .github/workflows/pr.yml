@@ -37,88 +37,28 @@ jobs:
       - run: ruff check .
       - run: mypy
 
-  # yggdrasil's chart module: `helm lint`, a render with the defaults, then the
-  # renders below, on the Helm version the release packages with (record 0012).
+  # yggdrasil's chart module: `helm lint`, a render with the defaults, then
+  # the helm-unittest suites in the chart's tests/ folder (its records 0012
+  # and 0060).
   chart:
     name: Chart
-    uses: zimmertr/yggdrasil/.github/workflows/chart.yml@f805e7b874e54e661d8dc8ad528883228bfc567b # v1.2.9
+    uses: zimmertr/yggdrasil/.github/workflows/chart.yml@6a96e4f4c9c915235817451cbdb9db783db0e51b # feat/standard-test-tools
     permissions:
       contents: read
     with:
       chart: charts/hevy-garmin-sync-helm
-      # Each grep reads the whole render: the module runs this with pipefail,
-      # and `grep -q` would close the pipe on Helm at its first match.
-      test: |
-        # With an existing Secret.
-        helm template hevy-garmin-sync "$CHART" --set existingSecret=hevy-garmin-sync >/dev/null
-        # Every resource states its namespace: kustomize 5.8, which Argo CD
-        # runs, adds none to a chart's output. The default render has four
-        # resources.
-        test "$(helm template hevy-garmin-sync "$CHART" --namespace check | grep -c '^  namespace: check$')" -eq 4
-        # The release writes the digest; it must render as image@digest.
-        helm template hevy-garmin-sync "$CHART" --set image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 | grep 'ghcr.io/zimmertr/hevy-garmin-sync@sha256:0' >/dev/null
-        # The container's filesystem is read-only unless a user turns it off
-        # (spec O-4, record 0008).
-        helm template hevy-garmin-sync "$CHART" | grep '^            readOnlyRootFilesystem: true$' >/dev/null
-        # The container port, and so the probes and the Service, follow
-        # HTTP_PORT (spec C-13).
-        helm template hevy-garmin-sync "$CHART" --set env.HTTP_PORT=9090 | grep '^              containerPort: 9090$' >/dev/null
-        # The status page stays reachable while a rejected sign-in makes the
-        # pod unready: it's where the fix is shown (spec W-8).
-        helm template hevy-garmin-sync "$CHART" | grep '^  publishNotReadyAddresses: true$' >/dev/null
-        # The Gateway and VirtualService render only when asked, for the hosts
-        # given (issue #62).
-        test "$(helm template hevy-garmin-sync "$CHART" | grep -c '^kind: Gateway$')" -eq 0
-        INGRESS=(--set ingress.enabled=true --set 'ingress.hosts[0]=hevy-garmin-sync.example.com')
-        test "$(helm template hevy-garmin-sync "$CHART" "${INGRESS[@]}" | grep -cE '^kind: (Gateway|VirtualService)$')" -eq 2
-        helm template hevy-garmin-sync "$CHART" "${INGRESS[@]}" | grep '^        - hevy-garmin-sync.example.com$' >/dev/null
-        # A preview keeps its data folder in the pod: no claim, an emptyDir
-        # (spec W-10).
-        test "$(helm template hevy-garmin-sync "$CHART" --set persistence.enabled=false | grep -c '^kind: PersistentVolumeClaim$')" -eq 0
-        helm template hevy-garmin-sync "$CHART" --set persistence.enabled=false | grep '^          emptyDir:$' >/dev/null
 
   # yggdrasil's docker-build module: hadolint, the linux/amd64 image built but
-  # not pushed, a Trivy table in a sticky comment, the smoke test, then a
+  # not pushed, a Trivy table in a sticky comment, tests/structure-test.yaml, then a
   # failure on any fixable Critical or High, as the release would refuse.
   docker-build:
     name: Docker Build
-    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@f805e7b874e54e661d8dc8ad528883228bfc567b # v1.2.9
+    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@6a96e4f4c9c915235817451cbdb9db783db0e51b # feat/standard-test-tools
     permissions:
       contents: read
       pull-requests: write # the sticky scan comment
     with:
       # As the release passes it: the apt upgrade layer reruns per push.
       build-args: APP_COMMIT=${{ github.event.pull_request.head.sha }}
-      # What only a built image shows: the entry point starts on the image's
-      # own Python, the zoneinfo data is there for TZ, Garmin's client and
-      # its compiled sign-in dependency import, the two exercise tables are
-      # in the image and load, it runs as the unprivileged user the chart
-      # expects, it starts with the read-only root filesystem the chart and
-      # compose.yaml give it, it ships its license, and every file the status
-      # page serves is in it.
-      smoke-test: |
-        docker run --rm "$IMAGE" --help
-        docker run --rm "$IMAGE" --version
-        docker run --rm --read-only "$IMAGE" --version
-        docker run --rm --entrypoint python3 "$IMAGE" -c 'import zoneinfo; zoneinfo.ZoneInfo("America/Los_Angeles")'
-        docker run --rm --entrypoint python3 "$IMAGE" -c 'import garminconnect, curl_cffi'
-        docker run --rm --entrypoint python3 "$IMAGE" -c 'from hevy_garmin_sync.exercises import ExerciseMap; ExerciseMap.load()'
-        test "$(docker run --rm --entrypoint id "$IMAGE" -u)" = 1000
-        docker run --rm --entrypoint test "$IMAGE" -s /app/LICENSE
-        docker run --rm --entrypoint python3 "$IMAGE" -c 'from hevy_garmin_sync import server; [server._file(name) for name, _ in server._FILES.values()]'
-        # A preview runs its loop on the made-up accounts with no network at
-        # all, and no credential (spec W-10).
-        docker run -d --name preview --network none --read-only --tmpfs /data:uid=1000,gid=1000 -e PREVIEW_PR=1 -e PREVIEW_COMMIT=0123456 "$IMAGE"
-        for _ in $(seq 120); do
-          docker logs preview > preview.log 2>&1
-          grep 'Sync: ' preview.log >/dev/null && break
-          sleep 1
-        done
-        docker rm -f preview >/dev/null
-        cat preview.log
-        grep 'A preview of pull request 1' preview.log >/dev/null
-        grep 'Sync: ' preview.log >/dev/null
-        # The one workout the made-up Garmin refuses, and nothing else wrong.
-        grep "Garmin refused 'Hevy/Home: Everything Day'" preview.log >/dev/null
-        test "$(grep -c ' ERROR ' preview.log)" -eq 1
-        ! grep Traceback preview.log
+      # What only the built image shows, as container-structure-test checks.
+      structure-test: tests/structure-test.yaml

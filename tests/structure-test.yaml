@@ -1,0 +1,72 @@
+# What only the built image shows, checked by container-structure-test through
+# yggdrasil's docker-build module (its record 0060). The tool replaces the
+# image's entry point for each command, so each names Python itself; the
+# metadata test holds the entry point.
+schemaVersion: 2.0.0
+
+metadataTest:
+  entrypoint: [python3, -m, hevy_garmin_sync]
+  # The unprivileged user the chart and compose.yaml expect.
+  user: "1000:1000"
+  workdir: /app
+  envVars:
+    - key: DATA_DIR
+      value: /data
+  exposedPorts: ["8080"]
+
+fileExistenceTests:
+  - name: the license ships
+    path: /app/LICENSE
+    shouldExist: true
+  # The one folder the app writes, owned by its user (spec C-8).
+  - name: the data folder
+    path: /data
+    shouldExist: true
+    uid: 1000
+    gid: 1000
+
+commandTests:
+  - name: the command line starts
+    command: python3
+    args: [-m, hevy_garmin_sync, --help]
+    exitCode: 0
+  - name: it knows its version
+    command: python3
+    args: [-m, hevy_garmin_sync, --version]
+    expectedOutput: ["^hevy-garmin-sync "]
+  - name: the zoneinfo data is there for TZ
+    command: python3
+    args: [-c, 'import zoneinfo; zoneinfo.ZoneInfo("America/Los_Angeles")']
+    exitCode: 0
+  - name: Garmin's client and its compiled sign-in dependency import
+    command: python3
+    args: [-c, 'import garminconnect, curl_cffi']
+    exitCode: 0
+  - name: both exercise tables are in the image and load
+    command: python3
+    args: [-c, from hevy_garmin_sync.exercises import ExerciseMap; ExerciseMap.load()]
+    exitCode: 0
+  - name: every file the status page serves is in the image
+    command: python3
+    args: [-c, 'from hevy_garmin_sync import server; [server._file(name) for name, _ in server._FILES.values()]']
+    exitCode: 0
+  # A preview runs the real loop on the made-up accounts to its first sync,
+  # where the made-up Garmin refuses the one workout it is set to (spec W-10).
+  # `timeout` ends it; the app takes the SIGTERM as a stop.
+  - name: a preview reaches its first sync on the made-up accounts
+    command: timeout
+    args: ["45", python3, -m, hevy_garmin_sync]
+    envVars:
+      - key: PREVIEW_PR
+        value: "1"
+      - key: PREVIEW_COMMIT
+        value: "0123456"
+    exitCode: 124
+    expectedError:
+      - "A preview of pull request 1: Hevy, Hevy Trainer and Garmin are made up"
+      - "Garmin refused 'Hevy/Home: Everything Day'"
+      - "INFO hevy_garmin_sync.app Sync: "
+    excludedError:
+      - Traceback
+      - "can't be reached"
+      - "is failing"

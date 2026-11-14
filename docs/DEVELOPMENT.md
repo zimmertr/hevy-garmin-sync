@@ -11,7 +11,7 @@ CI is the test runner. Branch from the latest `main`, open a draft PR early, pus
 | `make lint` | ruff |
 | `make typecheck` | mypy, strict |
 | `make lint-docker` | hadolint on the Dockerfile |
-| `make chart` | `helm lint` and two renders, as the `Chart / Chart` check does |
+| `make chart` | `helm lint`, a render, and the helm-unittest suites, as the `Chart / Chart` check does |
 | `make build` | The image, tagged `hevy-garmin-sync:dev` |
 | `make scan` | The release scan's rules against that build |
 | `make lock` | Not a check: recompiles `requirements.txt` and `requirements-dev.txt` from the `.in` files, hashed. A pin change ships with its lock in the same PR |
@@ -56,3 +56,4 @@ It reads the workout back and says whether Garmin stored every note whole. Then 
 - `tests/test_exercise_data.py` checks both exercise tables against `src/hevy_garmin_sync/data/garmin_exercises.json`, the keys of Garmin's own exercise list, which ships in the package so the app can check `CUSTOM_EXERCISE_MAP` too. A row naming an exercise Garmin doesn't have fails it. It reads Hevy's muscle groups and equipment from `tests/data/hevy_api.json`. Both copies are written by `make upstream-update`; don't edit them by hand.
 - `tests/test_recorded_shapes.py` runs the live check over the fakes and compares what it records with `tests/data/recorded_shapes.json`, the shapes the live checks recorded (keys and types, no values). A fake that drifts from a real reply fails it, naming the field. When a new live check records a reply differently, put its shape from the live check's file in place of the old one, and fix whatever builder the test then names.
 - A test that reads files fails when it can't find them, instead of skipping.
+- The chart's checks are helm-unittest suites in `charts/hevy-garmin-sync-helm/tests/`, and the image's are container-structure-test checks in `tests/structure-test.yaml`. yggdrasil's modules run both (its record 0060). Never a shell script of `grep` or `docker run` in a workflow; a check neither tool can hold goes to TJ first.

@@ -39,7 +39,7 @@ Every change ships with tests. Coverage aims at 100% of lines and branches; CI r
 File issues with the `create-issue` skill from zimmertr/ai-config: the two-sentence summary, the six sections, the hemingway and humanizer passes, one priority, one type, the area labels and the session label. The skill reads the four things below from this section.
 
 - **The reader**: a lifter who uses Hevy and a Garmin watch and doesn't read code.
-- **The gates**: `test` (aim 100% coverage), `Python Lint` (ruff and mypy), `Chart / Chart`, `Lint / actionlint`, `Lint / zizmor`, `Lint / semgrep`, `PR Title / PR Title`, and `Docker Build / Docker Build` (the image built, scanned by Trivy and smoke-tested).
+- **The gates**: `test` (aim 100% coverage), `Python Lint` (ruff and mypy), `Chart / Chart`, `Lint / actionlint`, `Lint / zizmor`, `Lint / semgrep`, `PR Title / PR Title`, and `Docker Build / Docker Build` (the image built, scanned by Trivy and checked by `tests/structure-test.yaml`).
 - **The constraints**: never write to Hevy; only touch Garmin workouts the app owns; no tokens, ids or personal data in the repo; nothing Docker-specific; the spec (`docs/SPEC.md`, issue #1) is the source of truth.
 - **The areas**: `hevy`, `trainer`, `garmin`, `watch`, `calendar`, `exercise-map`, `config`, `ci`, `docs`, `helm`.
 

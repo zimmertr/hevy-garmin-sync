@@ -1,4 +1,7 @@
 {{- if .Values.ingress.enabled }}
+{{- if not .Values.ingress.hosts }}
+{{- fail "ingress.hosts is required when ingress.enabled" }}
+{{- end }}
 # The page by hostname, through the cluster's shared ingress gateway: one
 # Gateway per app on the one gateway, as bluebird-helm's are (issue #62).
 apiVersion: networking.istio.io/v1
@@ -13,7 +16,7 @@ spec:
     {{- toYaml .Values.ingress.gatewaySelector | nindent 4 }}
   servers:
     - hosts:
-        {{- toYaml (required "ingress.hosts is required when ingress.enabled" .Values.ingress.hosts) | nindent 8 }}
+        {{- toYaml .Values.ingress.hosts | nindent 8 }}
       port:
         name: http
         number: 80

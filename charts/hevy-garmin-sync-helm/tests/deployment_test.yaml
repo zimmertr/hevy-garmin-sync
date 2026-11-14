@@ -1,0 +1,53 @@
+suite: deployment
+templates:
+  - deployment.yaml
+tests:
+  # The release writes the digest; it wins over the tag (record 0006).
+  - it: runs the image by digest when the release wrote one
+    set:
+      image.digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/zimmertr/hevy-garmin-sync@sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+  # The app writes only to /data (spec O-4, record 0008).
+  - it: keeps the container's root filesystem read-only
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+
+  # The probes and the Service name the port, so all follow it (spec C-13).
+  - it: listens on HTTP_PORT
+    set:
+      env.HTTP_PORT: "9090"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].containerPort
+          value: 9090
+
+  - it: reads the credentials from an existing Secret when given one
+    set:
+      existingSecret: made-up
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].envFrom[0].secretRef.name
+          value: made-up
+
+  - it: keeps the data folder on its claim by default
+    asserts:
+      - equal:
+          path: spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          value: RELEASE-NAME-data
+
+  # A preview's accounts are made up (spec W-10).
+  - it: keeps the data folder in the pod without persistence
+    set:
+      persistence.enabled: false
+    asserts:
+      - notExists:
+          path: spec.template.spec.volumes[0].persistentVolumeClaim
+      - equal:
+          path: spec.template.spec.volumes[0].emptyDir.sizeLimit
+          value: 64Mi
