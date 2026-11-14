@@ -207,6 +207,18 @@ class SendTest(SyncCase):
         self.run_poll(self.push, self.pull)
         self.assertEqual(self.api.calls, [])
 
+    def test_a_manual_sync_never_sends_a_workout_deleted_in_garmin_connect(self) -> None:
+        # Its old id went to the watch, and Garmin answered 404 (TJ, 2026-11-14).
+        self.run_full(self.push, self.pull)
+        gone = self.id_of("Hevy: Push")
+        del self.api.workouts[gone]
+        self.api.pushed.clear()
+        self.sync.resend_all()
+        counts = self.run_full(self.push, self.pull)
+        self.assertEqual(counts.created, 1)
+        self.assertNotIn(gone, self.api.pushed)
+        self.assertEqual(sorted(self.api.pushed), sorted(self.api.workouts))
+
 
 class DeleteTest(SyncCase):
     def test_a_routine_is_deleted_only_when_two_runs_in_a_row_miss_it(self) -> None:
