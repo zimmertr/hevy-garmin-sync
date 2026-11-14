@@ -95,6 +95,34 @@ class LockTest(unittest.TestCase):
         # pip_requirements would bump a lock's pin and leave its hashes stale.
         self.assertIs(config["pip_requirements"]["enabled"], False)
 
+    def test_renovate_reads_every_python_pin_and_they_agree(self) -> None:
+        # A Python minor moves in one PR (record 0014). A custom rule that stops
+        # matching its file leaves that pin behind, to be moved by hand.
+        config = json.loads((REPO / ".github" / "renovate.json").read_text())
+        versions: dict[str, str] = {}
+        for manager in config["customManagers"]:
+            patterns = [re.compile(p.strip("/")) for p in manager["managerFilePatterns"]]
+            # Renovate writes a named group as (?<name>...), Python as (?P<name>...).
+            strings = [re.compile(s.replace("(?<", "(?P<")) for s in manager["matchStrings"]]
+            candidates = ("mypy.ini", "requirements.txt", "requirements-dev.txt")
+            files = [f for f in candidates if any(p.search(f) for p in patterns)]
+            self.assertNotEqual(files, [], manager["description"])
+            for name in files:
+                with self.subTest(file=name):
+                    found = strings[0].search((REPO / name).read_text())
+                    assert found is not None, f"Renovate reads no Python version in {name}"
+                    versions[name] = found.group("currentValue")
+        dockerfile = re.search(r"^FROM python:(\d+\.\d+)-", (REPO / "Dockerfile").read_text(), re.M)
+        makefile = re.search(r"^PYTHON_IMAGE := python:(\d+\.\d+)-", (REPO / "Makefile").read_text(), re.M)
+        assert dockerfile is not None and makefile is not None
+        versions["Dockerfile"], versions["Makefile"] = dockerfile.group(1), makefile.group(1)
+        for workflow in sorted((REPO / ".github" / "workflows").glob("*.yml")):
+            for found in re.finditer(r'python-version: "(\d+\.\d+)"', workflow.read_text()):
+                versions[workflow.name] = found.group(1)
+        self.assertEqual(len(set(versions.values())), 1, versions)
+        group = [r for r in config["packageRules"] if r.get("groupName") == "Python"]
+        self.assertEqual([r["matchDepNames"] for r in group], [["python"]])
+
     def test_renovate_can_read_each_locks_header(self) -> None:
         # Renovate recompiles a lock with the command in its header, and stops
         # at an option it doesn't know. pip-tools 7.5.3 wrote --no-index there.
