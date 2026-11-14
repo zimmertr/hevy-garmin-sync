@@ -13,6 +13,8 @@ Hevy Garmin Sync lets you to sync your Hevy routines to your Garmin smartwatch a
 
 ![The status page, with five routines, a Hevy Trainer program and one workout Garmin refused](docs/screenshot.png)
 
+<hr>
+
 ## How It Works
 
 Every minute your routines are read from Hevy and, when something changes, they are automatically updated in Garmin Connect and available on your watch the next time it syncs. 
@@ -29,11 +31,15 @@ If you Hevy Trainer every workout in your program will also get synced to Garmin
 
 Each workout also includes a note for each set that includes the type of set, target reps, weight, and (if different) the name that Hevy uses for the exercise.
 
+<hr>
+
 ## Requirements
 
 - [Hevy Pro](https://help.hevyapp.com/hc/en-us/articles/35119778922263-Hevy-Pro-Subscription-How-to-get-Pro-and-What-Does-It-Include) to enable API access (and support the developers!)
 - A Garmin watch that supports strength workouts.
 - A way to run Hevy Garmin Sync (Docker, Kubernetes, Linux, etc)
+
+<hr>
 
 ## Instructions
 
@@ -109,68 +115,74 @@ The app hosts a small web application over HTTP/8080. It shows all of the workou
 
 Each sync uses ~3 Garmin calls **per workout**, and Garmin does rate limit accounts that call too often. So avoid spamming these functions or you account might get locked out.
 
+<hr>
+
 ## Configuration
 
 A collection of envronment variables are available that can configure how the tool works.
 
-| Variable | Default | Does |
-|---|---|---|
-| `HEVY_API_KEY` | required | Your Hevy API key |
-| `GARMIN_TOKEN` | on first init | Your Garmin auth token |
-| `INCLUDE_HEVY_FOLDERS` | every routine | Only these routine folders, by id or title, comma-separated |
-| `CUSTOM_EXERCISE_MAP` | by muscle group | The Garmin exercise for your own Hevy exercises, as `title-or-id=CATEGORY/NAME`, comma-separated |
-| `ENABLE_SCHEDULED_WORKOUTS` | `true` | Put every routine, and Hevy Trainer's next workout, on today's Garmin calendar |
-| `ENABLE_PREVIOUS_VALUES` | `true` | Show last time's sets for each exercise on the status page |
-| `HEVY_SESSION` | off | Turns Hevy Trainer on |
-| `HEVY_POLL_INTERVAL_SECONDS` | `60` | How often Hevy is checked |
-| `TZ` | your Garmin profile's time zone | Decides when "today" starts |
-| `DATA_DIR` | `/data` | Where the tokens are kept |
-| `LOG_LEVEL` | `INFO` | `DEBUG` for more |
-| `LOG_FORMAT` | `text` | Or `json` |
-| `HTTP_PORT` | `8080` | The status page's port |
-| `PREVIEW_PR` | off | Runs on made-up workouts for a pull request's preview, and ignores your keys |
-| `PREVIEW_COMMIT` | none | The commit a preview's banner shows |
+| Variable | Default | Required | Description |
+|---|---|---|---|
+| `HEVY_API_KEY` | | Yes | Your Hevy API key |
+| `GARMIN_TOKEN` | | Yes | Your Garmin auth token. Only needed on first init |
+| `INCLUDE_HEVY_FOLDERS` | every routine | | Only these routine folders, by id or title, comma-separated |
+| `CUSTOM_EXERCISE_MAP` | by muscle group | | The Garmin exercise for your own Hevy exercises, as `title-or-id=CATEGORY/NAME`, comma-separated |
+| `ENABLE_SCHEDULED_WORKOUTS` | `true` | | Put every routine, and Hevy Trainer's next workout, on today's Garmin calendar |
+| `ENABLE_PREVIOUS_VALUES` | `true` | | Show last time's sets for each exercise on the status page |
+| `HEVY_SESSION` | off | | Turns Hevy Trainer on |
+| `HEVY_POLL_INTERVAL_SECONDS` | `60` | | How often Hevy is checked |
+| `TZ` | your Garmin profile's time zone | | Decides when "today" starts |
+| `DATA_DIR` | `/data` | | Where the tokens are kept |
+| `LOG_LEVEL` | `INFO` | | `DEBUG` for more |
+| `LOG_FORMAT` | `text` | | Or `json` |
+| `HTTP_PORT` | `8080` | | The status page's port |
+| `PREVIEW_PR` | off | | Runs on made-up workouts for a pull request's preview, and ignores your keys |
+| `PREVIEW_COMMIT` | none | | The commit a preview's banner shows |
 
 ### Only some folders
 
-At startup the log lists every routine folder with its id:
+By default, every routine you have in Hevy gets synced. If you only want some of them, set `INCLUDE_HEVY_FOLDERS` to a comma-separated list of folder names or ids. The app logs every folder it finds, along with its id, when it starts up:
 
 ```
 Hevy routine folder: id 42, title 'Push Pull Legs'
 Hevy routine folder: id 43, title 'Home'
 ```
 
-Name the ones you want, by id or title. Routines in no folder are left out too.
+For example - this syncs both of those folders, one by name and one by id:
 
 ```sh
 INCLUDE_HEVY_FOLDERS=Push Pull Legs,43
 ```
 
+Keep in mind that once this is set, routines that aren't in a folder get skipped too.
+
 ### Keep it off the calendar
+
+By default, every routine (and your next Hevy Trainer workout) gets added to today's Garmin calendar so your watch offers them to you when you start a strength activity. If you'd rather keep your calendar clean, turn it off:
 
 ```sh
 ENABLE_SCHEDULED_WORKOUTS=false
 ```
 
-The workouts stay in the watch's saved list, and the calendar entries it made are removed.
+The workouts are still available on your watch under Workouts, and any calendar entries the app already made get removed.
 
 ### Your time zone
+
+The app decides when "today" starts based on the time zone in your Garmin profile. That matters for the calendar and for Hevy Trainer's week. If you want to override it, set `TZ`:
 
 ```sh
 TZ=America/Los_Angeles
 ```
 
-It decides when "today" starts, for the calendar and for Trainer's week. Unset, it uses the time zone in your Garmin profile.
-
 ### Your own exercises
 
-The log says which Garmin exercise each of your own Hevy exercises got:
+If you created your own exercises in Hevy, the app picks the closest Garmin exercise for each one based on the muscle group and equipment you set in Hevy. The log tells you which one it picked:
 
 ```
 Custom Hevy exercise 'My Cable Raise' (muscle group shoulders, equipment cable) is Garmin's TOTAL_BODY / TOTAL_BODY, by muscle group and equipment
 ```
 
-To pick a different one, find its category and name in [garmin_exercises.json](src/hevy_garmin_sync/data/garmin_exercises.json) and set:
+If you don't like its pick, find a better category and name in [garmin_exercises.json](src/hevy_garmin_sync/data/garmin_exercises.json) and map it yourself. For example:
 
 ```sh
 CUSTOM_EXERCISE_MAP=My Cable Raise=LATERAL_RAISE/CABLE_FRONT_RAISE
@@ -178,13 +190,22 @@ CUSTOM_EXERCISE_MAP=My Cable Raise=LATERAL_RAISE/CABLE_FRONT_RAISE
 
 ### Hevy Trainer
 
-Trainer's program isn't in Hevy's public API, so this reads it from the private API the Hevy app uses. Hevy doesn't document that API and can change it, and Hevy's terms allow suspending accounts for unauthorized use. It's off unless you turn it on.
+Hevy doesn't expose Hevy Trainer in its public API, so your API key can't see it. Instead, the app reads it from the private API that the Hevy app itself uses. Hevy doesn't document that API and could change it at any time, and Hevy's terms allow them to suspend accounts for unauthorized use. So it's off by default.
 
-To turn it on, open a private browser window, sign in at hevy.com, and copy the value of the `auth2.0-token` cookie (developer tools, Application, Cookies). Close the window without logging out, and set `HEVY_SESSION` to that value. Don't keep using a browser signed in with that same session: the app and the browser would end each other's session. The Hevy phone app isn't affected.
+To turn it on:
+
+1. Open a private browser window and sign in at hevy.com.
+2. Open developer tools, go to Application, then Cookies, and copy the value of the `auth2.0-token` cookie.
+3. Close the window without logging out.
+4. Set `HEVY_SESSION` to that value.
+
+Don't keep using a browser that's signed in with that same session, or the app and the browser will keep ending each other's session. The Hevy app on your phone isn't affected.
+
+<hr>
 
 ## Docs
 
-Additional documentation is available in `./docs/`.
+Additional documentation is available in [`./docs/`](docs/).
 
 | Doc | What's in it |
 |---|---|
@@ -197,17 +218,23 @@ Additional documentation is available in `./docs/`.
 | [docs/CICD.md](docs/CICD.md) | How a change becomes a release |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Working on the code |
 
+<hr>
+
 ## Known Limitations and Problems
 
 - **Permanent vs Temporary Exercise Replacement** - Hevy allows you to swap exercises out in a Workout permanently or for a single workout. When you choose permanently, Hevy will remember and this change will beecome available on workouts that sync to your watch. However, if you choose temporarily, this information is not updated server-side. Therefore, there is no way for this tool to know about that change and it will not be synced. 
-- **Inconsistent exercise names & availability** - Hevy, Garmin, and Strava all maintain their own exercise lists and names. So this tool maintains a [CSV file](src/hevy_garmin_sync/data/exercise_map.csv) that makes an attempt at correlating them between platforms. If an exercise shows up under the wrong name on the watch, feel free to raise an [issue](https://github.com/zimmertr/hevy-garmin-sync/issues/new?template=exercise-match.yml) or a PR. Additionally, if you create a custom exercise in Hevy it won't be in the platform mapping. So it will show as the closest exercise Garmin could identify based on the muscle groups and equipment set in Hevy. For example, an exercise targeting biceps that used dumbells would be detected as Dumbbell Biceps Curl. However, you can provide your own custom exericse map via env var with `CUSTOM_EXERCISE_MAP`. ([Your own exercises](#your-own-exercises)).
-- **Trainer Weight Progression Syncing** - Hevy Trainer does not store weight progression server-side. It is calculated on your phone based on whether or not you met the last sessions weight and rep goals. Therefore, like temporary exercise replacements, it is not available for Hevy Garmin Sync. The app makes an effort and keeping this information up to date for you, but it can drift as Hevy changes the underlying algorithm. ([Hevy Trainer](#hevy-trainer)).
+- **Inconsistent exercise names & availability** - Hevy, Garmin, and Strava all maintain their own exercise lists and names. So this tool maintains a [CSV file](src/hevy_garmin_sync/data/exercise_map.csv) that makes an attempt at correlating them between platforms. If an exercise shows up under the wrong name on the watch, feel free to raise an [issue](https://github.com/zimmertr/hevy-garmin-sync/issues/new?template=exercise-match.yml) or a PR. Additionally, if you create a custom exercise in Hevy it won't be in the platform mapping. So it will show as the closest exercise Garmin could identify based on the muscle groups and equipment set in Hevy. For example, an exercise targeting biceps that used dumbells would be detected as Dumbbell Biceps Curl. However, you can [provide your own custom exercise map via env var](#your-own-exercises) with `CUSTOM_EXERCISE_MAP`.
+- **Trainer Weight Progression Syncing** - Hevy Trainer does not store weight progression server-side. It is calculated on your phone based on whether or not you met the last sessions weight and rep goals. Therefore, like temporary exercise replacements, it is not available for Hevy Garmin Sync. The app makes an effort and keeping this information up to date for you, but it can drift as Hevy changes the underlying algorithm. ([docs/HEVY_TRAINER_RULES.md](docs/HEVY_TRAINER_RULES.md)).
 - **A deleted routine stays on the watch.** It leaves Garmin Connect, but the copy in the watch's saved workouts stays until you delete it on the watch.
-- **It doesn't copy finished workouts** from Hevy to Garmin, and it doesn't pick which routine is next. For Hevy Trainer, today's calendar gets just the workout Hevy says is next.
+- **Hevy to Garmin, and only planned workouts** - This app is only meant to sync your routines from Hevy to Garmin as planned workouts. Copying finished workouts between the two is intentionally out of scope. So a workout you log in Hevy doesn't become a Garmin activity, and an activity you record on your watch doesn't get sent back to Hevy. It also doesn't decide which routine you should do next. Every routine goes on today's calendar, except with Hevy Trainer, where only the workout Hevy says is next gets added.
+
+<hr>
 
 ## Support
 
 Open an issue. Security problems go through private reporting instead ([the security policy](https://github.com/zimmertr/hevy-garmin-sync/security/policy)).
+
+<hr>
 
 ## License
 
