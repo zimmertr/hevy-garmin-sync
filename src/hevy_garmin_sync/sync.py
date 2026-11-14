@@ -186,6 +186,10 @@ class Sync:
             else:
                 synced = owner.updated.replace(tzinfo=self.now().tzinfo) if owner.updated else None
                 self._known[key] = _Known(int(item["workoutId"]), owner.version, synced)
+        # A workout deleted in Garmin Connect after it was queued for the watch is gone, and
+        # Garmin answers a send of it with a 404 (a manual sync queues before this read; TJ, 2026-11-14).
+        owned = {known.workout_id for known in self._known.values()}
+        self._unsent = [workout_id for workout_id in self._unsent if workout_id in owned]
 
     def _desired(self, plans: Sequence[Plans]) -> dict[Key, Workout]:
         desired = {}

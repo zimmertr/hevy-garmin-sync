@@ -23,6 +23,8 @@ let notice = null; // a reply to a button press, shown until the status moves on
 let logLines = [];
 let logMore = true;
 let logLoaded = false;
+let started = null; // when the app that answers started: a new value is a new app
+let offline = false;
 
 // One time format everywhere, in the app's time zone: "Nov 12, 9:41 AM" (TJ, 2026-11-12).
 function when(iso) {
@@ -31,6 +33,12 @@ function when(iso) {
 }
 function day(isoDate) {
   return isoDate ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(isoDate + "T00:00:00Z")) : "";
+}
+// A log line's time, with seconds: "12:43:16 AM", or "Nov 14, 12:43:16 AM" for Copy log.
+function clock(iso, withDay) {
+  const parts = { hour: "numeric", minute: "2-digit", second: "2-digit", timeZone: status ? status.time_zone : undefined };
+  if (withDay) Object.assign(parts, { month: "short", day: "numeric" });
+  return new Intl.DateTimeFormat(undefined, parts).format(new Date(iso));
 }
 function today() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: status.time_zone }).format(new Date());
@@ -53,12 +61,21 @@ function counts(c) {
 async function refresh() {
   try {
     const reply = await fetch("/api/status", { cache: "no-store" });
-    if (!reply.ok) return;
-    status = await reply.json();
+    if (!reply.ok) throw new Error(`status ${reply.status}`);
+    const next = await reply.json();
+    // A new app, maybe a new version: reload, so its page, its log and its workouts all come with it.
+    if (started && next.started !== started) { location.reload(); return; }
+    started = next.started;
+    status = next;
+    offline = false;
     render();
-  } catch { /* the app is restarting; the next poll catches up */ }
-  if ($("#log").open || !logLoaded) await newLines();
-  setTimeout(refresh, status && status.sync.state !== "idle" ? 1000 : 5000);
+  } catch {
+    // The app is restarting or out of reach. Keep asking, every second, until it answers.
+    offline = true;
+    if (status) renderOffline();
+  }
+  if (!offline && ($("#log").open || !logLoaded)) await newLines();
+  setTimeout(refresh, offline || (status && status.sync.state !== "idle") ? 1000 : 5000);
 }
 
 async function logPage(before, size) {
@@ -191,6 +208,12 @@ function renderControl() {
   box.innerHTML = msg(status.next_auto_sync ? `Next auto-sync: ${esc(when(status.next_auto_sync))}` : "Starting up", "ok");
 }
 
+function renderOffline() {
+  document.title = "Reconnecting: hevy-garmin-sync";
+  $("#sync").disabled = $("#force").disabled = true;
+  $("#notice").innerHTML = msg("Can't reach the app. Reconnecting.", "wait");
+}
+
 function msg(html, tone) {
   return `<p class="msg tone-${tone}">${html}</p>`;
 }
@@ -208,12 +231,12 @@ function renderServices() {
 
 function renderLog() {
   const last = logLines[logLines.length - 1];
-  $("#latest").textContent = last ? `${last.time.slice(11, 19)}  ${last.message.split("\n")[0]}` : "";
+  $("#latest").textContent = last ? `${clock(last.time)}  ${last.message.split("\n")[0]}` : "";
   const head = logMore
     ? '<button class="older" type="button" id="older">Load older lines</button>'
     : `<p class="start">Start of the log this app has kept since it started (up to 5,000 lines).</p>`;
   $("#lines").innerHTML = head + logLines.map((l) =>
-    `<div class="l ${esc(l.level)}"><time>${esc(l.time.slice(11, 19))}</time><span class="lv">${esc(l.level)}</span><span>${esc(l.message)}</span></div>`).join("");
+    `<div class="l ${esc(l.level)}"><time>${esc(clock(l.time))}</time><span class="lv">${esc(l.level)}</span><span>${esc(l.message)}</span></div>`).join("");
 }
 
 function filters() {
@@ -365,7 +388,7 @@ $("#log").addEventListener("toggle", (event) => {
 });
 $("#copy").addEventListener("click", async (event) => {
   const only = $("#only").checked;
-  const text = logLines.filter((l) => !only || l.level !== "INFO").map((l) => `${l.time} ${l.level} ${l.message}`).join("\n");
+  const text = logLines.filter((l) => !only || l.level !== "INFO").map((l) => `${clock(l.time, true)} ${l.level} ${l.message}`).join("\n");
   const button = event.currentTarget;
   try { await navigator.clipboard.writeText(text); button.textContent = "Copied"; } catch {
     const range = document.createRange();
