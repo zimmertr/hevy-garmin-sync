@@ -1,5 +1,6 @@
 """Garmin is made to match the plan: workouts, Send to Device and today's calendar (spec F-3, sections 3 and 5)."""
 
+import re
 import tempfile
 import unittest
 from datetime import datetime, time, timedelta
@@ -132,9 +133,22 @@ class WorkoutsTest(SyncCase):
     def test_a_workout_with_no_version_line_is_rewritten(self) -> None:
         self.run_full(self.push)
         stored = self.api.workouts[self.id_of("Hevy: Push")]
-        stored["description"] = stored["description"].split("\nVersion")[0]
+        stored["description"] = re.sub(r" \| Version: [0-9a-f]{6}", "", stored["description"])
+        self.assertNotIn("Version", stored["description"])
         self.sync = self.new_sync()
         self.assertEqual(self.run_full(self.push).updated, 1)
+
+    def test_a_workout_in_the_four_line_layout_is_rewritten_once(self) -> None:
+        # The layout from before 2026-11-14, with the hash it carried then (F-12).
+        self.run_full(self.push)
+        stored = self.api.workouts[self.id_of("Hevy: Push")]
+        first, dated, owned = stored["description"].splitlines()
+        stored["description"] = "\n".join([first, dated.split(" | ")[0], owned, "Version: 3f9c1a"])
+        self.sync = self.new_sync()
+        self.assertEqual(self.run_full(self.push).updated, 1)
+        rewritten = self.api.workouts[self.id_of("Hevy: Push")]["description"]
+        self.assertEqual(len(rewritten.splitlines()), 3)
+        self.assertEqual(self.run_full(self.push).updated, 0)
 
     def test_workouts_the_app_did_not_create_are_never_touched(self) -> None:
         self.api.workouts[1] = {"workoutId": 1, "workoutName": "Tempo Run", "description": "from a running app"}
