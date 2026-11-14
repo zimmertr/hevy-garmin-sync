@@ -112,6 +112,42 @@ class ConfigTest(unittest.TestCase):
         self.assertIn("Garmin profile", summary["TZ"])
 
 
+class PreviewTest(unittest.TestCase):
+    """PREVIEW_PR and PREVIEW_COMMIT: a pull request's preview, on made-up accounts (C-14, C-15, W-10)."""
+
+    CREDENTIALS = {"HEVY_API_KEY": "made-up-key", "GARMIN_TOKEN": "made-up-token", "HEVY_SESSION": "made-up-cookie"}
+
+    def test_a_preview_needs_no_credential(self) -> None:
+        loaded = config.load({"PREVIEW_PR": " 63 ", "PREVIEW_COMMIT": " 7BC73BC0FFEE "})
+        self.assertEqual((loaded.preview_pr, loaded.preview_commit), ("63", "7bc73bc0ffee"))
+
+    def test_preview_pr_wins_over_every_credential(self) -> None:
+        loaded = config.load(self.CREDENTIALS | {"PREVIEW_PR": "63"})
+        self.assertEqual(loaded.hevy_api_key, "")
+        self.assertIsNone(loaded.garmin_token)
+        self.assertIsNone(loaded.hevy_session)
+
+    def test_unset_is_the_live_app(self) -> None:
+        loaded = config.load(self.CREDENTIALS | {"PREVIEW_PR": "", "PREVIEW_COMMIT": "7bc73bc"})
+        self.assertIsNone(loaded.preview_pr)
+        self.assertEqual(loaded.garmin_token, "made-up-token")
+
+    def test_a_bad_value_names_its_variable(self) -> None:
+        cases = {"PREVIEW_PR": ["sixty-three", "-1", "6.3", "٦٣"], "PREVIEW_COMMIT": ["main", "7bc 73b", "٧bc"]}
+        for name, values in cases.items():
+            for value in values:
+                with self.subTest(name=name, value=value), self.assertRaisesRegex(ConfigError, f"^{name} "):
+                    config.load({"PREVIEW_PR": "63", name: value})
+
+    def test_the_summary_says_the_credentials_are_ignored_and_shows_none(self) -> None:
+        summary = config.load(self.CREDENTIALS | {"PREVIEW_PR": "63"}).summary()
+        for name in self.CREDENTIALS:
+            self.assertEqual(summary[name], "ignored (a preview)")
+            self.assertNotIn(self.CREDENTIALS[name], " ".join(summary.values()))
+        self.assertEqual((summary["PREVIEW_PR"], summary["PREVIEW_COMMIT"]), ("63", "unset"))
+        self.assertNotIn("PREVIEW_PR", config.load(REQUIRED).summary())
+
+
 class CustomExerciseMapTest(unittest.TestCase):
     """CUSTOM_EXERCISE_MAP: title-or-id=CATEGORY/NAME, comma-separated, each pair one Garmin has (C-11, #24)."""
 

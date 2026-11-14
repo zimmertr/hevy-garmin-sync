@@ -12,7 +12,7 @@ and `user_key_values`. Every name, id and token here is made up (spec D-10).
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote

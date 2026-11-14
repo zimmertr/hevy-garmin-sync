@@ -37,20 +37,9 @@ class Config:
 
     def summary(self) -> dict[str, str]:
         """The effective configuration for the startup log, secrets redacted (O-3c)."""
-        if self.preview_pr:
-            credentials = dict.fromkeys(("HEVY_API_KEY", "GARMIN_TOKEN", "HEVY_SESSION"), "ignored (a preview)")
-            return credentials | self._settings() | {
-                "PREVIEW_PR": self.preview_pr,
-                "PREVIEW_COMMIT": self.preview_commit or "unset",
-            }
-        return {
+        summary = {
             "HEVY_API_KEY": "set",
             "GARMIN_TOKEN": "set" if self.garmin_token else "unset (using the token in DATA_DIR)",
-            "HEVY_SESSION": "set (Hevy Trainer on)" if self.hevy_session else "unset (Hevy Trainer off)",
-        } | self._settings()
-
-    def _settings(self) -> dict[str, str]:
-        return {
             "INCLUDE_HEVY_FOLDERS": ", ".join(self.include_folders) or "unset (all routines)",
             # A count only: the entries hold a user's own exercise titles (C-11).
             "CUSTOM_EXERCISE_MAP": (
@@ -60,6 +49,7 @@ class Config:
             ),
             "ENABLE_SCHEDULED_WORKOUTS": str(self.scheduled).lower(),
             "ENABLE_PREVIOUS_VALUES": str(self.previous_values).lower(),
+            "HEVY_SESSION": "set (Hevy Trainer on)" if self.hevy_session else "unset (Hevy Trainer off)",
             "HEVY_POLL_INTERVAL_SECONDS": str(self.poll_seconds),
             "TZ": self.zone.key if self.zone else "unset (using the Garmin profile's time zone)",
             "DATA_DIR": str(self.data_dir),
@@ -67,6 +57,12 @@ class Config:
             "LOG_FORMAT": self.log_format,
             "HTTP_PORT": str(self.http_port),
         }
+        if self.preview_pr:
+            summary |= dict.fromkeys(("HEVY_API_KEY", "GARMIN_TOKEN", "HEVY_SESSION"), "ignored (a preview)") | {
+                "PREVIEW_PR": self.preview_pr,
+                "PREVIEW_COMMIT": self.preview_commit or "unset",
+            }
+        return summary
 
 
 def load(env: Mapping[str, str]) -> Config:

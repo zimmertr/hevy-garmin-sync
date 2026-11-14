@@ -119,6 +119,6 @@ jobs:
         grep 'A preview of pull request 1' preview.log >/dev/null
         grep 'Sync: ' preview.log >/dev/null
         # The one workout the made-up Garmin refuses, and nothing else wrong.
-        grep "Garmin refused 'Everything Day'" preview.log >/dev/null
+        grep "Garmin refused 'Hevy/Home: Everything Day'" preview.log >/dev/null
         test "$(grep -c ' ERROR ' preview.log)" -eq 1
         ! grep Traceback preview.log

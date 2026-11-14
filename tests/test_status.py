@@ -55,7 +55,13 @@ class BuildTest(unittest.TestCase):
              "last_ended": None, "last_counts": None},
         )
         self.assertEqual(built["settings"], {"HEVY_API_KEY": "set"})
+        self.assertIsNone(built["preview"])
         json.dumps(built)  # every value is JSON
+
+    def test_a_preview_carries_its_pr_and_its_commit_short(self) -> None:
+        built = status.build(facts(preview_pr="63", preview_commit="7bc73bc0ffee"))
+        self.assertEqual(built["preview"], {"pr": "63", "commit": "7bc73bc"})
+        self.assertEqual(status.build(facts(preview_pr="63"))["preview"], {"pr": "63", "commit": ""})
 
     def test_a_routine_carries_its_hevy_id_for_the_link_and_a_trainer_workout_none(self) -> None:
         routine = Workout(ROUTINE, "r-1", "Hevy/PPL: Push", (), title="Push", folder="PPL")
