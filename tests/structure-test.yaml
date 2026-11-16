@@ -64,9 +64,9 @@ commandTests:
     exitCode: 124
     expectedError:
       - "A preview of pull request 1: Hevy, Hevy Trainer and Garmin are made up"
-      - "Garmin refused 'Hevy/Home: Everything Day'"
+      # Each entry is a regular expression, so the brackets around the workout's name are escaped.
+      - "\\[Hevy/Home: Everything Day\\] Garmin refused it"
       - "INFO hevy_garmin_sync.app Sync: "
     excludedError:
       - Traceback
-      - "can't be reached"
-      - "is failing"
+      - "unreachable or failing"
