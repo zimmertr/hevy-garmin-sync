@@ -384,7 +384,9 @@ class RefusedTest(SyncCase):
         self.at(17, 45)
         with self.assertLogs("hevy_garmin_sync.sync", "INFO") as logs:
             counts = self.run_poll(self.push)
-        self.assertEqual(logs.output, ["INFO:hevy_garmin_sync.sync:[Hevy: Push] Trying again, Garmin refused it before"])
+        self.assertEqual(
+            logs.output, ["INFO:hevy_garmin_sync.sync:[Hevy: Push] Trying again, Garmin refused it before"]
+        )
         self.assertEqual((counts.created, counts.failed, self.names()), (1, 0, ["Hevy: Push"]))
         self.at(18, 30)
         self.api.calls.clear()

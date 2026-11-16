@@ -436,7 +436,8 @@ class FailureTest(AppCase):
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.run_app(lambda: self.hevy_api.fail(400))
         self.assertEqual(
-            logs.output[0], f'{ERROR}[Hevy] workouts/events refused: HTTP 400, {{"error": "made up"}}. Next try in 1 min'
+            logs.output[0],
+            f'{ERROR}[Hevy] workouts/events refused: HTTP 400, {{"error": "made up"}}. Next try in 1 min',
         )
         # The page keeps its own words, and they name the request too.
         self.assertEqual(self.service("Hevy")["reason"], 'Hevy refused a request (HTTP 400, {"error": "made up"})')
