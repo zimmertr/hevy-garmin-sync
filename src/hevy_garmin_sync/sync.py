@@ -318,6 +318,8 @@ class Sync:
                 counts.unscheduled += 1
             self._on_today.discard(known.workout_id)
             self.garmin.delete(known.workout_id)
+            # A manual sync queued it; sent now, Garmin answers 404 and the no-watch warning is spent on it.
+            self._unsent = [workout_id for workout_id in self._unsent if workout_id != known.workout_id]
             counts.deleted += 1
             log.debug("Deleted the Garmin workout of %s %s", *key)
         self._absent = gone & self._known.keys()
