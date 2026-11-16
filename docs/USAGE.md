@@ -41,16 +41,19 @@ Open `http://localhost:8080` under Compose, or the Service's address under Kuber
 
 ## In the log
 
+A line about one workout starts with its name in brackets, as Garmin and the watch show it, then the facts. A line about a request starts with its service in brackets instead.
+
 | Line | Means |
 |---|---|
 | `Sync: created 2, updated 0, deleted 0, scheduled 2, unscheduled 0, failed 0` | One per full run, and one per poll that changed something |
 | `Nothing changed in the last hour (60 polls)` | The app is alive and Hevy didn't change |
 | `Hevy routine folder: id 42, title 'Push Pull Legs'` | At startup, every folder, for `INCLUDE_HEVY_FOLDERS` |
 | `Custom Hevy exercise 'My Cable Raise' (muscle group shoulders, equipment machine) is Garmin's SHOULDER_PRESS / SMITH_MACHINE_OVERHEAD_PRESS, by muscle group and equipment` | The Garmin exercise one of your own Hevy exercises got, logged the first time it syncs and when that changes. Ends `from CUSTOM_EXERCISE_MAP` when the variable chose it |
-| `Hevy Trainer: Side Bend (Dumbbell): 40 lbs (up)` | A Trainer prescription, logged when it is first worked out and when it changes |
-| `Hevy Trainer: ...: no prescription (...)` | Trainer gives that exercise no weight, and why |
+| `[Hevy/Trainer: Lower (C2-W3)] Goblet Squat: 80 lbs, no change, warm-ups 30, 50` | A Trainer prescription in one workout, logged when it is first worked out, when it changes, and again under the new name when the week turns |
+| `[Hevy/Trainer: Upper (C2-W3)] Lat Pulldown (Cable): no weight, not logged in this workout yet` | Trainer gives that exercise no weight, and why |
 | `Manual sync asked for (forced: every workout is rewritten)` | Sync now, Force sync or `sync` started a run. A plain one ends at `asked for` |
-| `Trying '<workout>' again, which Garmin refused` | Another try at a workout Garmin refused earlier. If Garmin refuses it again, an ERROR line follows |
+| `[Hevy/Push: Push A] Trying again, Garmin refused it before` | Another try at a workout Garmin refused earlier. If Garmin refuses it again, an ERROR line follows |
+| `[Hevy/Legs: Leg Day] Deleted from Garmin` | At DEBUG: a workout whose routine is gone from Hevy, named as Garmin had it. `Created in Garmin` and `Updated in Garmin` are the same for a write |
 
 ## When it breaks
 
@@ -59,15 +62,18 @@ Open `http://localhost:8080` under Compose, or the Service's address under Kuber
 | It exits at startup naming a variable | Fix that variable. The message says how |
 | The status page shows a sign-in rejected, or the pod isn't ready (`0/1`) | A sign-in was rejected. The app keeps running and leaves that service alone; the page and the log say which one, and the rows below say what to do. Set the new value, then restart the app |
 | `login` says `Sign-in failed` and names a cloud server | Garmin blocks sign-ins from a lot of cloud IPs. Run `login` at home, even if the app runs in the cloud, and set `GARMIN_TOKEN` there |
-| `Garmin rejected the app's credentials` | Nothing reaches Garmin until it is fixed. Run `login` again and set `GARMIN_TOKEN` to the new value |
-| `Hevy rejected the app's credentials; check HEVY_API_KEY` | Nothing is read from Hevy until it is fixed. Make a new key at https://hevy.com/settings?developer. The key needs Hevy Pro |
-| `Hevy Trainer rejected the app's credentials` | Copy the `auth2.0-token` cookie from hevy.com again, in a private window you then close without logging out, and set `HEVY_SESSION` to it. Routines keep syncing meanwhile, and the Trainer workouts stay in Garmin as they were. If the app restarted with the session already rejected, it can't tell which Trainer workout is next: the one on today's calendar stays there until midnight, and none is added until the session works again |
-| `... can't be reached or is failing ... Trying again in N min` | Nothing. It retries by itself, waiting longer each time, up to 30 minutes |
-| `... is rate limiting the app and said how long to wait` | Nothing. It waits as long as Hevy or Garmin asked, even past 30 minutes. The line says how long |
-| `Garmin is rate limiting the app` | Nothing. It waits at least 15 minutes |
-| `Garmin refused '<workout>' (N steps): ... It is tried again at 17:45` | Garmin won't take that one workout. The others still sync. It is tried again 5 minutes later, then at gaps that double until midnight, then once a day at midnight; the line says when. A change to the routine is tried at once, and so is a restart. Undo the change in Hevy and Garmin's reason leaves the status page at the next poll. Open an issue with the line |
+| `[Garmin] Rejected the app's credentials` | Nothing reaches Garmin until it is fixed. Run `login` again and set `GARMIN_TOKEN` to the new value |
+| `[Hevy] Rejected the app's credentials, check HEVY_API_KEY` | Nothing is read from Hevy until it is fixed. Make a new key at https://hevy.com/settings?developer. The key needs Hevy Pro |
+| `[Hevy Trainer] Rejected the app's credentials` | Copy the `auth2.0-token` cookie from hevy.com again, in a private window you then close without logging out, and set `HEVY_SESSION` to it. Routines keep syncing meanwhile, and the Trainer workouts stay in Garmin as they were. If the app restarted with the session already rejected, it can't tell which Trainer workout is next: the one on today's calendar stays there until midnight, and none is added until the session works again |
+| `... unreachable or failing ... Next try in N min` | Nothing. It retries by itself, waiting longer each time, up to 30 minutes. For Hevy and Hevy Trainer the line names the request, such as `[Hevy] routines` |
+| `[Hevy Trainer] user_workouts_paged refused: HTTP 400. Next try in 1 min` | Hevy refused that one request. It is tried again after the same waits. If it keeps coming back, open an issue with the line |
+| `... Rate limiting the app, waiting as long as it asked` | Nothing. It waits as long as Hevy or Garmin asked, even past 30 minutes. The line says how long |
+| `[Garmin] Rate limiting the app` | Nothing. It waits at least 15 minutes |
+| `[Hevy/Push: Push A] Garmin refused it: 61 steps, "Invalid workout". Next try 12:05, or when it changes in Hevy` | Garmin won't take that one workout. The others still sync. It is tried again 5 minutes later, then at gaps that double until midnight, then once a day at midnight; the line says when. A change in Hevy is tried at once, and so is a restart. Undo the change in Hevy and Garmin's reason leaves the status page at the next poll. Open an issue with the line |
 | `No exercise map row for Hevy exercise ...` | A built-in Hevy exercise the map doesn't know. It still syncs, under the closest exercise by muscle group. Open an issue so it gets a proper row |
-| `Hevy's program names no next workout` | Hevy didn't say which Trainer workout is next. Until it does, every Trainer workout not logged this week is on today. Open an issue with the line |
+| `[Hevy Trainer] Program names no next workout` | Hevy didn't say which Trainer workout is next. Until it does, every Trainer workout not logged this week is on today, while calendar entries are on. Open an issue with the line |
+| `[Hevy: Push] Garmin didn't send it to the watch: ...` | Garmin didn't put the workout in the watch's saved list, once for each workout until a send of it works. If it is on today's calendar, the watch still gets it from there. Check that the account has a watch that has synced with Garmin Connect |
+| `[Hevy] Bench Press (Barbell) history refused: ...` | Hevy won't give that exercise's history, so the status page shows no last time for it. Everything still syncs |
 | `'<folder>' in INCLUDE_HEVY_FOLDERS is gone` | The folder was renamed or deleted in Hevy. Its workouts are kept. Fix the variable and restart |
 | A workout shows the wrong exercise name on the watch | For a built-in Hevy exercise, the map has a poor row for it. Open an issue or a PR against `src/hevy_garmin_sync/data/exercise_map.csv`. For one of your own, find its `Custom Hevy exercise` line and set `CUSTOM_EXERCISE_MAP` ([CONFIGURATION.md](CONFIGURATION.md)). The workout is rewritten and sent to the watch again |
 | `CUSTOM_EXERCISE_MAP names CURL/CURLS, which Garmin doesn't have` | It exits at startup. Pick a category and an exercise from [`garmin_exercises.json`](../src/hevy_garmin_sync/data/garmin_exercises.json), in capitals as written there |
