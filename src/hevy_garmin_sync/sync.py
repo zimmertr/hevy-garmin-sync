@@ -249,13 +249,16 @@ class Sync:
             known.synced = self.now()
             counts.updated += 1
             log.debug("Updated %r", plan.name)
+            self._unsent.append(known.workout_id)
         else:
-            known = self._known[key] = _Known(created, version, self.now())
+            self._known[key] = _Known(created, version, self.now())
             counts.created += 1
             log.debug("Created %r", plan.name)
+            # Queued before the calendar call: a failure there leaves the version current, so no
+            # later run would write this workout, or send it, again (F-31a, O-3a).
+            self._unsent.append(created)
             if self.scheduled and not off_calendar:
                 self._schedule(created, today, counts)
-        self._unsent.append(known.workout_id)
         self._send()
 
     def _refuse(self, key: Key, version: str, before: _Refused | None, today: date, reason: str) -> str:
