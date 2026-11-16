@@ -543,6 +543,22 @@ class TrainerTest(AppCase):
         self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push"])
         self.assertEqual(self.service("Hevy Trainer")["state"], "rejected")
 
+    def test_a_session_rejected_at_a_restart_adds_no_trainer_workout_to_today(self) -> None:
+        # Garmin already holds Trainer's workouts, and the app restarts not knowing which one is next (W-8, F-33).
+        self.run_app()
+        self.end_the_session()
+        with self.assertLogs(LOGGER, "ERROR"):
+            self.run_app()
+        self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push", self.LOWER, self.UPPER])
+        self.assertEqual(self.on_the_calendar(), ["Hevy/PPL: Pull", "Hevy/PPL: Push", self.UPPER])
+
+    def test_a_trainer_read_that_fails_after_a_restart_adds_no_trainer_workout_to_today(self) -> None:
+        self.run_app()
+        self.private_api.fail(None, 503)  # the startup check answers, the first read of the program doesn't
+        with self.assertLogs(LOGGER, "ERROR"):
+            self.run_app()
+        self.assertEqual(self.on_the_calendar(), ["Hevy/PPL: Pull", "Hevy/PPL: Push", self.UPPER])
+
     def test_an_outage_of_hevys_private_api_at_startup_is_waited_out(self) -> None:
         self.private_api.fail(503)
         with self.assertLogs(LOGGER, "ERROR") as logs:
