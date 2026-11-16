@@ -155,10 +155,8 @@ def _for(seconds: float) -> str:
     return f"{seconds / 60:.0f} min" if seconds >= 60 else f"{seconds:.0f} s"
 
 
-def _problem(service: str, fix: str, error: ServiceError) -> str:
-    """What failed and how to fix it, for the status page (O-1, W-2)."""
-    if isinstance(error, Rejected):
-        return f"{service} rejected the app's credentials; {fix}"
+def _problem(service: str, error: ServiceError) -> str:
+    """What failed, for the status page while the service is waited out (O-1, W-2). A rejection shows the fix."""
     if isinstance(error, RateLimited) and error.retry_after is not None:
         return f"{service} is rate limiting the app and said how long to wait; nothing to do but wait"
     if isinstance(error, RateLimited):
@@ -278,7 +276,7 @@ class App:
                 self._reject(service, fix, e)
                 return
             except ServiceError as e:
-                delay = backoff.failed(e, _problem(service, fix, e))
+                delay = backoff.failed(e, _problem(service, e))
                 log.error("%s. Next try in %s", _said(service, fix, e), _for(delay))
                 self._publish()
                 # A manual sync ends a wait early, but never a service's wait (W-3).
@@ -346,7 +344,7 @@ class App:
                     self._reject(GARMIN, LOGIN_FIX, e)
                 except ServiceError as e:
                     full = True  # whatever was half done is finished by a full run (O-1, O-3a)
-                    delay = self._garmin_backoff.failed(e, _problem(GARMIN, LOGIN_FIX, e))
+                    delay = self._garmin_backoff.failed(e, _problem(GARMIN, e))
                     log.error("%s. Next try in %s", _said(GARMIN, LOGIN_FIX, e), _for(delay))
                 except Stopped:
                     raise
@@ -416,7 +414,7 @@ class App:
             self._reject(HEVY, KEY_FIX, e)
             return None
         except ServiceError as e:
-            delay = self._hevy_backoff.failed(e, _problem(HEVY, KEY_FIX, e))
+            delay = self._hevy_backoff.failed(e, _problem(HEVY, e))
             log.error("%s. Next try in %s", _said(HEVY, KEY_FIX, e), _for(delay))
             return None
         except Exception as e:  # noqa: BLE001 a reply in a shape the app didn't expect must not end the process
@@ -469,7 +467,7 @@ class App:
             self._reject(TRAINER_SERVICE, SESSION_FIX, e)
             self._trainer_plans = replace(self._trainer_plans, hold=True)  # as it was, calendar and all
         except ServiceError as e:
-            delay = self._trainer_backoff.failed(e, _problem(TRAINER_SERVICE, SESSION_FIX, e))
+            delay = self._trainer_backoff.failed(e, _problem(TRAINER_SERVICE, e))
             log.error("%s. Next try in %s", _said(TRAINER_SERVICE, SESSION_FIX, e), _for(delay))
         except Exception as e:  # noqa: BLE001 a reply in a shape the app didn't expect must not end the process
             delay = self._trainer_backoff.failed(e, "Unexpected error while reading Hevy Trainer")
