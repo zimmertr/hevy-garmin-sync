@@ -156,7 +156,7 @@ def _for(seconds: float) -> str:
 
 
 def _problem(service: str, error: ServiceError) -> str:
-    """What failed, for the status page while the service is waited out (O-1, W-2). A rejection shows the fix."""
+    """What failed, for the status page while the service is waited out (O-1, W-2). A rejection never gets here: _reject logs it."""
     if isinstance(error, RateLimited) and error.retry_after is not None:
         return f"{service} is rate limiting the app and said how long to wait; nothing to do but wait"
     if isinstance(error, RateLimited):
