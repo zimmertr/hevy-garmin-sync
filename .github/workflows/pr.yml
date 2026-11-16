@@ -42,7 +42,7 @@ jobs:
   # and 0060).
   chart:
     name: Chart
-    uses: zimmertr/yggdrasil/.github/workflows/chart.yml@2c8908cedc33fb6c062bab831df70645e46d2162 # v2.0.2
+    uses: zimmertr/yggdrasil/.github/workflows/chart.yml@20ecc5dacd84eaf95243364b450bf3800925bc05 # v2.0.3
     permissions:
       contents: read
     with:
@@ -53,7 +53,7 @@ jobs:
   # failure on any fixable Critical or High, as the release would refuse.
   docker-build:
     name: Docker Build
-    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@2c8908cedc33fb6c062bab831df70645e46d2162 # v2.0.2
+    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@20ecc5dacd84eaf95243364b450bf3800925bc05 # v2.0.3
     permissions:
       contents: read
       pull-requests: write # the sticky scan comment
