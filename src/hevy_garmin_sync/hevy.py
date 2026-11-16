@@ -2,7 +2,8 @@
 
 Read only: the app never writes to Hevy (S-1). Hevy's only webhook reports a
 saved workout, and nothing reports a changed routine, so the app polls. A
-webhook would also need a listening port, which F-2 rules out.
+webhook would also need the app's port open to the internet, and F-2 rules out
+a webhook receiver.
 """
 
 from collections.abc import Callable, Iterator

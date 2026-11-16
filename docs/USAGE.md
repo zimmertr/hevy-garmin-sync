@@ -27,7 +27,7 @@ What you see when it runs, and what to do when it breaks.
 
 ## On the status page
 
-Open `http://localhost:8080` under Compose, or the Service's address under Kubernetes (`kubectl port-forward svc/hevy-garmin-sync 8080` if it has none outside the cluster). TJ's is at http://atlas.sol.milkyway. The page has no sign-in: anyone who can reach the port sees your workouts and can press its buttons.
+Open `http://localhost:8080` under Compose, or the Service's address under Kubernetes (`kubectl port-forward svc/hevy-garmin-sync 8080` if it has none outside the cluster). The page has no sign-in: anyone who can reach the port sees your workouts and can press its buttons.
 
 - **Sync now** reads Hevy and syncs all workouts to Garmin Connect. It writes what changed, tries again any workout Garmin refused, sends every workout to the watch again, and reads Hevy Trainer's preferences and logged workouts again. A hand edit in Garmin Connect stays.
 - **Force sync** reads Hevy and overwrites all workouts on Garmin Connect, which undoes any hand edit there. Each workout keeps its place on the calendar. It also reads last time's sets for the status page from Hevy again.

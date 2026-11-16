@@ -80,7 +80,10 @@ def shape(value: Any) -> Any:
 
 
 def _units(reply: Any) -> dict[str, str]:
-    """Per-exercise unit overrides from a reply whose shape is not yet known (U-15): read what fits, skip the rest."""
+    """Per-exercise unit overrides from the units reply, a list of rows (U-15, seen 2026-11-11).
+
+    A reply or row of another shape is skipped, so a change on Hevy's side falls back to the account's unit.
+    """
     rows = reply
     if isinstance(reply, dict):
         rows = next((v for v in reply.values() if isinstance(v, list)), [])
