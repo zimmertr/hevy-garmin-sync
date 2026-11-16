@@ -56,6 +56,9 @@ class BuildTest(unittest.TestCase):
         )
         self.assertEqual(built["settings"], {"HEVY_API_KEY": "set"})
         self.assertIsNone(built["preview"])
+        # The refused count goes to the page with the rest, which shows it once it isn't zero (#85).
+        manual = status.build(facts(last_manual=fixtures.NOW, last_manual_counts=Counts(failed=1)))
+        self.assertEqual(manual["sync"]["last_counts"]["failed"], 1)
         json.dumps(built)  # every value is JSON
 
     def test_a_preview_carries_its_pr_and_its_commit_short(self) -> None:
@@ -80,6 +83,30 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(built["workouts"][0]["title"], "Hevy: Legs")  # no title of its own: the Garmin name
         self.assertEqual((built["workouts"][0]["refused"], built["workouts"][0]["retry"]),
                          ("Invalid step", fixtures.NOW.isoformat()))
+
+    def test_a_retry_after_the_next_daily_run_shows_the_daily_run_which_tries_it_first(self) -> None:
+        # The gap can double past midnight, but the midnight run retries it (F-16, #85).
+        plan = Workout(ROUTINE, "r-1", "Hevy: Legs", ())
+        late = fixtures.NOW + timedelta(hours=7)  # the next daily run is 6 hours away
+        soon = fixtures.NOW + timedelta(minutes=5)
+        later, sooner = status.build(
+            facts(Report(plan, None, None, None, "Invalid step", late), Report(plan, None, None, None, "x", soon))
+        )["workouts"]
+        self.assertIsNone(later["retry"])  # the page then shows next_daily_run
+        self.assertEqual(sooner["retry"], soon.isoformat())
+
+    def test_each_workout_has_its_own_key_even_with_the_same_name_in_the_same_folder(self) -> None:
+        # The page selects a workout and writes the URL's hash by this key (#85).
+        first = Workout(ROUTINE, "r-1", "Hevy/PPL: Push", (), title="Push", folder="PPL")
+        second = Workout(ROUTINE, "r-2", "Hevy/PPL: Push", (), title="Push", folder="PPL")
+        trainer = Workout(TRAINER, "r-1", "Hevy/Trainer: Upper", (), title="Upper")
+        no_letters = Workout(ROUTINE, "r-3", "Hevy: 腿", (), title="腿")
+        reports = [Report(w, None, None, None) for w in (first, second, trainer, no_letters)]
+        keys = [w["key"] for w in status.build(facts(*reports))["workouts"]]
+        self.assertEqual(len(set(keys)), 4)  # a routine and a Trainer workout with the same id differ too
+        self.assertTrue(all(key and key.isalnum() and key.isascii() for key in keys))  # safe in a URL as it is
+        self.assertEqual(keys, [w["key"] for w in status.build(facts(*reports))["workouts"]])  # stable across builds
+        self.assertNotIn("r-1", keys[2])  # no raw id beyond the links (W-9)
 
     def test_an_exercise_shows_its_garmin_name_what_chose_it_and_trainers_numbers(self) -> None:
         squat = exercise(
