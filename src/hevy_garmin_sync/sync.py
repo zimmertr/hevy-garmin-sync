@@ -212,6 +212,8 @@ class Sync:
         version = workout.version(body)
         known = self._known.get(key)
         if known and known.version == version and not force:
+            # Garmin holds what Hevy wants, so a refusal of another version (an edit since undone) is over.
+            self._refused.pop(key, None)
             return
         refused = self._refused.get(key)
         if refused and refused.version != version:
