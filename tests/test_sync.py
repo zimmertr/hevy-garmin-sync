@@ -175,6 +175,29 @@ class WorkoutsTest(SyncCase):
             counts = self.run_full(self.push)
         self.assertEqual((len(self.api.workouts), counts.deleted), (1, 1))
 
+    def test_a_failed_read_of_the_workout_list_keeps_what_the_last_run_found(self) -> None:
+        self.run_full(self.push, self.pull)
+        self.api.fail("get_workouts", fixtures.garmin_error(503))
+        with self.assertRaises(errors.Unavailable):
+            self.run_full(self.push, self.pull)
+        self.assertEqual({r.garmin_id for r in self.sync.report()}, set(self.api.workouts))
+        # A manual sync while Garmin is waited out still sends every workout to the watch (W-3).
+        self.api.pushed.clear()
+        self.sync.resend_all()
+        self.run_full(self.push, self.pull)
+        self.assertEqual(sorted(self.api.pushed), sorted(self.api.workouts))
+
+    def test_a_workout_deleted_in_garmin_connect_and_then_changed_in_hevy_is_made_again(self) -> None:
+        self.run_full(self.push)
+        self.api.delete_workout(self.id_of("Hevy: Push"))  # its calendar entry goes with it
+        with self.assertNoLogs("hevy_garmin_sync.sync", "ERROR"):
+            counts = self.run_poll(routine("r-push", "Hevy: Push v2", reps=10))
+        self.assertEqual((counts.created, counts.updated, counts.scheduled, counts.failed), (1, 0, 1, 0))
+        made = self.id_of("Hevy: Push v2")
+        self.assertEqual(self.api.pushed[-1], made)
+        self.assertEqual(self.days(), {"Hevy: Push v2": [fixtures.TODAY.isoformat()]})
+        self.assertEqual([r.garmin_id for r in self.sync.report()], [made])
+
     def test_a_garmin_outage_mid_run_raises_and_the_next_full_run_finishes_the_job(self) -> None:
         self.api.fail("push_workout_to_device", fixtures.garmin_error(503))
         with self.assertRaises(errors.Unavailable):
@@ -207,6 +230,16 @@ class SendTest(SyncCase):
         self.run_poll(self.push, self.pull)
         self.assertEqual(self.api.calls, [])
 
+    def test_a_new_workout_whose_calendar_call_failed_is_sent_by_the_next_run(self) -> None:
+        # F-31a, O-3a: the calendar call comes before the send, and a failure there must not lose the send.
+        self.api.fail("schedule_workout", fixtures.garmin_error(503))
+        with self.assertRaises(errors.Unavailable):
+            self.run_full(self.push)
+        self.assertEqual(self.api.pushed, [])
+        self.run_full(self.push)
+        self.assertEqual(self.api.pushed, [self.id_of("Hevy: Push")])
+        self.assertEqual(self.days(), {"Hevy: Push": [fixtures.TODAY.isoformat()]})
+
     def test_a_manual_sync_never_sends_a_workout_deleted_in_garmin_connect(self) -> None:
         # Its old id went to the watch, and Garmin answered 404 (TJ, 2026-11-14).
         self.run_full(self.push, self.pull)
@@ -235,6 +268,14 @@ class DeleteTest(SyncCase):
         self.run_poll(self.push, self.pull)
         self.run_poll(self.push)
         self.assertEqual(self.names(), ["Hevy: Pull", "Hevy: Push"])
+
+    def test_a_manual_sync_that_deletes_a_workout_does_not_send_it(self) -> None:
+        self.run_full(self.push, self.pull)
+        self.run_poll(self.push)
+        self.api.pushed.clear()
+        self.sync.resend_all()
+        self.assertEqual(self.run_full(self.push).deleted, 1)
+        self.assertEqual(self.api.pushed, [self.id_of("Hevy: Push")])
 
     def test_the_calendar_entry_goes_before_the_workout(self) -> None:
         self.run_full(self.push)
@@ -394,6 +435,17 @@ class RefusedTest(SyncCase):
         self.assertEqual((counts.failed, counts.updated, self.names()), (1, 0, ["Hevy: Push"]))
         self.run_poll(routine("r-push", "Hevy: Push v2"))
         self.assertEqual(self.names(), ["Hevy: Push"])
+
+    def test_an_edit_undone_in_hevy_clears_garmins_refusal_of_it(self) -> None:
+        self.run_full(self.push)
+        self.refuse("update_workout")
+        with self.assertLogs("hevy_garmin_sync.sync", "ERROR"):
+            self.run_poll(routine("r-push", "Hevy: Push v2"))
+        self.run_poll(self.push)  # back to the version Garmin holds
+        (report,) = self.sync.report()
+        self.assertEqual((report.refused, report.retry), (None, None))
+        # Made again, the edit is a change like any other and is tried at once (F-16).
+        self.assertEqual(self.run_poll(routine("r-push", "Hevy: Push v2")).updated, 1)
 
     def test_a_routine_with_no_exercises_gets_no_workout_and_says_so_once(self) -> None:
         empty = Workout(workout.ROUTINE, "r-empty", "Hevy: Empty", ())
