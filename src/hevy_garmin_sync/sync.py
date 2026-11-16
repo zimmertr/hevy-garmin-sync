@@ -139,12 +139,13 @@ class Sync:
         for done, (key, plan) in enumerate(desired.items()):
             progress("Writing workouts", done, len(desired))
             self._write(key, plan, key in off_calendar, today, full, counts, force)
-        self._delete_missing(desired, {p.kind for p in plans if p.hold}, counts)
+        held = {p.kind for p in plans if p.hold}
+        self._delete_missing(desired, held, counts)
         progress("Sending to the watch", 0, 0)
         self._send()
         if full:
             progress("Updating today's calendar", 0, 0)
-            self._reconcile_calendar(today, off_calendar, counts)
+            self._reconcile_calendar(today, desired, off_calendar, held, counts)
         elif self.scheduled:
             self._follow_calendar(desired, off_calendar, today, counts)
         self._calendar_day = today
@@ -369,12 +370,19 @@ class Sync:
             if not off and workout_id not in self._on_today:
                 self._schedule(workout_id, today, counts)
 
-    def _reconcile_calendar(self, today: date, off_calendar: set[Key], counts: Counts) -> None:
+    def _reconcile_calendar(
+        self, today: date, desired: dict[Key, Workout], off_calendar: set[Key], held: set[str], counts: Counts
+    ) -> None:
         """One entry on today for each workout, and none of the app's on the 31 days before (F-31, F-32).
 
         Entries of workouts the app doesn't own are never touched, entries on
         later days are left alone, and whether an entry was completed is never
         read: the recorded activity stays on Garmin's calendar by itself.
+
+        A held kind's workout that its plans don't list keeps an entry already
+        on today but gets no new one. Its source can't say which is next, as
+        after a restart with HEVY_SESSION rejected, and adding one to each
+        would put every Trainer workout on today (F-33, W-8, #82).
         """
         mine = {known.workout_id: key for key, known in self._known.items()}
         self._entries = {}
@@ -398,5 +406,6 @@ class Sync:
                 counts.unscheduled += 1
         if self.scheduled:
             for key, known in self._known.items():
-                if known.workout_id not in self._entries and key not in off_calendar:
+                unlisted = key[0] in held and key not in desired
+                if known.workout_id not in self._entries and key not in off_calendar and not unlisted:
                     self._schedule(known.workout_id, today, counts)
