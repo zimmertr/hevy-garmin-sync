@@ -17,7 +17,7 @@ The rules match Hevy app 3.2.5, and no release through 3.2.7 changed them. Every
 | Hevy's public API | `GET /v1/exercise_history/{id}` | The last twelve months of one exercise, only for an exercise new to its workout |
 | Hevy's public API | `GET /v1/workouts/events` | Whether a workout was saved, edited or deleted since the last poll |
 
-The program and the events are read on every poll. Everything else is read at startup, at local midnight, and after a workout event.
+The program and the events are read on every poll. The exercise templates are read once, on first use, and a template made later is read by itself (D-11c). An exercise's history is read only for an exercise new to its workout, once until the logged workouts are next read (F-46). The preferences, the units and the logged workouts are read at startup, at local midnight, after a workout event, at a manual sync (W-3), and when a new program begins.
 
 An exercise swapped in the Hevy app and answered "Replace permanently? Yes" is already in its template's `exercises` the next time the program is read, so it reaches the watch like any other change. A swap answered "No", for that workout only, is kept on the phone until the workout is saved and is in nothing read here, so the watch keeps the old exercise (2026-11-11). Tracked in [issue 44](https://github.com/zimmertr/hevy-garmin-sync/issues/44).
 
