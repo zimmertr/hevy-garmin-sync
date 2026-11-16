@@ -72,8 +72,14 @@ class HistoryTest(PreviousCase):
     def test_a_history_hevy_refuses_gives_none_with_one_warning_and_is_not_asked_for_again(self) -> None:
         self.api.fail(404)
         with self.assertLogs("hevy_garmin_sync.previous", "WARNING") as logs:
-            self.assertEqual(self.previous.sets("T-BENCH"), ())
-        self.assertIn("Hevy gave no history for exercise T-BENCH (HTTP 404", logs.output[0])
+            self.assertEqual(self.previous.sets("T-BENCH", "Bench Press (Barbell)"), ())
+        self.assertEqual(
+            logs.output,
+            [
+                'WARNING:hevy_garmin_sync.previous:[Hevy] Bench Press (Barbell) history refused: HTTP 404, '
+                '{"error": "made up"}. No last time for it on the status page'
+            ],
+        )
         self.assertEqual(self.previous.sets("T-BENCH"), ())
         self.assertEqual(self.history_reads(), 1)
 

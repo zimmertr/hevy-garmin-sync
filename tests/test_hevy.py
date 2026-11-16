@@ -71,11 +71,20 @@ class HevyTest(unittest.TestCase):
                     self.hevy.folders()
                 self.assertIsNone(caught.exception.retry_after)
 
+    def test_an_error_names_its_request_by_its_path_and_holds_hevys_reply(self) -> None:
+        # #81: which request failed, for the log, without the host or the query.
+        for failure, text in ((400, 'HTTP 400, {"error": "made up"}'), (fixtures.FakeResponse(400, ""), "HTTP 400")):
+            with self.subTest(text=text):
+                self.api.fail(failure)
+                with self.assertRaises(errors.Refused) as caught:
+                    self.hevy.folders()
+                self.assertEqual((caught.exception.request, str(caught.exception)), ("routine_folders", text))
+
     def test_a_network_error_never_puts_the_url_in_the_message(self) -> None:
         self.api.fail(requests.ConnectionError("https://api.hevyapp.com/v1/routines?secret=1"))
         with self.assertRaises(errors.Unavailable) as caught:
             self.hevy.folders()
-        self.assertEqual(str(caught.exception), "ConnectionError")
+        self.assertEqual((str(caught.exception), caught.exception.request), ("ConnectionError", "routine_folders"))
 
     def test_templates_are_read_once_as_a_whole_list(self) -> None:
         self.assertEqual((self.hevy.template("T-BENCH") or {})["title"], "Bench Press (Barbell)")

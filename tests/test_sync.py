@@ -171,9 +171,24 @@ class WorkoutsTest(SyncCase):
         copy = dict(self.api.workouts[self.id_of("Hevy: Push")]) | {"workoutId": 5}
         self.api.workouts[5] = copy
         self.sync = self.new_sync()
-        with self.assertLogs("hevy_garmin_sync.sync", "WARNING"):
+        with self.assertLogs("hevy_garmin_sync.sync", "WARNING") as logs:
             counts = self.run_full(self.push)
         self.assertEqual((len(self.api.workouts), counts.deleted), (1, 1))
+        self.assertEqual(
+            logs.output, ["WARNING:hevy_garmin_sync.sync:[Hevy: Push] Two Garmin workouts claim it, deleting one"]
+        )
+
+    def test_each_write_names_its_workout_at_debug(self) -> None:
+        with self.assertLogs("hevy_garmin_sync.sync", "DEBUG") as logs:
+            self.run_full(self.push)
+            self.run_poll(routine("r-push", "Hevy: Push v2", reps=10))
+        self.assertEqual(
+            logs.output,
+            [
+                "DEBUG:hevy_garmin_sync.sync:[Hevy: Push] Created in Garmin",
+                "DEBUG:hevy_garmin_sync.sync:[Hevy: Push v2] Updated in Garmin",
+            ],
+        )
 
     def test_a_failed_read_of_the_workout_list_keeps_what_the_last_run_found(self) -> None:
         self.run_full(self.push, self.pull)
@@ -219,16 +234,41 @@ class SendTest(SyncCase):
         self.assertEqual(self.api.pushed, [self.id_of("Hevy: Push")])
         self.assertEqual(self.writes(), ["push_workout_to_device"])
 
-    def test_an_account_with_no_watch_is_warned_about_once_and_still_syncs(self) -> None:
-        self.api.fail("push_workout_to_device", KeyError("userDeviceId"), KeyError("userDeviceId"))
+    NO_WATCH = "Garmin didn't send it to the watch: unexpected reply from Garmin (KeyError: 'userDeviceId')."
+
+    def test_an_account_with_no_watch_is_warned_about_once_a_workout_and_still_syncs(self) -> None:
+        self.api.fail("push_workout_to_device", *[KeyError("userDeviceId")] * 3)
         with self.assertLogs("hevy_garmin_sync.sync", "WARNING") as logs:
             counts = self.run_full(self.push, self.pull)
-        self.assertEqual(len(logs.output), 1)
-        self.assertIn("still on the calendar", logs.output[0])
+        check = "Still on today's calendar, check the account has a watch that has synced"
+        self.assertEqual(
+            logs.output,
+            [
+                f"WARNING:hevy_garmin_sync.sync:[Hevy: Push] {self.NO_WATCH} {check}",
+                f"WARNING:hevy_garmin_sync.sync:[Hevy: Pull] {self.NO_WATCH} {check}",
+            ],
+        )
         self.assertEqual((counts.created, counts.scheduled), (2, 2))
         self.api.calls.clear()
         self.run_poll(self.push, self.pull)
         self.assertEqual(self.api.calls, [])
+        # Once for each workout: the same workout failing again says nothing more.
+        with self.assertNoLogs("hevy_garmin_sync.sync", "WARNING"):
+            self.run_poll(routine("r-push", "Hevy: Push", reps=10), self.pull)
+        self.assertIn("push_workout_to_device", self.api.calls)
+
+    def test_with_the_calendar_off_the_no_watch_warning_says_nothing_of_the_calendar(self) -> None:
+        self.sync = self.new_sync(scheduled=False)
+        self.api.fail("push_workout_to_device", KeyError("userDeviceId"))
+        with self.assertLogs("hevy_garmin_sync.sync", "WARNING") as logs:
+            self.run_full(self.push)
+        self.assertEqual(
+            logs.output,
+            [
+                f"WARNING:hevy_garmin_sync.sync:[Hevy: Push] {self.NO_WATCH} "
+                "Check the account has a watch that has synced"
+            ],
+        )
 
     def test_a_new_workout_whose_calendar_call_failed_is_sent_by_the_next_run(self) -> None:
         # F-31a, O-3a: the calendar call comes before the send, and a failure there must not lose the send.
@@ -277,6 +317,15 @@ class DeleteTest(SyncCase):
         self.assertEqual(self.run_full(self.push).deleted, 1)
         self.assertEqual(self.api.pushed, [self.id_of("Hevy: Push")])
 
+    def test_a_deleted_workout_is_named_as_garmin_had_it_even_after_a_restart(self) -> None:
+        # The routine is gone from Hevy by then, so only Garmin's name says which workout went (#81).
+        self.run_full(self.push, self.pull)
+        self.sync = self.new_sync()
+        self.run_full(self.push)
+        with self.assertLogs("hevy_garmin_sync.sync", "DEBUG") as logs:
+            self.run_poll(self.push)
+        self.assertEqual(logs.output, ["DEBUG:hevy_garmin_sync.sync:[Hevy: Pull] Deleted from Garmin"])
+
     def test_the_calendar_entry_goes_before_the_workout(self) -> None:
         self.run_full(self.push)
         self.run_poll()
@@ -316,8 +365,11 @@ class RefusedTest(SyncCase):
         self.refuse()
         with self.assertLogs("hevy_garmin_sync.sync", "ERROR") as logs:
             counts = self.run_full(self.push, self.pull)
-        self.assertIn("Garmin refused 'Hevy: Push' (2 steps): API Error 400 - Too many steps", logs.output[0])
-        self.assertIn("It is tried again at 17:45, or as soon as the routine changes.", logs.output[0])
+        self.assertEqual(
+            logs.output[0],
+            'ERROR:hevy_garmin_sync.sync:[Hevy: Push] Garmin refused it: 2 steps, "API Error 400 - Too many steps". '
+            "Next try 17:45, or when it changes in Hevy",
+        )
         self.assertEqual((counts.failed, counts.created, self.names()), (1, 1, ["Hevy: Pull"]))
 
     def test_one_refused_once_syncs_at_the_retry_five_minutes_later(self) -> None:
@@ -332,7 +384,7 @@ class RefusedTest(SyncCase):
         self.at(17, 45)
         with self.assertLogs("hevy_garmin_sync.sync", "INFO") as logs:
             counts = self.run_poll(self.push)
-        self.assertEqual(logs.output, ["INFO:hevy_garmin_sync.sync:Trying 'Hevy: Push' again, which Garmin refused"])
+        self.assertEqual(logs.output, ["INFO:hevy_garmin_sync.sync:[Hevy: Push] Trying again, Garmin refused it before"])
         self.assertEqual((counts.created, counts.failed, self.names()), (1, 0, ["Hevy: Push"]))
         self.at(18, 30)
         self.api.calls.clear()
@@ -349,9 +401,9 @@ class RefusedTest(SyncCase):
                 self.run_poll(self.push)
         # Gaps of 5, 10, 20 ... 640 minutes: tries at 00:05, 00:15, 00:35, 01:15, 02:35, 05:15, 10:35 and 21:15.
         self.assertEqual(self.uploads(), 1 + 8)
-        nexts = [line.split("tried again ")[1].split(",")[0] for line in logs.output]
-        self.assertEqual(nexts[:3], ["at 00:05", "at 00:15", "at 00:35"])
-        self.assertEqual(nexts[-2:], ["at 21:15", "at midnight"])
+        nexts = [line.split("Next try ")[1].split(",")[0] for line in logs.output]
+        self.assertEqual(nexts[:3], ["00:05", "00:15", "00:35"])
+        self.assertEqual(nexts[-2:], ["21:15", "midnight"])
 
         self.at(0, 0, days_later=1)
         with self.assertLogs("hevy_garmin_sync.sync", "ERROR") as logs:
@@ -360,7 +412,7 @@ class RefusedTest(SyncCase):
                 self.time += timedelta(minutes=1)
                 self.run_poll(self.push)
         self.assertEqual(self.uploads(), 1 + 8 + 1)
-        self.assertIn("tried again at midnight", logs.output[0])
+        self.assertIn("Next try midnight", logs.output[0])
 
         self.at(0, 0, days_later=2)
         with self.assertLogs("hevy_garmin_sync.sync", "ERROR"):
@@ -375,7 +427,7 @@ class RefusedTest(SyncCase):
         self.at(17, 41)
         with self.assertLogs("hevy_garmin_sync.sync", "ERROR") as logs:
             self.run_full(self.push)
-        self.assertIn("tried again at 17:51", logs.output[0])
+        self.assertIn("Next try 17:51", logs.output[0])
         self.assertEqual(self.uploads(), 2)
         # One that already waits for midnight still does after a same-day full run.
         self.at(0, 0, days_later=1)
@@ -384,7 +436,7 @@ class RefusedTest(SyncCase):
         self.at(9, 0, days_later=1)
         with self.assertLogs("hevy_garmin_sync.sync", "ERROR") as logs:
             self.run_full(self.push)
-        self.assertIn("tried again at midnight", logs.output[0])
+        self.assertIn("Next try midnight", logs.output[0])
         self.assertEqual(self.uploads(), 4)
 
     def test_a_changed_routine_is_tried_at_once_and_its_gaps_start_over(self) -> None:
@@ -397,7 +449,7 @@ class RefusedTest(SyncCase):
         self.at(17, 46)
         with self.assertLogs("hevy_garmin_sync.sync", "ERROR") as logs:
             self.run_poll(routine("r-push", "Hevy: Push", reps=5))
-        self.assertIn("tried again at 17:51", logs.output[0])
+        self.assertIn("Next try 17:51", logs.output[0])
         self.assertEqual(self.uploads(), 3)
 
     def test_a_restart_forgets_the_refusal_and_tries_it_at_startup(self) -> None:
@@ -453,7 +505,7 @@ class RefusedTest(SyncCase):
         with self.assertLogs("hevy_garmin_sync.sync", "INFO") as logs:
             self.run_full(self.push, empty, no_sets)
         self.assertEqual(len(logs.output), 2)
-        self.assertIn("'Hevy: Empty' has no exercises", logs.output[0])
+        self.assertEqual(logs.output[0], "INFO:hevy_garmin_sync.sync:[Hevy: Empty] No exercises, no Garmin workout")
         self.assertEqual(self.names(), ["Hevy: Push"])
         with self.assertNoLogs("hevy_garmin_sync.sync", "INFO"):
             self.run_poll(self.push, empty, no_sets)

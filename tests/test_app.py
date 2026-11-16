@@ -23,6 +23,7 @@ from tests.fixtures import hevy_exercise, hevy_folder, hevy_routine, hevy_set, l
 
 Step = Callable[[], None] | None
 LOGGER = "hevy_garmin_sync"
+ERROR = "ERROR:hevy_garmin_sync.app:"
 
 
 class AppCase(unittest.TestCase):
@@ -120,7 +121,11 @@ class StartupTest(AppCase):
         self.hevy_api.fail(401)
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(None), 0)
-        self.assertIn("Hevy rejected the app's credentials; check HEVY_API_KEY", logs.output[0])
+        self.assertEqual(
+            logs.output[0],
+            f"{ERROR}[Hevy] Rejected the app's credentials, check HEVY_API_KEY against "
+            "https://hevy.com/settings?developer (the key needs Hevy Pro). Left alone until then",
+        )
         self.assertEqual(len(logs.output), 1)
         self.assertEqual(self.names(), [])
         self.assertEqual(self.service("Hevy")["state"], "rejected")
@@ -131,7 +136,7 @@ class StartupTest(AppCase):
         self.garmin_api.fail("get_user_profile", garminconnect.GarminConnectAuthenticationError("401"))
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(None), 0)
-        self.assertIn("Garmin rejected the app's credentials; run `login` again", logs.output[0])
+        self.assertIn("[Garmin] Rejected the app's credentials, run `login` again", logs.output[0])
         self.assertEqual(self.names(), [])
         self.assertEqual(self.garmin_api.calls, ["get_user_profile"])
         self.assertEqual(self.service("Garmin")["state"], "rejected")
@@ -172,9 +177,12 @@ class StartupTest(AppCase):
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(None, None, None), 0)
         self.assertEqual(self.waits[:3], [60, 120, 60])
-        self.assertIn("Hevy can't be reached or is failing (ConnectionError)", logs.output[0])
-        self.assertIn("Trying again in 1 min", logs.output[0])
-        self.assertIn("Trying again in 2 min", logs.output[1])
+        self.assertEqual(
+            logs.output[0],
+            f"{ERROR}[Hevy] routine_folders unreachable or failing: ConnectionError, recovers by itself when Hevy "
+            "does. Next try in 1 min",
+        )
+        self.assertTrue(logs.output[1].endswith("recovers by itself when Hevy does. Next try in 2 min"))
         self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push"])
 
     def test_a_stop_during_that_wait_exits_cleanly(self) -> None:
@@ -305,8 +313,11 @@ class FailureTest(AppCase):
     def test_a_garmin_outage_is_logged_backed_off_and_followed_by_a_full_run(self) -> None:
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.run_app(self.break_garmin(fixtures.garmin_error(503)), None)
-        self.assertIn("Garmin can't be reached or is failing (API Error 503)", logs.output[0])
-        self.assertIn("Trying again in 1 min", logs.output[0])
+        self.assertEqual(
+            logs.output[0],
+            f"{ERROR}[Garmin] Unreachable or failing: API Error 503, recovers by itself when Garmin does. "
+            "Next try in 1 min",
+        )
         # One failed write, then a full run a minute later: the list is read again and the job finished.
         self.assertEqual(self.garmin_api.calls[:3], ["upload_workout", "get_user_profile", "get_workouts"])
         self.assertEqual(self.names(), ["Hevy/PPL: Legs", "Hevy/PPL: Pull", "Hevy/PPL: Push"])
@@ -315,7 +326,7 @@ class FailureTest(AppCase):
         down = [fixtures.garmin_error(503)] * 3
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(self.break_garmin(*down), *[None] * 7), 0)
-        self.assertEqual([line.split("Trying again in ")[1] for line in logs.output], ["1 min.", "2 min.", "4 min."])
+        self.assertEqual([line.split("Next try in ")[1] for line in logs.output], ["1 min", "2 min", "4 min"])
         # Polled on every wake, whatever Garmin was doing: 8 wakes after the break, 3 calls each (the workout
         # events, the folders and the routines).
         self.assertEqual(len(self.hevy_api.requests), 24)
@@ -325,8 +336,7 @@ class FailureTest(AppCase):
         limited = garminconnect.GarminConnectTooManyRequestsError("slow down")
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(self.break_garmin(limited), *[None] * 14), 0)
-        self.assertIn("Garmin is rate limiting the app", logs.output[0])
-        self.assertIn("Trying again in 15 min", logs.output[0])
+        self.assertEqual(logs.output[0], f"{ERROR}[Garmin] Rate limiting the app. Next try in 15 min")
         self.assertNotIn("Hevy/PPL: Legs", self.names())
         self.steps = []
         self.run_app(None)
@@ -342,8 +352,9 @@ class FailureTest(AppCase):
 
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(self.break_garmin(limited), *[None] * 59, an_hour_on), 0)
-        self.assertIn("Garmin is rate limiting the app and said how long to wait", logs.output[0])
-        self.assertIn("Trying again in 60 min.", logs.output[0])
+        self.assertEqual(
+            logs.output[0], f"{ERROR}[Garmin] Rate limiting the app, waiting as long as it asked. Next try in 60 min"
+        )
         self.assertEqual(calls_at_the_hour, [["upload_workout"]])
         self.assertIn("Hevy/PPL: Legs", self.names())
 
@@ -359,8 +370,9 @@ class FailureTest(AppCase):
 
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(limited, note, note), 0)
-        self.assertIn("Hevy is rate limiting the app and said how long to wait", logs.output[0])
-        self.assertIn("Trying again in 2 min.", logs.output[0])
+        self.assertEqual(
+            logs.output[0], f"{ERROR}[Hevy] Rate limiting the app, waiting as long as it asked. Next try in 2 min"
+        )
         # The 429 a minute after startup, nothing a minute later, and Hevy read again two minutes on.
         self.assertEqual(reads, [1, 1])
         self.assertGreater(len(self.hevy_api.requests), 1)
@@ -369,14 +381,14 @@ class FailureTest(AppCase):
         self.hevy_api.fail(fixtures.rate_limited("30"))
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(HEVY_POLL_INTERVAL_SECONDS="10"), 0)
-        self.assertIn("Trying again in 30 s.", logs.output[0])
+        self.assertTrue(logs.output[0].endswith("Next try in 30 s"))
         self.assertEqual(self.waits, [30])
 
     def test_a_token_garmin_rejects_while_running_stops_every_garmin_call_after_it(self) -> None:
         # W-8: waiting can't fix a dead token, so Garmin is left alone until the fix and a restart.
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(self.break_garmin(fixtures.garmin_error(401)), None, None), 0)
-        self.assertIn("Garmin rejected the app's credentials; run `login` again", logs.output[-1])
+        self.assertIn("[Garmin] Rejected the app's credentials, run `login` again", logs.output[-1])
         self.assertEqual(len(logs.output), 1)
         self.assertEqual(self.garmin_api.calls, ["upload_workout"])
         self.assertEqual(self.service("Garmin")["state"], "rejected")
@@ -394,7 +406,7 @@ class FailureTest(AppCase):
                 self.garmin_api.fail(method, garminconnect.GarminConnectAuthenticationError("401"))
                 with self.assertLogs(LOGGER, "ERROR") as logs:
                     self.assertEqual(self.run_app(None), 0)
-                self.assertIn("Garmin rejected the app's credentials", logs.output[-1])
+                self.assertIn("[Garmin] Rejected the app's credentials", logs.output[-1])
                 self.assertEqual(self.garmin_api.calls[-1], method)
 
     def test_a_hevy_key_rejected_while_running_stops_hevy_and_leaves_garmin_as_it_is(self) -> None:
@@ -404,7 +416,7 @@ class FailureTest(AppCase):
 
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(reject, None, None), 0)
-        self.assertIn("Hevy rejected the app's credentials; check HEVY_API_KEY", logs.output[-1])
+        self.assertIn("[Hevy] Rejected the app's credentials, check HEVY_API_KEY", logs.output[-1])
         self.assertEqual(len(logs.output), 1)
         self.assertEqual(self.garmin_api.calls, [])
         self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push"])
@@ -416,19 +428,23 @@ class FailureTest(AppCase):
 
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(down, None, None, None), 0)
-        self.assertIn("Hevy can't be reached or is failing (HTTP 503", logs.output[0])
-        self.assertIn("Hevy is rate limiting the app", logs.output[1])
+        self.assertIn("[Hevy] workouts/events unreachable or failing: HTTP 503", logs.output[0])
+        self.assertIn("[Hevy] Rate limiting the app", logs.output[1])
         self.assertEqual(self.garmin_api.calls, [])
 
     def test_hevy_refusing_a_request_is_said_plainly(self) -> None:
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.run_app(lambda: self.hevy_api.fail(400))
-        self.assertIn("Hevy refused a request (HTTP 400", logs.output[0])
+        self.assertEqual(
+            logs.output[0], f'{ERROR}[Hevy] workouts/events refused: HTTP 400, {{"error": "made up"}}. Next try in 1 min'
+        )
+        # The page keeps its own words, and they name the request too.
+        self.assertEqual(self.service("Hevy")["reason"], 'Hevy refused a request (HTTP 400, {"error": "made up"})')
 
     def test_a_bug_while_syncing_is_logged_with_its_traceback_and_does_not_end_the_process(self) -> None:
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(self.break_garmin(RuntimeError("a bug")), None), 0)
-        self.assertIn("Unexpected error while syncing", logs.output[0])
+        self.assertIn("[Garmin] Unexpected error while syncing. Next try in 1 min", logs.output[0])
         self.assertIn("RuntimeError: a bug", logs.output[0])
         self.assertIn("Hevy/PPL: Legs", self.names())
 
@@ -438,7 +454,7 @@ class FailureTest(AppCase):
 
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(odd, None), 0)
-        self.assertIn("Unexpected error while reading Hevy", logs.output[0])
+        self.assertIn("[Hevy] Unexpected error while reading. Next try in 1 min", logs.output[0])
         self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push"])
 
 
@@ -511,7 +527,7 @@ class TrainerTest(AppCase):
         with self.assertLogs(LOGGER, "INFO") as logs:
             self.run_app(log_upper, ENABLE_PREVIOUS_VALUES="false")
         self.assertEqual(self.garmin_api.calls, ["update_workout", "push_workout_to_device"])
-        self.assertIn("Hevy Trainer: Side Bend (Dumbbell): 40 lbs (up)", "\n".join(logs.output))
+        self.assertIn("[Hevy/Trainer: Upper (C2-W2)] Side Bend (Dumbbell): 40 lbs, up", "\n".join(logs.output))
 
     def test_a_workout_logged_while_trainer_waits_after_a_failure_is_still_acted_on(self) -> None:
         def down() -> None:
@@ -538,8 +554,8 @@ class TrainerTest(AppCase):
         self.end_the_session()
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(), 0)
-        self.assertIn("Hevy Trainer rejected the app's credentials; copy the auth2.0-token cookie", logs.output[0])
-        self.assertIn("set HEVY_SESSION to it", logs.output[0])
+        self.assertIn("[Hevy Trainer] Rejected the app's credentials, copy the auth2.0-token cookie", logs.output[0])
+        self.assertTrue(logs.output[0].endswith("set HEVY_SESSION to it. Left alone until then"))
         self.assertEqual(self.names(), ["Hevy/PPL: Pull", "Hevy/PPL: Push"])
         self.assertEqual(self.service("Hevy Trainer")["state"], "rejected")
 
@@ -563,7 +579,7 @@ class TrainerTest(AppCase):
         self.private_api.fail(503)
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(None), 0)
-        self.assertIn("Hevy Trainer can't be reached or is failing (HTTP 503", logs.output[0])
+        self.assertIn("[Hevy Trainer] v2/user_preferences unreachable or failing: HTTP 503", logs.output[0])
         self.assertEqual(self.waits[0], 60)
         self.assertIn(self.UPPER, self.names())
 
@@ -576,8 +592,8 @@ class TrainerTest(AppCase):
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(down, *[None] * 4, HEVY_POLL_INTERVAL_SECONDS="15"), 0)
         self.assertEqual(len(logs.output), 1)
-        self.assertIn("Hevy Trainer can't be reached or is failing", logs.output[0])
-        self.assertIn("Trying again in 1 min", logs.output[0])
+        self.assertIn("[Hevy Trainer] hevy_trainer/v3/program unreachable or failing: HTTP 503", logs.output[0])
+        self.assertTrue(logs.output[0].endswith("Next try in 1 min"))
         self.assertEqual(self.names(), ["Hevy/PPL: Legs", "Hevy/PPL: Pull", "Hevy/PPL: Push", self.LOWER, self.UPPER])
         # Asked at the poll that failed and a minute later, not on the three polls in between.
         self.assertEqual(self.private_api.paths().count("hevy_trainer/v3/program"), 2)
@@ -592,16 +608,25 @@ class TrainerTest(AppCase):
             self.assertEqual(self.run_app(end, None), 0)
         self.assertIn(self.LOWER, self.names())
         self.assertNotIn("delete_workout", self.garmin_api.calls)
-        self.assertIn("Hevy Trainer rejected the app's credentials; copy the auth2.0-token cookie", logs.output[-1])
-        self.assertIn("set HEVY_SESSION to it", logs.output[-1])
+        self.assertIn("[Hevy Trainer] Rejected the app's credentials, copy the auth2.0-token cookie", logs.output[-1])
         # The session got its one refresh, and was not tried again on the next poll.
         self.assertEqual(self.private_api.paths().count("auth/refresh_token"), 1)
         self.assertEqual(self.garmin_api.calls, [])
 
+    def test_a_refused_read_names_its_request(self) -> None:
+        # The startup check, the program, both preferences and the units answer; the logged workouts don't.
+        self.private_api.fail(None, None, None, None, None, 400)
+        with self.assertLogs(LOGGER, "ERROR") as logs:
+            self.run_app()
+        self.assertEqual(
+            logs.output,
+            [f'{ERROR}[Hevy Trainer] user_workouts_paged refused: HTTP 400, {{"error": "made up"}}. Next try in 1 min'],
+        )
+
     def test_a_rate_limit_from_hevys_private_api_does_not_exit(self) -> None:
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(lambda: self.private_api.fail(429), None), 0)
-        self.assertIn("Hevy Trainer is rate limiting the app", logs.output[0])
+        self.assertIn("[Hevy Trainer] Rate limiting the app", logs.output[0])
 
     def test_a_program_in_an_unexpected_shape_does_not_end_the_process(self) -> None:
         def odd() -> None:
@@ -610,7 +635,7 @@ class TrainerTest(AppCase):
 
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.assertEqual(self.run_app(odd, None), 0)
-        self.assertIn("Unexpected error while reading Hevy Trainer", logs.output[0])
+        self.assertIn("[Hevy Trainer] Unexpected error while reading. Next try in 1 min", logs.output[0])
         self.assertIn("AttributeError", logs.output[0])
         self.assertIn(self.LOWER, self.names())
 
@@ -684,7 +709,7 @@ class PreviousTest(AppCase):
         started = self.utc
         with self.assertLogs(LOGGER, "ERROR") as logs:
             self.run_app(None, lambda: self.hevy_api.fail(503), None)
-        self.assertIn("Hevy can't be reached or is failing (HTTP 503", logs.output[0])
+        self.assertIn("[Hevy] workouts/events unreachable or failing: HTTP 503", logs.output[0])
         # The read two minutes on failed, so the one a minute after it asks from the same instant.
         minute = hevy._utc(started + timedelta(seconds=60))
         self.assertEqual(self.events_asked(), [hevy._utc(started), hevy._utc(started), minute, minute])
