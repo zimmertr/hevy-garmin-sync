@@ -6,6 +6,7 @@ It holds workout names, weights and the Garmin and Hevy workout ids for the
 page's links, never a key, token, cookie, username, email or account id (W-9).
 """
 
+import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -93,7 +94,7 @@ def build(facts: Facts) -> Json:
             "last_ended": _time(facts.last_manual),
             "last_counts": vars(facts.last_manual_counts) if facts.last_manual_counts else None,
         },
-        "workouts": [_workout(r, unit, facts.system) for r in facts.reports],
+        "workouts": [_workout(r, unit, facts.system, facts.next_daily_run) for r in facts.reports],
         "settings": dict(facts.settings),
     }
 
@@ -106,9 +107,17 @@ def _day(day: date | None) -> str | None:
     return day.isoformat() if day else None
 
 
-def _workout(report: Report, unit: str, system: str | None) -> Json:
+def _key(kind: str, source_id: str) -> str:
+    """A workout's own key for the page's rows and its URL: names repeat, ids don't, and no raw id is shown (W-9)."""
+    return hashlib.sha256(f"{kind}\0{source_id}".encode()).hexdigest()[:12]
+
+
+def _workout(report: Report, unit: str, system: str | None, next_daily_run: datetime) -> Json:
     plan = report.plan
+    # A retry gap can double past midnight, but the daily run tries every refused workout first (F-16).
+    retry = report.retry if report.retry and report.retry <= next_daily_run else None
     return {
+        "key": _key(plan.kind, plan.source_id),
         "title": plan.title or plan.name,
         "kind": plan.kind,
         "folder": plan.folder,
@@ -118,7 +127,7 @@ def _workout(report: Report, unit: str, system: str | None) -> Json:
         "scheduled": _day(report.scheduled),
         "synced": _time(report.synced),
         "refused": report.refused,
-        "retry": _time(report.retry),
+        "retry": _time(retry),  # None: the next daily run
         "exercises": [_exercise(e, unit, system) for e in plan.exercises],
     }
 

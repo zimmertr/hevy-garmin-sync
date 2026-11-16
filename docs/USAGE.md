@@ -35,8 +35,10 @@ Open `http://localhost:8080` under Compose, or the Service's address under Kuber
 - One sync a minute. Within a minute of the last one, the page and `sync` say how many seconds are left. A press while a sync runs joins it. While Garmin is making the app wait, the sync runs when the wait ends, and the page says so.
 - A sync costs about 3 Garmin calls per workout, and Garmin is known to block accounts that call too often. Use it when something looks wrong, not on a timer.
 - Services: Hevy, Hevy Trainer and Garmin, each working, waiting with the reason and the next try, or sign-in rejected with the fix. The tab's title and icon turn yellow while one waits, and red while one is rejected or Garmin refuses a workout.
-- Workouts: each one's schedule, when it last synced, links to Hevy and Garmin Connect, and Garmin's reason if it refused it. Its exercises show the Garmin exercise each got, the sets, the rest and the weight. One matched by muscle group and equipment has "Report this match", which opens an issue with both exercises filled in.
-- The log: the last 5,000 lines, 200 at a time, with a switch for errors and warnings only.
+- A sync's result and the last daily run say how many workouts were written and deleted, and how many Garmin refused once any were. A manual sync that Garmin refused any of shows in red.
+- Workouts: each one's schedule, when it last synced, links to Hevy and Garmin Connect, and Garmin's reason if it refused it, with the next try. Its exercises show the Garmin exercise each got, the sets, the rest and the weight, and with Hevy Trainer the direction, also beside "No weight". One matched by muscle group and equipment has "Report this match", which opens an issue with both exercises filled in.
+- Under a workout's links, "Garmin Connect is in sync with Hevy." while Garmin and the workout's source work. While one of them has its sign-in rejected or waits, the line says so and that you see the workout as it was last synced.
+- The log: the last 5,000 lines, 200 at a time, and folded, its newest line. "Errors and warnings only" hides INFO and DEBUG, and Copy log then copies only what is shown. Copy log works over plain HTTP too; if the browser still refuses, it says "Couldn't copy" and leaves the lines selected, so your keyboard's copy works. The page's own requests and the health checks aren't logged unless they fail.
 - Settings: every variable, with the secrets shown only as set or unset.
 
 ## In the log

@@ -6,6 +6,7 @@ const STEPS = ["Reading Hevy", "Reading Hevy Trainer", "Reading Garmin", "Writin
 const CHOSEN = { map: "Exercise map", custom: "<code>CUSTOM_EXERCISE_MAP</code>", guess: "Closest by muscle group and equipment" };
 const EXTRA = { "Hevy": "Nothing syncs until then.", "Hevy Trainer": "Routines keep syncing.", "Garmin": "Nothing reaches Garmin until then." };
 const REPO = "https://github.com/zimmertr/hevy-garmin-sync";
+const LOUD = new Set(["WARNING", "ERROR", "CRITICAL"]); // what "Errors and warnings only" keeps
 const EXTERNAL = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 3h4v4M13 3L7 9M12 9.5V13H3V4h3.5"/></svg>';
 
 const $ = (selector) => document.querySelector(selector);
@@ -18,11 +19,12 @@ const store = {
 let status = null;
 let filter = "all";
 let query = "";
-let selected = null; // a workout's slug
+let selected = null; // a workout's key
 let notice = null; // a reply to a button press, shown until the status moves on: { html, tone, until }
 let logLines = [];
 let logMore = true;
 let logLoaded = false;
+let detail = { key: null, html: "" }; // the detail pane as last drawn, so a poll that changes nothing leaves it alone
 let started = null; // when the app that answers started: a new value is a new app
 let offline = false;
 
@@ -43,17 +45,15 @@ function clock(iso, withDay) {
 function today() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: status.time_zone }).format(new Date());
 }
-function slug(workout) {
-  return (workout.folder ? workout.folder + "-" : "") + workout.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
 function codeify(text) {
   // Variable names, the cookie and the command read as code.
   return esc(text).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\b([A-Z][A-Z0-9]*_[A-Z0-9_]+)\b|(auth2\.0-token)/g, (m) => `<code>${m}</code>`);
 }
-function counts(c) {
+// "3 written, 0 deleted", and ", 1 refused" once Garmin refused any: `by` adds " by Garmin" to that.
+function counts(c, by = "") {
   if (!c) return "";
   const written = c.created + c.updated;
-  return `${written} written, ${c.deleted} deleted`;
+  return `${written} written, ${c.deleted} deleted${c.failed ? `, ${c.failed} refused${by}` : ""}`;
 }
 
 // ---- Data ----
@@ -74,7 +74,8 @@ async function refresh() {
     offline = true;
     if (status) renderOffline();
   }
-  if (!offline && ($("#log").open || !logLoaded)) await newLines();
+  // Folded or not: the folded log's header shows the newest line.
+  if (!offline) await newLines();
   setTimeout(refresh, offline || (status && status.sync.state !== "idle") ? 1000 : 5000);
 }
 
@@ -90,11 +91,13 @@ async function newLines() {
     const page = await logPage(null, 200);
     const last = logLines.length ? logLines[logLines.length - 1].seq : 0;
     const fresh = page.lines.filter((l) => l.seq > last);
-    if (!logLoaded) { logMore = page.more; logLoaded = true; }
+    // More than a page was logged since the last poll: start over from the newest page, so no gap hides in the middle.
+    const gap = page.lines.length && page.lines[0].seq > last + 1;
+    if (!logLoaded || gap) { logMore = page.more; logLoaded = true; }
     if (fresh.length) {
       const box = $("#lines");
       const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 8;
-      logLines = logLines.concat(fresh);
+      logLines = gap ? page.lines : logLines.concat(fresh);
       renderLog();
       if (atBottom) box.scrollTop = box.scrollHeight;
     }
@@ -202,7 +205,8 @@ function renderControl() {
   }
   const recent = run.last_ended && Date.now() - new Date(run.last_ended) < 60000;
   if (recent) {
-    box.innerHTML = msg(run.last_counts ? `Synced at ${esc(when(run.last_ended))}: ${counts(run.last_counts)}.` : `The sync at ${esc(when(run.last_ended))} failed. The log says why.`, run.last_counts ? "ok" : "bad");
+    const c = run.last_counts;
+    box.innerHTML = msg(c ? `Synced at ${esc(when(run.last_ended))}: ${counts(c, " by Garmin")}.` : `The sync at ${esc(when(run.last_ended))} failed. The log says why.`, c && !c.failed ? "ok" : "bad");
     return;
   }
   box.innerHTML = msg(status.next_auto_sync ? `Next auto-sync: ${esc(when(status.next_auto_sync))}` : "Starting up", "ok");
@@ -266,15 +270,15 @@ function renderWorkouts() {
     $("#rows").innerHTML = status.last_daily_run
       ? '<p class="empty">No workouts yet. Make a routine in Hevy, or set <code>HEVY_SESSION</code> to sync Hevy Trainer, and it appears here at the next auto-sync.</p>'
       : '<p class="empty">Waiting for the first sync. Your workouts appear here once it reads Hevy.</p>';
-    $("#detail").innerHTML = "";
+    drawDetail(null, "");
     return;
   }
   const test = all.find(([key]) => key === filter)[3];
   const shown = status.workouts.filter((w) => test(w) && w.title.toLowerCase().includes(query.toLowerCase()));
-  if (!selected || !status.workouts.some((w) => slug(w) === selected)) selected = slug(status.workouts[0]);
+  if (!selected || !status.workouts.some((w) => w.key === selected)) selected = status.workouts[0].key;
   $("#rows").innerHTML = shown.length ? shown.map((w) => {
     const [tone, label] = state(w);
-    return `<button class="row" type="button" data-slug="${esc(slug(w))}" aria-current="${slug(w) === selected}">
+    return `<button class="row" type="button" data-key="${esc(w.key)}" aria-current="${w.key === selected}">
       <span class="n">${esc(w.title)}</span><span class="pill ${tone}">${label}</span>
       <span class="m"><span>${esc(w.folder || (w.kind === "trainer" ? "Hevy Trainer" : "Routine"))}</span>${w.scheduled === today() ? '<span class="today">On today\'s calendar</span>' : ""}</span>
       <span class="when">Synced: ${w.synced ? esc(when(w.synced)) : "Never"}</span></button>`;
@@ -293,26 +297,50 @@ function link(label, href, why) {
     : `<a class="lnk" aria-disabled="true" role="link" title="${esc(why)}">${label}${EXTERNAL}</a>`;
 }
 
+// The line under a workout's links while Garmin has it: in sync only while Garmin and the workout's own
+// source work. Otherwise the one that doesn't, and that this is the workout as it was last synced.
+function syncLine(w) {
+  const names = [w.kind === "trainer" ? "Hevy Trainer" : "Hevy", "Garmin"];
+  const services = names.map((name) => status.services.find((s) => s.name === name)).filter(Boolean);
+  const down = services.find((s) => s.state === "rejected") || services.find((s) => s.state === "waiting");
+  if (!down) return "Garmin Connect is in sync with Hevy.";
+  const what = down.state === "rejected" ? `${down.name}'s sign-in was rejected.` : `${down.name} is waiting${down.next_try ? ` until ${when(down.next_try)}` : ""}.`;
+  return `${what} This is the workout as last synced${w.synced ? `, ${when(w.synced)}` : ""}.`;
+}
+
+// Draws the detail pane only when it changed, so a poll keeps a selection, and an opened refusal stays open.
+function drawDetail(key, html) {
+  if (key === detail.key && html === detail.html) return;
+  const open = key === detail.key && $("#detail details.slot[open]");
+  $("#detail").innerHTML = html;
+  if (open && $("#detail details.slot")) $("#detail details.slot").open = true;
+  detail = { key, html };
+}
+
 function renderDetail() {
-  const w = status.workouts.find((x) => slug(x) === selected);
-  if (!w) { $("#detail").innerHTML = ""; return; }
+  const w = status.workouts.find((x) => x.key === selected);
+  if (!w) { drawDetail(null, ""); return; }
   const [tone, label] = state(w);
   const rows = w.exercises.map((e) => {
     const report = e.chosen_by === "guess"
       ? `<a class="report" href="${esc(reportLink(e))}" target="_blank" rel="noopener">Report this match</a>` : "";
+    // Trainer's direction shows beside "No weight" too: a rep range can move up with no weight to move (W-2).
+    const direction = e.direction ? `<span class="dir ${e.direction === "up" ? "up" : e.direction === "down" ? "down" : ""}">${esc(e.direction)}</span>` : "";
     const weight = e.weight
-      ? `${esc(e.weight)}${e.direction ? `<span class="dir ${e.direction === "up" ? "up" : e.direction === "down" ? "down" : ""}">${esc(e.direction)}</span>` : ""}${e.warmups ? `<span class="wu">Warm-ups ${esc(e.warmups)}</span>` : ""}`
-      : `<span class="none">${esc(e.no_weight ? `No weight: ${e.no_weight}.` : "No weight")}</span>`;
+      ? `${esc(e.weight)}${direction}${e.warmups ? `<span class="wu">Warm-ups ${esc(e.warmups)}</span>` : ""}`
+      : `<span class="none">${esc(e.no_weight ? `No weight: ${e.no_weight}.` : "No weight")}</span>${direction}`;
     return `<tr><td>${esc(e.hevy)}</td>
       <td>${esc(e.garmin)}<span class="src ${e.chosen_by === "guess" ? "guess" : ""}">${CHOSEN[e.chosen_by] || ""}${report}</span></td>
       <td class="sets">${esc(e.sets || "")}${e.rest ? `<small>${esc(e.rest)}</small>` : ""}${e.last ? `<small class="prev">${esc(e.last)}</small>` : ""}</td>
       <td class="rx">${weight}</td></tr>`;
   }).join("");
+  // No retry: the next daily run, which also comes before a retry that falls after it (status.py).
+  const retry = esc(when(w.retry || status.next_daily_run));
   const slot = w.refused
-    ? `<details class="slot bad"><summary><b>Refused by Garmin:</b> "${esc(w.refused)}" Next try: ${w.retry ? esc(when(w.retry)) : esc(when(status.next_daily_run))}, or press Sync now.</summary>
-       <p>Garmin said: "${esc(w.refused)}" The app tries again on ${w.retry ? esc(when(w.retry)) : esc(when(status.next_daily_run))}. Sync now tries it at once.</p></details>`
-    : w.garmin_id ? '<p class="slot quiet">Garmin Connect is in sync with Hevy.</p>' : '<p class="slot quiet">Not on Garmin yet. It goes there at the next sync.</p>';
-  $("#detail").innerHTML = `
+    ? `<details class="slot bad"><summary><b>Refused by Garmin:</b> "${esc(w.refused)}" Next try: ${retry}, or press Sync now.</summary>
+       <p>Garmin said: "${esc(w.refused)}" The app tries again on ${retry}. Sync now tries it at once.</p></details>`
+    : w.garmin_id ? `<p class="slot quiet">${esc(syncLine(w))}</p>` : '<p class="slot quiet">Not on Garmin yet. It goes there at the next sync.</p>';
+  drawDetail(w.key, `
     <button class="back" type="button" id="back">‹ All workouts</button>
     <div class="dhead">
       <div><h3>${esc(w.title)}</h3>
@@ -331,7 +359,7 @@ function renderDetail() {
     ${slot}
     <div class="ex"><table>
       <thead><tr><th>Hevy exercise</th><th>Garmin exercise</th><th>Sets</th><th>Weight</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>`;
+      <tbody>${rows}</tbody></table></div>`);
 }
 
 function reportLink(exercise) {
@@ -360,7 +388,8 @@ function setTheme(value) {
 }
 
 function fromHash() {
-  const wanted = decodeURIComponent(location.hash.slice(1));
+  let wanted = "";
+  try { wanted = decodeURIComponent(location.hash.slice(1)); } catch { /* not a hash this page wrote: show the first workout */ }
   if (wanted) { selected = wanted; if (status) renderWorkouts(); }
 }
 
@@ -372,8 +401,8 @@ document.addEventListener("click", (event) => {
   else if (target.id === "older") olderLines();
   else if (target.id === "back") $("#split").classList.remove("showing");
   else if (target.dataset.filter) { filter = target.dataset.filter; renderWorkouts(); }
-  else if (target.dataset.slug) {
-    selected = target.dataset.slug;
+  else if (target.dataset.key) {
+    selected = target.dataset.key;
     history.replaceState(null, "", "#" + selected);
     renderWorkouts();
     $("#split").classList.add("showing");
@@ -386,18 +415,43 @@ $("#log").addEventListener("toggle", (event) => {
   store.set("log", event.target.open ? "1" : "");
   if (event.target.open) newLines().then(() => { $("#lines").scrollTop = $("#lines").scrollHeight; });
 });
-$("#copy").addEventListener("click", async (event) => {
+// Browsers offer navigator.clipboard only over HTTPS and on localhost, and the page is often served over plain
+// HTTP on a home network. There a hidden textarea and execCommand("copy") still copy, inside the click.
+function copyByHand(text) {
+  const area = document.createElement("textarea");
+  area.className = "clipboard";
+  area.value = text;
+  area.setAttribute("readonly", "");
+  document.body.append(area);
+  area.select();
+  let copied = false;
+  try { copied = document.execCommand("copy"); } catch { /* copied stays false */ }
+  area.remove();
+  return copied;
+}
+
+let copyReset = null;
+$("#copy").addEventListener("click", (event) => {
   const only = $("#only").checked;
-  const text = logLines.filter((l) => !only || l.level !== "INFO").map((l) => `${clock(l.time, true)} ${l.level} ${l.message}`).join("\n");
+  const text = logLines.filter((l) => !only || LOUD.has(l.level)).map((l) => `${clock(l.time, true)} ${l.level} ${l.message}`).join("\n");
   const button = event.currentTarget;
-  try { await navigator.clipboard.writeText(text); button.textContent = "Copied"; } catch {
+  const say = (label) => {
+    button.textContent = label;
+    clearTimeout(copyReset);
+    copyReset = setTimeout(() => { button.textContent = "Copy log"; }, 1600);
+  };
+  const failed = () => {
+    // Leave the lines selected, so the keyboard's copy still works.
     const range = document.createRange();
     range.selectNodeContents($("#lines"));
     getSelection().removeAllRanges();
     getSelection().addRange(range);
-    button.textContent = "Press Ctrl+C";
-  }
-  setTimeout(() => { button.textContent = "Copy log"; }, 1600);
+    say("Couldn't copy");
+  };
+  const fallback = () => (copyByHand(text) ? say("Copied") : failed());
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => say("Copied"), fallback);
+  else fallback();
+  button.focus();
 });
 window.addEventListener("hashchange", fromHash);
 
