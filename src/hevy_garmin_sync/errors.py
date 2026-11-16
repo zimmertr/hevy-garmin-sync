@@ -17,6 +17,9 @@ class Stopped(Exception):
 class ServiceError(Exception):
     """A call to Hevy or Garmin failed."""
 
+    # Which request it was, for the log: a path with no host and no query, which can hold the username (#81).
+    request = ""
+
 
 class Rejected(ServiceError):
     """The service refused the credentials (401, 403). Fixed by the user, not by waiting, so the app exits (O-1)."""

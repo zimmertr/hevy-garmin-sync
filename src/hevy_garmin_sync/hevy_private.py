@@ -117,7 +117,8 @@ class HevyPrivate:
                     headers=self._headers(),
                     json={"refresh_token": self._tokens["refresh_token"]},
                     timeout=TIMEOUT_SECONDS,
-                )
+                ),
+                "auth/refresh_token",
             )
         except Refused as e:
             raise Rejected(f"Hevy would not refresh the session ({e})") from e
@@ -140,7 +141,8 @@ class HevyPrivate:
             return get_json(
                 lambda: self._session.get(
                     f"{BASE}/{path}", headers=self._headers(), params=params, timeout=TIMEOUT_SECONDS
-                )
+                ),
+                path,  # never the query, which holds the username
             )
 
         try:

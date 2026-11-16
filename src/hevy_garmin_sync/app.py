@@ -156,7 +156,7 @@ def _for(seconds: float) -> str:
 
 
 def _problem(service: str, fix: str, error: ServiceError) -> str:
-    """What failed and how to fix it, for the log (O-1)."""
+    """What failed and how to fix it, for the status page (O-1, W-2)."""
     if isinstance(error, Rejected):
         return f"{service} rejected the app's credentials; {fix}"
     if isinstance(error, RateLimited) and error.retry_after is not None:
@@ -166,6 +166,20 @@ def _problem(service: str, fix: str, error: ServiceError) -> str:
     if isinstance(error, Refused):
         return f"{service} refused a request ({error})"
     return f"{service} can't be reached or is failing ({error}); it will recover by itself when {service} does"
+
+
+def _said(service: str, fix: str, error: ServiceError) -> str:
+    """The same for the log: the service in brackets, then the facts, naming the request when Hevy's (O-3, #81)."""
+    if isinstance(error, Rejected):
+        what = f"Rejected the app's credentials, {fix}"
+    elif isinstance(error, RateLimited):
+        what = "Rate limiting the app" + (", waiting as long as it asked" if error.retry_after is not None else "")
+    elif isinstance(error, Refused):
+        what = f"{error.request} refused: {error}" if error.request else f"Refused a request: {error}"
+    else:
+        failing = f"{error.request} unreachable or failing" if error.request else "Unreachable or failing"
+        what = f"{failing}: {error}, recovers by itself when {service} does"
+    return f"[{service}] {what}"
 
 
 class App:
@@ -191,7 +205,11 @@ class App:
         self._zone: ZoneInfo = config.zone or ZoneInfo("UTC")
         self._previous = Previous(hevy, self._now) if config.previous_values else None
         self._routines = Routines(hevy, config.include_folders, exercises, self._previous)
-        self._trainer = Trainer(hevy_private, hevy, exercises, self._now, self._previous) if hevy_private else None
+        self._trainer = (
+            Trainer(hevy_private, hevy, exercises, self._now, self._previous, scheduled=config.scheduled)
+            if hevy_private
+            else None
+        )
         self._events_since = self._now()  # workouts logged before startup are in the first reads (F-4)
         self._sync = Sync(garmin, config.scheduled, self._now)
         self._hevy_backoff = Backoff(clock, shortest=config.poll_seconds)
@@ -261,7 +279,7 @@ class App:
                 return
             except ServiceError as e:
                 delay = backoff.failed(e, _problem(service, fix, e))
-                log.error("%s. Trying again in %s.", backoff.reason, _for(delay))
+                log.error("%s. Next try in %s", _said(service, fix, e), _for(delay))
                 self._publish()
                 # A manual sync ends a wait early, but never a service's wait (W-3).
                 while not backoff.ready():
@@ -275,7 +293,7 @@ class App:
         and its Garmin workouts stay as they are.
         """
         # Once per service: nothing calls a rejected service again, so nothing rejects it twice.
-        log.error("%s. Until then the app leaves %s alone.", _problem(service, fix, error), service)
+        log.error("%s. Left alone until then", _said(service, fix, error))
         self._rejected[service] = fix
         self._publish()
 
@@ -329,13 +347,13 @@ class App:
                 except ServiceError as e:
                     full = True  # whatever was half done is finished by a full run (O-1, O-3a)
                     delay = self._garmin_backoff.failed(e, _problem(GARMIN, LOGIN_FIX, e))
-                    log.error("%s. Trying again in %s.", self._garmin_backoff.reason, _for(delay))
+                    log.error("%s. Next try in %s", _said(GARMIN, LOGIN_FIX, e), _for(delay))
                 except Stopped:
                     raise
                 except Exception as e:  # noqa: BLE001 a bug must not become a restart loop that hammers Garmin
                     full = True
                     delay = self._garmin_backoff.failed(e, "Unexpected error while syncing")
-                    log.exception("Unexpected error while syncing. Trying again in %s.", _for(delay))
+                    log.exception("[%s] Unexpected error while syncing. Next try in %s", GARMIN, _for(delay))
                 else:
                     self._garmin_backoff.succeeded()
                     if full or counts.any():
@@ -399,11 +417,11 @@ class App:
             return None
         except ServiceError as e:
             delay = self._hevy_backoff.failed(e, _problem(HEVY, KEY_FIX, e))
-            log.error("%s. Trying again in %s.", self._hevy_backoff.reason, _for(delay))
+            log.error("%s. Next try in %s", _said(HEVY, KEY_FIX, e), _for(delay))
             return None
         except Exception as e:  # noqa: BLE001 a reply in a shape the app didn't expect must not end the process
             delay = self._hevy_backoff.failed(e, "Unexpected error while reading Hevy")
-            log.exception("Unexpected error while reading Hevy. Trying again in %s.", _for(delay))
+            log.exception("[%s] Unexpected error while reading. Next try in %s", HEVY, _for(delay))
             return None
         self._hevy_backoff.succeeded()
         log.debug("Hevy poll: %d calls, %d routines", self._hevy.calls - calls, len(routines.workouts))
@@ -452,10 +470,10 @@ class App:
             self._trainer_plans = replace(self._trainer_plans, hold=True)  # as it was, calendar and all
         except ServiceError as e:
             delay = self._trainer_backoff.failed(e, _problem(TRAINER_SERVICE, SESSION_FIX, e))
-            log.error("%s. Trying again in %s.", self._trainer_backoff.reason, _for(delay))
+            log.error("%s. Next try in %s", _said(TRAINER_SERVICE, SESSION_FIX, e), _for(delay))
         except Exception as e:  # noqa: BLE001 a reply in a shape the app didn't expect must not end the process
             delay = self._trainer_backoff.failed(e, "Unexpected error while reading Hevy Trainer")
-            log.exception("Unexpected error while reading Hevy Trainer. Trying again in %s.", _for(delay))
+            log.exception("[%s] Unexpected error while reading. Next try in %s", TRAINER_SERVICE, _for(delay))
         else:
             self._trainer_backoff.succeeded()
             log.debug(

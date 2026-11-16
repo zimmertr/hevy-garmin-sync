@@ -38,6 +38,19 @@ _DIRECTIONS = {
     "deload": "deload week",
     "new": "new exercise",
 }
+# Why an exercise gets no weight: the status page's words, then the log's fragment (O-3, #81).
+Why = tuple[str, str]
+_NOT_PLANNED: Why = ("Trainer plans no weight or rep range for it", "Trainer plans no weight or rep range")
+_NO_WORKING_SET: Why = (
+    "its last session has no working set, or no weight the equipment can load",
+    "last session has no working set, or no weight the equipment can load",
+)
+_NOT_LOGGED: Why = ("it has not been logged in this workout yet", "not logged in this workout yet")
+_NO_START: Why = (
+    "it is new to this workout and nothing gives it a starting weight",
+    "new to this workout, nothing gives it a starting weight",
+)
+_NO_REASON: Why = ("", "")
 
 
 def template_name(template: Json) -> str:
@@ -88,12 +101,15 @@ class Trainer:
         exercises: ExerciseMap,
         now: Callable[[], datetime],  # the current time in the user's zone
         previous: Previous | None = None,  # None: ENABLE_PREVIOUS_VALUES is false
+        *,
+        scheduled: bool = True,  # ENABLE_SCHEDULED_WORKOUTS, for what the log says of the calendar (F-30a)
     ) -> None:
         self._private = private
         self._public = public
         self._exercises = exercises
         self._now = now
         self._previous = previous
+        self._scheduled = scheduled
         self._read_on: date | None = None
         self._logged_since_read = False
         self._units_shape_said = False
@@ -169,12 +185,13 @@ class Trainer:
             if any(started.astimezone(zone).date() >= this_week for started, _ in sessions):
                 done.add(template_id)  # logged this week: the calendar rule when Hevy names no next workout (F-33)
             history = [logged for started, logged in sessions if not rules.is_deload_week(week_of(started), deloads)]
+            title = f"{template_name(template)} {label}"
+            name = f"Hevy/Trainer: {title}"  # as Garmin and the watch show it, which each exercise's line starts with
             exercises = tuple(
-                self._exercise(template_id, planned, history, deload, now)
+                self._exercise(template_id, name, planned, history, deload, now)
                 for planned in sorted(template.get("exercises") or [], key=lambda e: e.get("index") or 0)
             )
-            title = f"{template_name(template)} {label}"
-            workouts.append(Workout(TRAINER, template_id, f"Hevy/Trainer: {title}", exercises, title=title))
+            workouts.append(Workout(TRAINER, template_id, name, exercises, title=title))
         return Plans(TRAINER, workouts, off_calendar=self._off_calendar(program, templates, workouts, done))
 
     def _off_calendar(
@@ -196,9 +213,9 @@ class Trainer:
             if not self._no_next_said:
                 self._no_next_said = True
                 log.warning(
-                    "Hevy's program names no next workout (next_workout_index %r), so every Hevy Trainer "
-                    "workout not logged this week stays on today's calendar",
+                    "[Hevy Trainer] Program names no next workout: next_workout_index %r%s",
                     index,
+                    ". Every workout not logged this week on today's calendar" if self._scheduled else "",
                 )
             return frozenset(done)
         self._no_next_said = False
@@ -216,7 +233,9 @@ class Trainer:
         self._workouts_since = program_created
         self._best = {}
 
-    def _exercise(self, template_id: str, planned: Json, history: list[Json], deload: bool, now: datetime) -> Exercise:
+    def _exercise(
+        self, template_id: str, workout: str, planned: Json, history: list[Json], deload: bool, now: datetime
+    ) -> Exercise:
         exercise_id = str(planned.get("exercise_template_id") or "")
         details = self._public.template(exercise_id) or {}
         title = str(details.get("title") or planned.get("title") or exercise_id)
@@ -226,8 +245,10 @@ class Trainer:
         if bounds.get("start") and bounds.get("end"):
             rep_range = (int(bounds["start"]), int(bounds["end"]))
 
-        prescription, why_not = self._prescribe(exercise_id, details, planned, rep_range, history, deload, now)
-        self._say(template_id, exercise_id, title, prescription, why_not)
+        prescription, (why_not, said_why) = self._prescribe(
+            exercise_id, details, planned, rep_range, history, deload, now
+        )
+        self._say(template_id, exercise_id, f"[{workout}] {title}", prescription, said_why)
         if prescription and prescription.rep_range:
             rep_range = prescription.rep_range
         weight_kg = prescription.weight_kg if prescription else None
@@ -247,7 +268,7 @@ class Trainer:
             sets=(*warmup_sets, *[working] * int(planned.get("set_count") or 0)),
             rest_seconds=int(rest) if rest else None,
             assisted=details.get("type") in ASSISTED,
-            previous=self._previous.sets(exercise_id) if self._previous else (),
+            previous=self._previous.sets(exercise_id, title) if self._previous else (),
             chosen_by=garmin.chosen_by,
             direction=_DIRECTIONS.get(prescription.direction) if prescription else None,
             no_weight=None if prescription else why_not,
@@ -262,10 +283,10 @@ class Trainer:
         history: list[Json],
         deload: bool,
         now: datetime,
-    ) -> tuple[Prescription | None, str]:
+    ) -> tuple[Prescription | None, Why]:
         """Trainer's prescription for one exercise, or None and the reason there is none (F-46a)."""
         if planned.get("kind") != "resistance" or rep_range is None:
-            return None, "Trainer plans no weight or rep range for it"
+            return None, _NOT_PLANNED
         kind = details.get("type")
         set_count = int(planned.get("set_count") or 0)
         logs = []
@@ -286,20 +307,20 @@ class Trainer:
                     ]
                 )
         if kind == "reps_only":
-            return rules.next_rep_range(logs, set_count, rep_range, deload), ""
+            return rules.next_rep_range(logs, set_count, rep_range, deload), _NO_REASON
         unit = self._overrides.get(exercise_id) or ("lbs" if self._user.get("weight_unit") == "lbs" else "kg")
         gear = rules.equipment(details.get("equipment"), unit, self._available)
         if kind not in _WEIGHT_TYPES or gear is None:
             what = f"a {kind or 'unknown'} exercise on {details.get('equipment') or 'unknown'} equipment"
-            return None, f"Trainer suggests no weight for {what}"
+            return None, (f"Trainer suggests no weight for {what}", f"Trainer suggests none for {what}")
         warmups = rules.warmup_count(planned.get("warmup_set_count"))
         if logs:
             found = rules.next_weight(logs, set_count, rep_range, warmups, gear, deload)
-            return found, "" if found else "its last session has no working set, or no weight the equipment can load"
+            return found, _NO_REASON if found else _NO_WORKING_SET
         if kind != "weight_reps":
-            return None, "it has not been logged in this workout yet"
+            return None, _NOT_LOGGED
         found = rules.starting_weight(self._best_one_rep_max(exercise_id, now), rep_range, warmups, gear)
-        return found, "" if found else "it is new to this workout and nothing gives it a starting weight"
+        return found, _NO_REASON if found else _NO_START
 
     def _best_one_rep_max(self, exercise_id: str, now: datetime) -> float | None:
         """The best estimated one-rep max over the last 3 months, else the last 12, in kilograms (F-46).
@@ -324,17 +345,21 @@ class Trainer:
             self._best[exercise_id] = best
         return self._best[exercise_id]
 
-    def _say(self, template_id: str, exercise_id: str, title: str, found: Prescription | None, why_not: str) -> None:
-        """Log each exercise's prescription at INFO when it is first worked out and whenever it changes (O-3)."""
+    def _say(self, template_id: str, exercise_id: str, said: str, found: Prescription | None, why_not: str) -> None:
+        """Log each exercise's prescription at INFO when it is first worked out and whenever it changes (O-3).
+
+        `said` is the workout's name in brackets and the exercise's. The name
+        carries the cycle and week, so a new week logs every exercise again.
+        """
         if found is None:
-            text = f"no prescription ({why_not})"
+            text = f"{said}: no weight, {why_not}"
         elif found.rep_range:
-            text = f"{found.rep_range[0]}-{found.rep_range[1]} reps ({_DIRECTIONS[found.direction]})"
+            text = f"{said}: {found.rep_range[0]}-{found.rep_range[1]} reps, {_DIRECTIONS[found.direction]}"
         else:
-            text = f"{found.weight:g} {found.unit} ({_DIRECTIONS[found.direction]})"
+            text = f"{said}: {found.weight:g} {found.unit}, {_DIRECTIONS[found.direction]}"
             if found.warmups:
                 text += ", warm-ups " + ", ".join(f"{w:g}" for w in found.warmups)
         key = f"{template_id}/{exercise_id}"
         if self._said.get(key) != text:
             self._said[key] = text
-            log.info("Hevy Trainer: %s: %s", title, text)
+            log.info("%s", text)
