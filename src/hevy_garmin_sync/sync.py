@@ -173,19 +173,22 @@ class Sync:
 
     def _read_garmin(self, counts: Counts) -> None:
         self._system = self.garmin.measurement_system()
-        self._known = {}
+        # Swapped in whole once Garmin has answered: until then the page and a manual sync's
+        # resend_all work from what the last run found, not from nothing (W-2, W-3).
+        known: dict[Key, _Known] = {}
         for item in self.garmin.workouts():
             owner = workout.owner(item.get("description"))
             if not owner:
                 continue  # not the app's: never touched (F-12)
             key = (owner.kind, owner.source_id)
-            if key in self._known:
+            if key in known:
                 log.warning("Two Garmin workouts claim %s %s; deleting %r", *key, item.get("workoutName"))
                 self.garmin.delete(int(item["workoutId"]))
                 counts.deleted += 1
             else:
                 synced = owner.updated.replace(tzinfo=self.now().tzinfo) if owner.updated else None
-                self._known[key] = _Known(int(item["workoutId"]), owner.version, synced)
+                known[key] = _Known(int(item["workoutId"]), owner.version, synced)
+        self._known = known
         # A workout deleted in Garmin Connect after it was queued for the watch is gone, and
         # Garmin answers a send of it with a 404 (a manual sync queues before this read; TJ, 2026-11-14).
         owned = {known.workout_id for known in self._known.values()}
