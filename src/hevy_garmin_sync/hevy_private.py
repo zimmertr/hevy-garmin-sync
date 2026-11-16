@@ -160,7 +160,7 @@ class HevyPrivate:
         return body if isinstance(body, dict) else {}
 
     def unit_overrides(self) -> Any:
-        """The exercises the user logs in the other unit. Shape not yet seen (spec U-15)."""
+        """The exercises the user logs in the other unit, as `{id, exercise_template_id, weight_unit}` rows (U-15)."""
         return self._get("exercise_template_units")
 
     def program(self) -> Json | None:
