@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
 from . import workout
-from .errors import Refused
+from .errors import NotFound, Refused
 from .garmin import Garmin
 from .workout import Workout
 
@@ -229,8 +229,13 @@ class Sync:
         stamped = workout.stamped(body, plan, self.now())
         try:
             if known:
-                self.garmin.update(known.workout_id, stamped)
-            else:
+                try:
+                    self.garmin.update(known.workout_id, stamped)
+                except NotFound:
+                    # Deleted in Garmin Connect since the last full run, which would have found it gone.
+                    self._forget(key)
+                    known = None
+            if known is None:
                 created = self.garmin.create(stamped)
         except Refused as e:
             counts.failed += 1
@@ -260,6 +265,18 @@ class Sync:
             if self.scheduled and not off_calendar:
                 self._schedule(created, today, counts)
         self._send()
+
+    def _forget(self, key: Key) -> None:
+        """Drop all the app knows of a workout gone from Garmin, which took its calendar entries with it.
+
+        It also leaves the queue for the watch: a manual sync may have queued it,
+        and Garmin answers a send of a deleted workout with a 404, which would
+        spend the one no-watch warning on a watch that works (TJ, 2026-11-14).
+        """
+        gone = self._known.pop(key).workout_id
+        self._entries.pop(gone, None)
+        self._on_today.discard(gone)
+        self._unsent = [workout_id for workout_id in self._unsent if workout_id != gone]
 
     def _refuse(self, key: Key, version: str, before: _Refused | None, today: date, reason: str) -> str:
         """Note that Garmin refused this version, and say when it is tried next (F-16; TJ, 2026-11-10, #4).
@@ -312,14 +329,12 @@ class Sync:
         """
         gone = {key for key in self._known if key not in desired and key[0] not in held}
         for key in gone & self._absent:
-            known = self._known.pop(key)
-            if known.workout_id in self._entries:
-                self.garmin.unschedule(self._entries.pop(known.workout_id))
+            workout_id = self._known[key].workout_id
+            if workout_id in self._entries:
+                self.garmin.unschedule(self._entries.pop(workout_id))
                 counts.unscheduled += 1
-            self._on_today.discard(known.workout_id)
-            self.garmin.delete(known.workout_id)
-            # A manual sync queued it; sent now, Garmin answers 404 and the no-watch warning is spent on it.
-            self._unsent = [workout_id for workout_id in self._unsent if workout_id != known.workout_id]
+            self.garmin.delete(workout_id)
+            self._forget(key)
             counts.deleted += 1
             log.debug("Deleted the Garmin workout of %s %s", *key)
         self._absent = gone & self._known.keys()
