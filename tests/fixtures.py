@@ -19,7 +19,6 @@ import garminconnect
 
 from hevy_garmin_sync import preview
 from hevy_garmin_sync.exercises import ExerciseMap, GarminExercise
-from hevy_garmin_sync.server import Answer
 from hevy_garmin_sync.preview import (
     GARMIN_TOKENS,
     HEVY_SESSION_COOKIE,
@@ -47,6 +46,7 @@ from hevy_garmin_sync.preview import (
     trainer_program,
     trainer_template,
 )
+from hevy_garmin_sync.server import Answer
 from scripts.check_upstream import GARMIN_URL, HEVY_URL
 
 __all__ = [
