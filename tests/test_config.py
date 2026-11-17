@@ -16,7 +16,7 @@ class ConfigTest(unittest.TestCase):
         loaded = config.load(REQUIRED)
         self.assertEqual(loaded.hevy_api_key, "made-up-key")
         self.assertIsNone(loaded.garmin_token)
-        self.assertEqual(loaded.include_folders, ())
+        self.assertEqual((loaded.include_folders, loaded.include_routines), ((), ()))
         self.assertTrue(loaded.scheduled)
         self.assertTrue(loaded.previous_values)
         self.assertIsNone(loaded.hevy_session)
@@ -32,6 +32,7 @@ class ConfigTest(unittest.TestCase):
             | {
                 "GARMIN_TOKEN": " token ",
                 "INCLUDE_HEVY_FOLDERS": " Push Pull Legs , 42,, ",
+                "INCLUDE_HEVY_ROUTINES": "Mobility, ,r-made-up ",
                 "ENABLE_SCHEDULED_WORKOUTS": "False",
                 "ENABLE_PREVIOUS_VALUES": " FALSE ",
                 "HEVY_SESSION": "cookie",
@@ -46,6 +47,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(loaded.http_port, 9090)
         self.assertEqual(loaded.garmin_token, "token")
         self.assertEqual(loaded.include_folders, ("Push Pull Legs", "42"))
+        self.assertEqual(loaded.include_routines, ("Mobility", "r-made-up"))
         self.assertFalse(loaded.scheduled)
         self.assertFalse(loaded.previous_values)
         self.assertEqual(loaded.hevy_session, "cookie")
@@ -55,8 +57,10 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual((loaded.log_level, loaded.log_format), ("DEBUG", "json"))
 
     def test_an_empty_value_counts_as_unset(self) -> None:
-        loaded = config.load(REQUIRED | {"INCLUDE_HEVY_FOLDERS": " ", "HEVY_SESSION": "", "TZ": "", "GARMIN_TOKEN": ""})
-        self.assertEqual(loaded.include_folders, ())
+        empty = {"INCLUDE_HEVY_FOLDERS": " ", "INCLUDE_HEVY_ROUTINES": ",", "HEVY_SESSION": ""}
+        empty |= {"TZ": "", "GARMIN_TOKEN": ""}
+        loaded = config.load(REQUIRED | empty)
+        self.assertEqual((loaded.include_folders, loaded.include_routines), ((), ()))
         self.assertIsNone(loaded.hevy_session)
         self.assertIsNone(loaded.zone)
         self.assertIsNone(loaded.garmin_token)
@@ -86,6 +90,7 @@ class ConfigTest(unittest.TestCase):
                 "HEVY_API_KEY",
                 "GARMIN_TOKEN",
                 "INCLUDE_HEVY_FOLDERS",
+                "INCLUDE_HEVY_ROUTINES",
                 "CUSTOM_EXERCISE_MAP",
                 "ENABLE_SCHEDULED_WORKOUTS",
                 "ENABLE_PREVIOUS_VALUES",
@@ -101,15 +106,22 @@ class ConfigTest(unittest.TestCase):
         for secret in secrets.values():
             self.assertNotIn(secret, " ".join(summary.values()))
         self.assertEqual(summary["INCLUDE_HEVY_FOLDERS"], "PPL")
+        self.assertEqual(summary["INCLUDE_HEVY_ROUTINES"], "unset")
         self.assertEqual(summary["TZ"], "America/Los_Angeles")
 
     def test_the_summary_says_what_an_unset_variable_means(self) -> None:
         summary = config.load(REQUIRED).summary()
         self.assertIn("unset", summary["GARMIN_TOKEN"])
         self.assertIn("all routines", summary["INCLUDE_HEVY_FOLDERS"])
+        self.assertIn("all routines", summary["INCLUDE_HEVY_ROUTINES"])
         self.assertIn("by muscle group and equipment", summary["CUSTOM_EXERCISE_MAP"])
         self.assertIn("Trainer off", summary["HEVY_SESSION"])
         self.assertIn("Garmin profile", summary["TZ"])
+
+
+    def test_with_only_routines_chosen_the_unset_folders_say_so_plainly(self) -> None:
+        summary = config.load(REQUIRED | {"INCLUDE_HEVY_ROUTINES": "Mobility"}).summary()
+        self.assertEqual((summary["INCLUDE_HEVY_FOLDERS"], summary["INCLUDE_HEVY_ROUTINES"]), ("unset", "Mobility"))
 
 
 class PreviewTest(unittest.TestCase):

@@ -21,12 +21,12 @@ class RoutinesCase(unittest.TestCase):
             hevy_routine("r-loose", "Stretch"),
         ]
 
-    def routines(self, *entries: str) -> Routines:
+    def routines(self, *folders: str, routines: tuple[str, ...] = ()) -> Routines:
         client = hevy.Hevy("made-up-key", self.api)  # type: ignore[arg-type]
-        return Routines(client, entries, fixtures.exercise_map())
+        return Routines(client, folders, fixtures.exercise_map(), routines=routines)
 
-    def names(self, *entries: str) -> list[str]:
-        return [w.name for w in self.routines(*entries).plans().workouts]
+    def names(self, *folders: str, routines: tuple[str, ...] = ()) -> list[str]:
+        return [w.name for w in self.routines(*folders, routines=routines).plans().workouts]
 
 
 class SelectionTest(RoutinesCase):
@@ -45,6 +45,21 @@ class SelectionTest(RoutinesCase):
 
     def test_a_routine_with_no_folder_syncs_only_when_no_folder_is_chosen(self) -> None:
         self.assertNotIn("Hevy: Stretch", self.names("42"))
+
+    def test_a_routine_is_chosen_by_id_or_by_exact_title_beside_the_chosen_folders(self) -> None:
+        # INCLUDE_HEVY_ROUTINES brings back a routine in no folder, or one from a folder left out (C-16, #76).
+        self.assertEqual(self.names("42", routines=("Stretch",)), ["Hevy/Push Pull Legs: Push Day", "Hevy: Stretch"])
+        self.assertEqual(self.names("42", routines=("r-home",)), ["Hevy/Push Pull Legs: Push Day", "Hevy/Home: Garage"])
+
+    def test_with_only_routines_chosen_only_those_sync(self) -> None:
+        self.assertEqual(self.names(routines=("Stretch", "r-push")), ["Hevy/Push Pull Legs: Push Day", "Hevy: Stretch"])
+
+    def test_a_routine_id_is_tried_before_a_title(self) -> None:
+        self.api.routines.append(hevy_routine("r-odd", "r-loose"))
+        self.assertEqual(self.names(routines=("r-loose",)), ["Hevy: Stretch"])
+
+    def test_a_routine_in_a_chosen_folder_and_named_too_syncs_once(self) -> None:
+        self.assertEqual(self.names("42", routines=("Push Day",)), ["Hevy/Push Pull Legs: Push Day"])
 
     def test_the_plans_are_routines_and_are_not_held(self) -> None:
         plans = self.routines().plans()
@@ -83,6 +98,29 @@ class StartupTest(RoutinesCase):
             self.routines("42", "Legs", "99").check()
         self.assertEqual(len(logs.output), 2)
 
+    def test_no_routine_is_logged_or_read_while_nothing_is_chosen(self) -> None:
+        with self.assertLogs("hevy_garmin_sync.routines", "INFO") as logs:
+            self.routines().check()
+        self.assertNotIn("Hevy routine: ", " ".join(logs.output))
+        self.assertNotIn("/routines", [path for path, _ in self.api.requests])
+
+    def test_every_routine_is_logged_with_its_id_once_either_variable_is_set(self) -> None:
+        for folders, routines in ((("42",), ()), ((), ("Stretch",))):
+            with self.subTest(folders=folders, routines=routines):
+                with self.assertLogs("hevy_garmin_sync.routines", "INFO") as logs:
+                    self.routines(*folders, routines=routines).check()
+                lines = [line for line in logs.output if "Hevy routine: " in line]
+                self.assertEqual(len(lines), 3)
+                self.assertIn("id r-loose, title 'Stretch'", lines[2])
+
+    def test_an_unknown_routine_exits_after_the_list_is_logged(self) -> None:
+        with (
+            self.assertLogs("hevy_garmin_sync.routines", "INFO") as logs,
+            self.assertRaisesRegex(errors.ConfigError, "INCLUDE_HEVY_ROUTINES names no Hevy routine: Yoga, r-99"),
+        ):
+            self.routines(routines=("Stretch", "Yoga", "r-99")).check()
+        self.assertEqual(len(logs.output), 5)
+
     def test_a_rejected_key_shows_here(self) -> None:
         self.api.fail(401)
         with self.assertRaises(errors.Rejected):
@@ -119,6 +157,19 @@ class BadReadTest(RoutinesCase):
         self.api.folders[1]["title"] = "Garage"
         with self.assertLogs("hevy_garmin_sync.routines", "ERROR"):
             source.plans()
+
+    def test_a_chosen_routine_that_disappears_holds_its_workout_and_is_logged_once(self) -> None:
+        source = self.routines("42", routines=("Stretch",))
+        source.plans()
+        self.api.routines[2]["title"] = "Mobility"
+        with self.assertLogs("hevy_garmin_sync.routines", "ERROR") as logs:
+            plans = source.plans()
+        self.assertIn("routine 'Stretch' in INCLUDE_HEVY_ROUTINES is gone", logs.output[0])
+        self.assertIn("Its Garmin workout is kept;", logs.output[0])
+        self.assertTrue(plans.hold)
+        self.assertEqual([w.name for w in plans.workouts], ["Hevy/Push Pull Legs: Push Day"])
+        with self.assertNoLogs("hevy_garmin_sync.routines", "ERROR"):
+            self.assertTrue(source.plans().hold)
 
     def test_a_routine_whose_folder_is_not_in_the_folder_list_is_left_alone(self) -> None:
         self.api.routines.append(hevy_routine("r-new", "Brand New", 77))

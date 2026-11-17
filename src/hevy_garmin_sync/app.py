@@ -218,7 +218,9 @@ class App:
         self._utcnow = utcnow
         self._zone: ZoneInfo = config.zone or ZoneInfo("UTC")
         self._previous = Previous(hevy, self._now) if config.previous_values else None
-        self._routines = Routines(hevy, config.include_folders, exercises, self._previous)
+        self._routines = Routines(
+            hevy, config.include_folders, exercises, self._previous, routines=config.include_routines
+        )
         self._trainer = (
             Trainer(hevy_private, hevy, exercises, self._now, self._previous, scheduled=config.scheduled)
             if hevy_private

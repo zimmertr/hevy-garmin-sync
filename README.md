@@ -46,7 +46,7 @@ Every minute your routines are read from Hevy and, when something changes, they 
 
 ### Routines and Folders
 
-By default, each Hevy routine becomes a workout that is named after the one in Hevy. For example - `Hevy: Full Body` for a routine without a folder and `Hevy/Push Pull Legs: Push` for one in a folder. A routine you delete in Hevy is also then automatically removed from Garmin Connect. Since Hevy lacks scheduling capabilities, each routine is also added to the current day's Garmin calendar. This enables the watch to offer them to you automatically when you start a strength activity. You can choose to sync all folders or a subset of them, and to keep them off the calendar ([Configuration](#configuration)).
+By default, each Hevy routine becomes a workout that is named after the one in Hevy. For example - `Hevy: Full Body` for a routine without a folder and `Hevy/Push Pull Legs: Push` for one in a folder. A routine you delete in Hevy is also then automatically removed from Garmin Connect. Since Hevy lacks scheduling capabilities, each routine is also added to the current day's Garmin calendar. This enables the watch to offer them to you automatically when you start a strength activity. You can choose to sync all folders, a subset of them or single routines, and to keep them off the calendar ([Configuration](#configuration)).
 
 ### Hevy Trainer
 
@@ -165,6 +165,7 @@ A collection of environment variables are available that can configure how the a
 | `HEVY_API_KEY` | | Yes | Your Hevy API key |
 | `GARMIN_TOKEN` | | Yes | Your Garmin auth token. Only needed on first init |
 | `INCLUDE_HEVY_FOLDERS` | All folders | | Only these routine folders, by id or title, comma-separated |
+| `INCLUDE_HEVY_ROUTINES` | All routines | | Also these routines, by id or title, comma-separated |
 | `CUSTOM_EXERCISE_MAP` | By muscle group and equipment | | The Garmin exercise for your custom Hevy exercises, as `title-or-id=CATEGORY/NAME`, comma-separated |
 | `ENABLE_SCHEDULED_WORKOUTS` | `true` | | Put every routine, and Hevy Trainer's next workout, on today's Garmin calendar |
 | `ENABLE_PREVIOUS_VALUES` | `true` | | Show last time's sets for each exercise on the status page |
@@ -191,6 +192,20 @@ For example - this syncs both of those folders, one by name and one by id:
 
 ```dotenv
 INCLUDE_HEVY_FOLDERS="Push Pull Legs,43"
+```
+
+However, a routine that isn't in any folder gets left out once this is set. So if you want it too, or just one routine out of a folder you didn't pick, name it in `INCLUDE_HEVY_ROUTINES` as well. A routine then syncs if either variable picks it, and setting `INCLUDE_HEVY_ROUTINES` on its own syncs only the routines you name. Once either variable is set, the app also logs every routine and its id when it starts up:
+
+```text
+Hevy routine: id 1a2b3c4d, title 'Mobility'
+Hevy routine: id 5e6f7a8b, title 'Grip Day'
+```
+
+For example - this syncs the two folders above, plus those two routines, one by name and one by id:
+
+```dotenv
+INCLUDE_HEVY_FOLDERS="Push Pull Legs,43"
+INCLUDE_HEVY_ROUTINES="Mobility,5e6f7a8b"
 ```
 
 ### Disabling Scheduled Workouts

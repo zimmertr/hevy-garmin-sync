@@ -20,6 +20,7 @@ secret: {}
 env: {}
 #  TZ: America/Los_Angeles
 #  INCLUDE_HEVY_FOLDERS: "Push Pull Legs,Home"
+#  INCLUDE_HEVY_ROUTINES: "Mobility,Grip Day"
 
 # The data folder: the app keeps its rotated sign-in tokens here (spec A-4).
 persistence:

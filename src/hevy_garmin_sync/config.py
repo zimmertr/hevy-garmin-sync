@@ -22,6 +22,7 @@ class Config:
     hevy_api_key: str
     garmin_token: str | None
     include_folders: tuple[str, ...]
+    include_routines: tuple[str, ...]
     custom_exercises: Mapping[str, GarminExercise]
     scheduled: bool
     previous_values: bool
@@ -40,7 +41,8 @@ class Config:
         summary = {
             "HEVY_API_KEY": "set",
             "GARMIN_TOKEN": "set" if self.garmin_token else "unset (using the token in DATA_DIR)",
-            "INCLUDE_HEVY_FOLDERS": ", ".join(self.include_folders) or "unset (all routines)",
+            "INCLUDE_HEVY_FOLDERS": ", ".join(self.include_folders) or _unset_selection(self.include_routines),
+            "INCLUDE_HEVY_ROUTINES": ", ".join(self.include_routines) or _unset_selection(self.include_folders),
             # A count only: the entries hold a user's own exercise titles (C-11).
             "CUSTOM_EXERCISE_MAP": (
                 f"set ({len(self.custom_exercises)} {'entry' if len(self.custom_exercises) == 1 else 'entries'})"
@@ -116,7 +118,8 @@ def load(env: Mapping[str, str]) -> Config:
     return Config(
         hevy_api_key="" if preview_pr else api_key,
         garmin_token=None if preview_pr else get("GARMIN_TOKEN") or None,
-        include_folders=tuple(part.strip() for part in get("INCLUDE_HEVY_FOLDERS").split(",") if part.strip()),
+        include_folders=_entries(get("INCLUDE_HEVY_FOLDERS")),
+        include_routines=_entries(get("INCLUDE_HEVY_ROUTINES")),
         custom_exercises=_custom_exercises(get("CUSTOM_EXERCISE_MAP")),
         scheduled=scheduled == "true",
         previous_values=previous_values == "true",
@@ -131,6 +134,16 @@ def load(env: Mapping[str, str]) -> Config:
         preview_pr=preview_pr,
         preview_commit=preview_commit,
     )
+
+
+def _entries(value: str) -> tuple[str, ...]:
+    """A comma-separated list of ids or titles, spaces trimmed and empty entries dropped (C-3, C-16)."""
+    return tuple(part.strip() for part in value.split(",") if part.strip())
+
+
+def _unset_selection(other: tuple[str, ...]) -> str:
+    """What an unset INCLUDE_HEVY_FOLDERS or INCLUDE_HEVY_ROUTINES means, given the other one."""
+    return "unset" if other else "unset (all routines)"
 
 
 def _custom_exercises(value: str) -> dict[str, GarminExercise]:
