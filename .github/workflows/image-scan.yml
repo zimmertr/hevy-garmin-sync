@@ -15,7 +15,7 @@ permissions: {}
 jobs:
   scan:
     name: Scheduled Image Scan
-    uses: zimmertr/yggdrasil/.github/workflows/image-scan.yml@20ecc5dacd84eaf95243364b450bf3800925bc05 # v2.0.3
+    uses: zimmertr/yggdrasil/.github/workflows/image-scan.yml@f81440545f0f987933300d02ae67ab206be59ce5 # v2.0.4
     permissions:
       contents: read
       security-events: write # the SARIF upload

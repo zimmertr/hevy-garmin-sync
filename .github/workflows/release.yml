@@ -29,7 +29,7 @@ jobs:
   release:
     name: Release
     needs: test
-    uses: zimmertr/yggdrasil/.github/workflows/release.yml@20ecc5dacd84eaf95243364b450bf3800925bc05 # v2.0.3
+    uses: zimmertr/yggdrasil/.github/workflows/release.yml@f81440545f0f987933300d02ae67ab206be59ce5 # v2.0.4
     permissions:
       contents: write # the tag and release
       packages: write # the image and the chart, pushed to ghcr.io/zimmertr
