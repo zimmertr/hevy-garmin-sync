@@ -314,15 +314,15 @@ function syncLine(w) {
 }
 
 // A workout its source doesn't list, kept in Garmin as it was (W-8): the app knows its name and its Garmin
-// link, not its exercises. The source is down, or, with Hevy working, a folder in INCLUDE_HEVY_FOLDERS is gone.
+// link, not its exercises. The source is down, or, with Hevy working, a folder or routine the settings name is gone.
 function notSyncingLine(w) {
   const name = w.kind === "trainer" ? "Hevy Trainer" : "Hevy";
   const source = status.services.find((s) => s.name === name);
   const last = `Garmin has it as last synced${w.synced ? `, ${when(w.synced)}` : ""}.`;
   if (source && source.state === "rejected") return `${name}'s sign-in was rejected, so the app can't show this workout's exercises. ${last}`;
   if (source && source.state === "waiting") return `${name} is waiting${source.next_try ? ` until ${when(source.next_try)}` : ""}, so the app can't show this workout's exercises. ${last}`;
-  // Hevy works, so the routine's folder is what's missing: renamed or deleted (F-14a).
-  return `A folder in INCLUDE_HEVY_FOLDERS is gone from Hevy, so the app leaves this workout as it was. ${last}`;
+  // Hevy works, so a folder or routine the settings name is what's missing: renamed or deleted (F-14a).
+  return `A folder in INCLUDE_HEVY_FOLDERS or a routine in INCLUDE_HEVY_ROUTINES is gone from Hevy, so the app leaves this workout as it was. ${last}`;
 }
 
 // Draws the detail pane only when it changed, so a poll keeps a selection, and an opened refusal stays open.

@@ -17,46 +17,61 @@ Json = dict[str, Any]
 _SET_TYPES = ("normal", "warmup", "dropset", "failure")
 
 
-def missing_folders(entries: Sequence[str], folders: Sequence[Json]) -> list[str]:
-    """The INCLUDE_HEVY_FOLDERS entries that name no folder, by id or by exact title."""
-    return [entry for entry in entries if not _matching(entry, folders)]
+def missing(entries: Sequence[str], items: Sequence[Json]) -> list[str]:
+    """The entries that name none of the folders or routines, by id or by exact title (C-3, C-16)."""
+    return [entry for entry in entries if not _matching(entry, items)]
 
 
-def _matching(entry: str, folders: Sequence[Json]) -> set[Any]:
-    """The folders one entry selects: the one with that id, else every one with that title (C-3)."""
-    by_id = {f["id"] for f in folders if str(f["id"]) == entry}
-    return by_id or {f["id"] for f in folders if f.get("title") == entry}
+def _matching(entry: str, items: Sequence[Json]) -> set[Any]:
+    """The folders or routines one entry selects: the one with that id, else every one with that title."""
+    by_id = {i["id"] for i in items if str(i["id"]) == entry}
+    return by_id or {i["id"] for i in items if i.get("title") == entry}
 
 
 class Routines:
     def __init__(
         self,
         hevy: Hevy,
-        entries: Sequence[str],
+        folders: Sequence[str],  # INCLUDE_HEVY_FOLDERS
         exercises: ExerciseMap,
         previous: Previous | None = None,  # None: ENABLE_PREVIOUS_VALUES is false
+        *,
+        routines: Sequence[str] = (),  # INCLUDE_HEVY_ROUTINES
     ) -> None:
         self._hevy = hevy
-        self._entries = tuple(entries)
+        self._folders = tuple(folders)
+        self._routines = tuple(routines)
         self._exercises = exercises
         self._previous = previous
-        self._missing: list[str] = []
+        self._missing: list[tuple[str, str]] = []  # (variable, entry), each logged once while it stays missing
 
     def check(self) -> None:
-        """At startup: list every folder so ids can be copied (F-11), and refuse a setting that names none (C-3).
+        """At startup: list every folder, and every routine once either is chosen, so ids can be copied (F-11).
 
-        Also the first call with the API key, so a rejected key shows here.
+        Refuses a setting that names none (C-3, C-16). Also the first call with the API key, so a rejected key
+        shows here.
         """
         folders = self._hevy.folders()
         for folder in folders:
             log.info("Hevy routine folder: id %s, title %r", folder["id"], folder.get("title"))
         if not folders:
             log.info("Hevy has no routine folders")
-        missing = missing_folders(self._entries, folders)
-        if missing:
+        routines: list[Json] = []
+        if self._folders or self._routines:
+            routines = list({r["id"]: r for r in self._hevy.routines()}.values())
+            for routine in routines:
+                log.info("Hevy routine: id %s, title %r", routine["id"], routine.get("title"))
+        unknown = missing(self._folders, folders)
+        if unknown:
             raise ConfigError(
-                f"INCLUDE_HEVY_FOLDERS names no Hevy folder: {', '.join(missing)}. "
+                f"INCLUDE_HEVY_FOLDERS names no Hevy folder: {', '.join(unknown)}. "
                 "Use a folder's id or its exact title from the list above."
+            )
+        unknown = missing(self._routines, routines)
+        if unknown:
+            raise ConfigError(
+                f"INCLUDE_HEVY_ROUTINES names no Hevy routine: {', '.join(unknown)}. "
+                "Use a routine's id or its exact title from the list above."
             )
 
     def plans(self) -> Plans:
@@ -65,22 +80,30 @@ class Routines:
         routines = {r["id"]: r for r in self._hevy.routines()}
         titles = {f["id"]: str(f.get("title") or "") for f in folders}
 
-        missing = missing_folders(self._entries, folders)
-        for entry in missing:
-            if entry not in self._missing:
+        gone = [("INCLUDE_HEVY_FOLDERS", entry) for entry in missing(self._folders, folders)]
+        gone += [("INCLUDE_HEVY_ROUTINES", entry) for entry in missing(self._routines, list(routines.values()))]
+        for variable, entry in gone:
+            if (variable, entry) not in self._missing:
+                folder = variable == "INCLUDE_HEVY_FOLDERS"
+                kept = "Its routines' Garmin workouts are kept as they are" if folder else "Its Garmin workout is kept"
                 log.error(
-                    "The Hevy folder %r in INCLUDE_HEVY_FOLDERS is gone (deleted or renamed). Its routines' Garmin "
-                    "workouts are kept as they are; fix the setting and restart.",
+                    "The Hevy %s %r in %s is gone (deleted or renamed). %s; fix the setting and restart.",
+                    "folder" if folder else "routine",
                     entry,
+                    variable,
+                    kept,
                 )
-        self._missing = missing
-        selected = set().union(*(_matching(entry, folders) for entry in self._entries))
+        self._missing = gone
+        chosen = bool(self._folders or self._routines)
+        folder_ids = set().union(*(_matching(entry, folders) for entry in self._folders))
+        routine_ids = set().union(*(_matching(entry, list(routines.values())) for entry in self._routines))
 
-        hold = bool(missing)
+        hold = bool(gone)
         workouts = []
         for routine in routines.values():
             folder_id = routine.get("folder_id")
-            if self._entries and folder_id not in selected:
+            # A routine syncs when its folder or the routine itself is chosen, or when nothing is (F-10).
+            if chosen and folder_id not in folder_ids and routine["id"] not in routine_ids:
                 continue
             if folder_id is not None and folder_id not in titles:
                 # The two lists were read a moment apart and disagree. Leave everything alone until they agree.
