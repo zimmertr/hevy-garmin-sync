@@ -95,6 +95,26 @@ class BuildTest(unittest.TestCase):
         self.assertIsNone(later["retry"])  # the page then shows next_daily_run
         self.assertEqual(sooner["retry"], soon.isoformat())
 
+    def test_a_workout_its_source_doesnt_list_shows_its_garmin_name_and_no_exercises(self) -> None:
+        # A held kind's workout the app keeps in Garmin, as after a restart with HEVY_SESSION rejected (W-8, #85).
+        lower = Workout(TRAINER, "t-1", "Hevy/Trainer: Lower (C2-W3)", ())
+        legs = Workout(ROUTINE, "r-1", "Hevy/Legs: Leg Day", ())
+        push = Workout(ROUTINE, "r-2", "Hevy: Push", (), title="Push")
+        reports = (
+            Report(lower, 7, None, fixtures.NOW, syncing=False),
+            Report(legs, 8, None, None, syncing=False),
+            Report(push, 9, None, None),
+        )
+        held, routine, listed = status.build(facts(*reports))["workouts"]
+        self.assertEqual(
+            (held["title"], held["syncing"], held["exercises"], held["garmin_id"], held["synced"]),
+            ("Lower (C2-W3)", False, [], 7, fixtures.NOW.isoformat()),
+        )
+        self.assertEqual(held["key"], status.build(facts(Report(lower, None, None, None)))["workouts"][0]["key"])
+        # A routine's Garmin name can't be split into folder and title for sure: a folder can hold ": ".
+        self.assertEqual((routine["title"], routine["folder"], routine["hevy_id"]), ("Hevy/Legs: Leg Day", None, "r-1"))
+        self.assertTrue(listed["syncing"])
+
     def test_each_workout_has_its_own_key_even_with_the_same_name_in_the_same_folder(self) -> None:
         # The page selects a workout and writes the URL's hash by this key (#85).
         first = Workout(ROUTINE, "r-1", "Hevy/PPL: Push", (), title="Push", folder="PPL")

@@ -702,6 +702,33 @@ class MoveTest(SyncCase):
         self.assertEqual(self.days(), {"Hevy: Pull": [self.TODAY]})
 
 
+class ReportTest(SyncCase):
+    def test_a_held_kinds_workouts_its_plans_dont_list_are_reported_as_not_syncing(self) -> None:
+        # After a restart with HEVY_SESSION rejected, Trainer's plan lists nothing, and the page still shows
+        # the Trainer workouts the app keeps in Garmin, by their Garmin name (W-2, W-8, #85).
+        lower = routine("t-lower", "Hevy/Trainer: Lower (C2-W3)", kind=workout.TRAINER)
+        self.sync.run([Plans(workout.ROUTINE, (self.push,)), Plans(workout.TRAINER, (lower,))], full=True)
+        self.time += timedelta(hours=1)
+        self.sync = self.new_sync()
+        self.sync.run([Plans(workout.ROUTINE, (self.push,)), Plans(workout.TRAINER, (), hold=True)], full=True)
+        push, held = self.sync.report()
+        self.assertTrue(push.syncing)
+        self.assertEqual(
+            (held.plan.kind, held.plan.source_id, held.plan.name, held.plan.exercises),
+            (workout.TRAINER, "t-lower", "Hevy/Trainer: Lower (C2-W3)", ()),
+        )
+        self.assertFalse(held.syncing)
+        self.assertEqual(held.garmin_id, self.id_of("Hevy/Trainer: Lower (C2-W3)"))
+        self.assertIsNotNone(held.synced)
+        self.assertEqual(held.synced, push.synced)  # both from Garmin's "Last updated", written at the first run
+        self.assertEqual((held.scheduled, held.refused, held.retry), (fixtures.TODAY, None, None))  # its entry stays
+
+    def test_a_workout_on_its_way_out_is_not_reported(self) -> None:
+        self.run_full(self.push, self.pull)
+        self.run_poll(self.push)  # Pull's routine is gone, not held: deleted at the next poll (F-14)
+        self.assertEqual([r.plan.name for r in self.sync.report()], ["Hevy: Push"])
+
+
 class CountsTest(unittest.TestCase):
     def test_the_summary_names_every_count(self) -> None:
         counts = Counts(created=1, failed=2)
