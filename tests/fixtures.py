@@ -46,6 +46,7 @@ from hevy_garmin_sync.preview import (
     trainer_program,
     trainer_template,
 )
+from hevy_garmin_sync.server import Answer
 from scripts.check_upstream import GARMIN_URL, HEVY_URL
 
 __all__ = [
@@ -320,12 +321,12 @@ class FakeRequests:
     """The app's door for a manual sync, answering what it is told to (W-3)."""
 
     def __init__(self) -> None:
-        self.answer: tuple[str, int] = ("started", 0)
+        self.answer: Answer | None = None  # None: started, as asked
         self.asked: list[bool] = []
 
-    def ask(self, force: bool) -> tuple[str, int]:
+    def ask(self, force: bool) -> Answer:
         self.asked.append(force)
-        return self.answer
+        return self.answer or Answer("started", force=force)
 
 
 class FakeLoop:

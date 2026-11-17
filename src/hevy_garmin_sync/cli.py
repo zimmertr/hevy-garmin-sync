@@ -44,17 +44,24 @@ def sync(force: bool, env: Mapping[str, str] = os.environ, out: TextIO | None = 
             if e.code == 429:
                 seconds = json.load(e).get("seconds")
                 print(f"A sync ended less than a minute ago. Try again in {seconds} seconds.", file=out)
+            elif e.code == 409:
+                print(f"No sync can run: {json.load(e).get('reason')}", file=out)
             else:
                 print(f"The app refused the request (HTTP {e.code}).", file=out)
         return 1
     except (urllib.error.URLError, OSError):
         print(f"The app isn't running here: nothing answers on port {port}.", file=out)
         return 1
-    kind = "A forced sync" if force else "A sync"
-    if answer.get("result") == "joined":
-        print("A sync is already running. Your request joined it.", file=out)
+    if answer.get("result") != "joined":
+        said = f"{'A forced sync' if force else 'A sync'} has started. The status page shows its progress."
+    elif not answer.get("running"):
+        # One still waiting to start takes a Force; one that runs has chosen what to write (W-4).
+        said = "A sync is waiting to start. Your request joined it" + (", and it is now forced." if force else ".")
+    elif force and not answer.get("force"):
+        said = "A sync is already running, so --force wasn't applied. Run `sync --force` again once it ends."
     else:
-        print(f"{kind} has started. The status page shows its progress.", file=out)
+        said = "A sync is already running. Your request joined it."
+    print(said, file=out)
     return 0
 
 

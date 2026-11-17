@@ -50,8 +50,19 @@ _HEADERS = {
 }
 
 
+@dataclass(frozen=True)
+class Answer:
+    """The door's answer to a manual sync (W-3), for the page, the API and `sync`."""
+
+    result: str  # started, joined, wait or refused
+    seconds: int = 0  # wait: the whole seconds left
+    force: bool = False  # started or joined: whether the sync will be forced
+    running: bool = False  # joined: the sync has begun, so a Force came too late to change it (W-4)
+    reason: str = ""  # refused: why no sync can run, with the fix
+
+
 class _Requests(Protocol):
-    def ask(self, force: bool) -> tuple[str, int]: ...
+    def ask(self, force: bool) -> Answer: ...
 
 
 class Loop(Protocol):
@@ -123,11 +134,14 @@ def route(method: str, target: str, headers: dict[str, str], loop: Loop, logs: L
             return _text(405, "Use POST")
         if not _same_origin(headers):
             return _text(403, "A sync can only be asked for from this app's own page")
-        force = query.get("force", ["false"])[0].lower() == "true"
-        result, seconds = loop.requests.ask(force)
-        if result == "wait":
-            return _json(429, {"result": "wait", "seconds": seconds}, {"Retry-After": str(seconds)})
-        return _json(202, {"result": result, "force": force})
+        answer = loop.requests.ask(query.get("force", ["false"])[0].lower() == "true")
+        if answer.result == "wait":
+            return _json(429, {"result": "wait", "seconds": answer.seconds}, {"Retry-After": str(answer.seconds)})
+        if answer.result == "refused":
+            return _json(409, {"result": "refused", "reason": answer.reason})
+        if answer.result == "joined":
+            return _json(202, {"result": "joined", "force": answer.force, "running": answer.running})
+        return _json(202, {"result": "started", "force": answer.force})
     return _text(404, "Not found")
 
 

@@ -7,6 +7,7 @@ from unittest import mock
 
 from hevy_garmin_sync import server
 from hevy_garmin_sync.logbuffer import LogBuffer
+from hevy_garmin_sync.server import Answer
 from tests import fixtures
 
 HOST = {"host": "nas.local:8080"}
@@ -79,14 +80,26 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(self.loop.requests.asked, [False, True])
 
     def test_a_sync_within_a_minute_is_refused_with_the_seconds_left(self) -> None:
-        self.loop.requests.answer = ("wait", 46)
+        self.loop.requests.answer = Answer("wait", 46)
         reply = self.route("POST", "/api/sync")
         self.assertEqual((reply.code, json.loads(reply.body)), (429, {"result": "wait", "seconds": 46}))
         self.assertEqual(reply.headers, {"Retry-After": "46"})
 
-    def test_a_sync_that_joins_one_says_so(self) -> None:
-        self.loop.requests.answer = ("joined", 0)
-        self.assertEqual(json.loads(self.route("POST", "/api/sync").body)["result"], "joined")
+    def test_a_sync_that_joins_one_says_so_whether_it_runs_and_whether_it_is_forced(self) -> None:
+        # So `sync --force` can say whether its force applied (W-4, #83).
+        self.loop.requests.answer = Answer("joined", force=False, running=True)
+        reply = self.route("POST", "/api/sync?force=true")
+        self.assertEqual(
+            (reply.code, json.loads(reply.body)), (202, {"result": "joined", "force": False, "running": True})
+        )
+
+    def test_a_sync_that_cant_run_is_refused_with_why(self) -> None:
+        self.loop.requests.answer = Answer("refused", reason="Garmin rejected the app's credentials.")
+        reply = self.route("POST", "/api/sync")
+        self.assertEqual(
+            (reply.code, json.loads(reply.body)),
+            (409, {"result": "refused", "reason": "Garmin rejected the app's credentials."}),
+        )
 
     def test_a_post_from_another_sites_page_is_refused_and_asks_for_nothing(self) -> None:
         reply = self.route("POST", "/api/sync?force=true", {"origin": "https://evil.example"})
@@ -133,7 +146,7 @@ class HandlerTest(unittest.TestCase):
 
     def test_a_post_reaches_the_route_and_its_extra_headers_are_sent(self) -> None:
         loop = fixtures.FakeLoop()
-        loop.requests.answer = ("wait", 5)
+        loop.requests.answer = Answer("wait", 5)
         connection = fixtures.FakeSocket(b"POST /api/sync HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n")
         handle = server.handler(loop, LogBuffer())
         handle(connection, ("127.0.0.1", 1234), mock.Mock())  # type: ignore[arg-type]

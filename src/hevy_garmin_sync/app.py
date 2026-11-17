@@ -102,13 +102,21 @@ class Requests:
     A request while one is waiting or running joins it. One within `GAP`
     seconds of the last manual sync's end is refused with the seconds left.
     The time lives in memory, so a restart clears it; a restart syncs anyway.
+    One while no sync can run, as with Hevy's or Garmin's sign-in rejected, is
+    refused with why, so nothing waits for a sync that never comes (#83).
     """
 
     GAP = 60.0
 
-    def __init__(self, clock: Callable[[], float], nudge: Callable[[], None]) -> None:
+    def __init__(
+        self,
+        clock: Callable[[], float],
+        nudge: Callable[[], None],
+        blocked: Callable[[], str | None] = lambda: None,  # why no sync can run, or None
+    ) -> None:
         self._clock = clock
         self._nudge = nudge  # wakes the loop from its wait
+        self._blocked = blocked
         self._guard = threading.Lock()
         self._pending = False
         self._fresh = False  # asked for since the loop last looked
@@ -116,26 +124,34 @@ class Requests:
         self.force = False
         self._ended = float("-inf")
 
-    def ask(self, force: bool) -> tuple[str, int]:
-        """`started`, `joined`, or `wait` with the whole seconds left."""
+    def ask(self, force: bool) -> server.Answer:
+        reason = self._blocked()
+        if reason:
+            return server.Answer("refused", reason=reason)
         with self._guard:
-            if self._pending or self._running:
-                if self._pending and not self._running:
-                    self.force = self.force or force  # a Force pressed before the sync starts still counts
-                return "joined", 0
-            left = self.GAP - (self._clock() - self._ended)
-            if left > 0:
-                return "wait", math.ceil(left)
-            self._pending, self._fresh, self.force = True, True, force
-        self._nudge()
-        return "started", 0
+            if self._running:
+                return server.Answer("joined", force=self.force, running=True)
+            if self._pending:
+                # A Force pressed before the sync starts makes it forced. The loop is woken to show it at once.
+                wake, self.force = force and not self.force, self.force or force
+                answer = server.Answer("joined", force=self.force)
+            else:
+                left = self.GAP - (self._clock() - self._ended)
+                if left > 0:
+                    return server.Answer("wait", math.ceil(left))
+                self._pending, self._fresh, self.force = True, True, force
+                wake = True
+                answer = server.Answer("started", force=force)
+        if wake:
+            self._nudge()
+        return answer
 
     def pending(self) -> bool:
         with self._guard:
             return self._pending
 
     def fresh(self) -> bool:
-        """True once per request: the first pass that sees it."""
+        """True once per request: the first pass that asks, which is the one that starts it."""
         with self._guard:
             fresh, self._fresh = self._fresh, False
             return fresh
@@ -216,7 +232,7 @@ class App:
         self._plans: list[Plans] | None = None
         # Until Hevy Trainer has answered once, its workouts in Garmin are left as they are.
         self._trainer_plans = Plans(TRAINER, (), hold=True)
-        self.requests = Requests(clock, nudge)
+        self.requests = Requests(clock, nudge, self._no_sync)
         # A rejected credential stops its service until the fix and a restart (W-8): service -> the fix.
         self._rejected: dict[str, str] = {}
         self._started = self._now()
@@ -238,6 +254,14 @@ class App:
     def ready(self) -> bool:
         """No sign-in is rejected (W-8)."""
         return not self._rejected
+
+    def _no_sync(self) -> str | None:
+        """Why no sync can run: Hevy's or Garmin's sign-in is rejected (W-3). Trainer's stops only Trainer (W-8)."""
+        for service in (HEVY, GARMIN):
+            fix = self._rejected.get(service)
+            if fix:
+                return f"{service} rejected the app's credentials. {fix[0].upper()}{fix[1:]}, then restart the app."
+        return None
 
     def run(self) -> int:
         try:
@@ -318,12 +342,13 @@ class App:
             if now.date() != day:
                 full = True  # the first run, and every local midnight (F-31)
             manual = self.requests.pending()
+            garmin_free = GARMIN not in self._rejected and self._garmin_backoff.ready()
             if manual:
                 full = True
-                if self.requests.fresh():
+                # Taken when it starts, not while it waits for Garmin: a Force that joined it meanwhile counts (W-4).
+                if garmin_free and self.requests.fresh():
                     self._take_request()
             changed = False
-            garmin_free = GARMIN not in self._rejected and self._garmin_backoff.ready()
             plans = self._read_hevy(manual and garmin_free)
             if plans is None and full:
                 # Hevy is down, but the calendar still rolls over on what Hevy said last.
@@ -366,8 +391,10 @@ class App:
                         self._last_manual = (self._now(), counts)
                         self.requests.end()
                         self._run = status.Run()
-            elif manual and GARMIN in self._rejected:
-                self.requests.begin()  # nothing to wait for: Garmin's sign-in needs fixing first
+            elif manual and (GARMIN in self._rejected or (plans is None and HEVY in self._rejected)):
+                # Rejected after the request was let in: nothing to wait for, as the sign-in needs fixing first.
+                log.warning("No manual sync can run: %s", self._no_sync())
+                self.requests.begin()
                 self.requests.end()
                 self._run = status.Run()
             if changed:
