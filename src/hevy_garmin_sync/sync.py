@@ -62,6 +62,8 @@ class _Known:
     workout_id: int
     version: str | None
     synced: datetime | None = None  # its last write, for the status page (W-2)
+    # Its name in Garmin, for the log: once its routine is gone from Hevy, nothing else says which it was (#81).
+    name: str = ""
 
 
 @dataclass
@@ -113,7 +115,7 @@ class Sync:
     # Workouts on today's calendar, also those whose entry id Garmin did not give,
     # so a poll never schedules one twice.
     _on_today: set[int] = field(default_factory=set)
-    _no_device_reported: bool = False
+    _no_device_reported: set[int] = field(default_factory=set)  # warned about once each, until a send works
     _desired_last: dict[Key, Workout] = field(default_factory=dict)  # what the last run planned, for report()
     _calendar_day: date | None = None  # the day today's entries are on
 
@@ -183,12 +185,12 @@ class Sync:
                 continue  # not the app's: never touched (F-12)
             key = (owner.kind, owner.source_id)
             if key in known:
-                log.warning("Two Garmin workouts claim %s %s; deleting %r", *key, item.get("workoutName"))
+                log.warning("[%s] Two Garmin workouts claim it, deleting one", item.get("workoutName"))
                 self.garmin.delete(int(item["workoutId"]))
                 counts.deleted += 1
             else:
                 synced = owner.updated.replace(tzinfo=self.now().tzinfo) if owner.updated else None
-                known[key] = _Known(int(item["workoutId"]), owner.version, synced)
+                known[key] = _Known(int(item["workoutId"]), owner.version, synced, str(item.get("workoutName") or ""))
         self._known = known
         # A workout deleted in Garmin Connect after it was queued for the watch is gone, and
         # Garmin answers a send of it with a 404 (a manual sync queues before this read; TJ, 2026-11-14).
@@ -205,7 +207,7 @@ class Sync:
             else:
                 empty.add(key)
                 if key not in self._empty:
-                    log.info("%r has no exercises, so it gets no Garmin workout", plan.name)
+                    log.info("[%s] No exercises, no Garmin workout", plan.name)
         self._empty = empty
         return desired
 
@@ -226,7 +228,7 @@ class Sync:
             # Only a full run or a retry that is due calls Garmin again, never every poll (F-4a, F-16).
             if not full and (refused.due is None or self.now() < refused.due):
                 return
-            log.info("Trying %r again, which Garmin refused", plan.name)
+            log.info("[%s] Trying again, Garmin refused it before", plan.name)
         stamped = workout.stamped(body, plan, self.now())
         try:
             if known:
@@ -242,7 +244,7 @@ class Sync:
             counts.failed += 1
             next_try = self._refuse(key, version, refused, today, str(e))
             log.error(
-                "Garmin refused %r (%d steps): %s. It is tried again %s, or as soon as the routine changes.",
+                '[%s] Garmin refused it: %d steps, "%s". Next try %s, or when it changes in Hevy',
                 plan.name,
                 workout.step_count(body),
                 e,
@@ -253,13 +255,14 @@ class Sync:
         if known:
             known.version = version
             known.synced = self.now()
+            known.name = plan.name
             counts.updated += 1
-            log.debug("Updated %r", plan.name)
+            log.debug("[%s] Updated in Garmin", plan.name)
             self._unsent.append(known.workout_id)
         else:
-            self._known[key] = _Known(created, version, self.now())
+            self._known[key] = _Known(created, version, self.now(), plan.name)
             counts.created += 1
-            log.debug("Created %r", plan.name)
+            log.debug("[%s] Created in Garmin", plan.name)
             # Queued before the calendar call: a failure there leaves the version current, so no
             # later run would write this workout, or send it, again (F-31a, O-3a).
             self._unsent.append(created)
@@ -272,7 +275,7 @@ class Sync:
 
         It also leaves the queue for the watch: a manual sync may have queued it,
         and Garmin answers a send of a deleted workout with a 404, which would
-        spend the one no-watch warning on a watch that works (TJ, 2026-11-14).
+        log a no-watch warning for a watch that works (TJ, 2026-11-14).
         """
         gone = self._known.pop(key).workout_id
         self._entries.pop(gone, None)
@@ -299,25 +302,34 @@ class Sync:
         refused.reason = reason
         self._refused[key] = refused
         due = refused.due.astimezone(now.tzinfo) if refused.due else None
-        return f"at {due:%H:%M}" if due and due.date() == today else "at midnight"
+        return f"{due:%H:%M}" if due and due.date() == today else "midnight"
 
     def _send(self) -> None:
         """Send every created or changed workout to the watch (F-31a).
 
         A workout stays queued when Garmin fails, so the send is retried with
-        the next run instead of being lost.
+        the next run instead of being lost. One Garmin refuses is warned about
+        once, by name, until a send of it works (#81).
         """
         while self._unsent:
+            workout_id = self._unsent[0]
             try:
-                self.garmin.send_to_device(self._unsent[0])
+                self.garmin.send_to_device(workout_id)
             except Refused as e:
-                if not self._no_device_reported:
-                    self._no_device_reported = True
+                if workout_id not in self._no_device_reported:
+                    self._no_device_reported.add(workout_id)
+                    names = {known.workout_id: known.name for known in self._known.values()}
                     log.warning(
-                        "Garmin did not take a workout for the watch's saved list (%s). It is still on the "
-                        "calendar. Does the account have a watch that has synced?",
+                        "[%s] Garmin didn't send it to the watch: %s. %s",
+                        names.get(workout_id) or workout_id,
                         e,
+                        # Only a workout on today still reaches the watch, through the calendar (F-31a).
+                        "Still on today's calendar, check the account has a watch that has synced"
+                        if self.scheduled and workout_id in self._on_today
+                        else "Check the account has a watch that has synced",
                     )
+            else:
+                self._no_device_reported.discard(workout_id)
             self._unsent.pop(0)
 
     def _delete_missing(self, desired: dict[Key, Workout], held: set[str], counts: Counts) -> None:
@@ -330,14 +342,14 @@ class Sync:
         """
         gone = {key for key in self._known if key not in desired and key[0] not in held}
         for key in gone & self._absent:
-            workout_id = self._known[key].workout_id
+            workout_id, name = self._known[key].workout_id, self._known[key].name
             if workout_id in self._entries:
                 self.garmin.unschedule(self._entries.pop(workout_id))
                 counts.unscheduled += 1
             self.garmin.delete(workout_id)
             self._forget(key)
             counts.deleted += 1
-            log.debug("Deleted the Garmin workout of %s %s", *key)
+            log.debug("[%s] Deleted from Garmin", name)
         self._absent = gone & self._known.keys()
 
     def _schedule(self, workout_id: int, day: date, counts: Counts) -> None:

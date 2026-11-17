@@ -34,8 +34,9 @@ class TrainerCase(unittest.TestCase):
         self.now = WEEK_8
         self.trainer = self.start()
 
-    def start(self, previous: bool = False) -> trainer.Trainer:
-        """A Trainer as the app makes it; with `previous`, as ENABLE_PREVIOUS_VALUES=true makes it."""
+    def start(self, previous: bool = False, scheduled: bool = True) -> trainer.Trainer:
+        """A Trainer as the app makes it; with `previous`, as ENABLE_PREVIOUS_VALUES=true makes it, and with
+        `scheduled` off, as ENABLE_SCHEDULED_WORKOUTS=false does."""
         public = hevy.Hevy("made-up-key", self.public)  # type: ignore[arg-type]
         return trainer.Trainer(
             HevyPrivate(
@@ -48,6 +49,7 @@ class TrainerCase(unittest.TestCase):
             fixtures.exercise_map(),
             lambda: self.now,
             Previous(public, lambda: self.now) if previous else None,
+            scheduled=scheduled,
         )
 
     def one(self, *exercises: dict[str, Any], **program: Any) -> None:
@@ -59,10 +61,10 @@ class TrainerCase(unittest.TestCase):
         self.private.workouts.append(logged_workout(template_id, start, sets))
 
     def said(self) -> list[str]:
-        """What a fresh start logs about each exercise, without the logger's prefix."""
+        """What a fresh start logs about each exercise, without the logger's prefix or the workout's name."""
         with self.assertLogs(LOGGER, "INFO") as logs:
             self.start().plans()
-        return [line.split("Hevy Trainer: ", 1)[1] for line in logs.output if "Hevy Trainer: " in line]
+        return [line.split("] ", 1)[1] for line in logs.output if ":[Hevy/Trainer: " in line]
 
     def sets(self) -> tuple[Set, ...]:
         """The sets of the first exercise of the first workout."""
@@ -130,15 +132,41 @@ class ProgramTest(TrainerCase):
                 ),
             ),
         )
-        said = "\n".join(logs.output)
-        self.assertIn("Hevy Trainer: Goblet Squat: 80 lbs (no change), warm-ups 30, 50", said)
-        self.assertIn("Hevy Trainer: Lying Leg Raise: 12-15 reps (up)", said)
-        self.assertIn("Hevy Trainer: Side Bend (Dumbbell): 40 lbs (up)", said)
-        self.assertIn(
-            "Walking Lunge (Dumbbell): no prescription (Trainer suggests no weight for a short_distance_weight "
-            "exercise on dumbbell equipment)",
-            said,
+        # O-3, #81: each line names its workout as Garmin and the watch show it.
+        self.assertEqual(
+            [line.split(":", 2)[2] for line in logs.output if "[Hevy/Trainer: " in line],
+            [
+                "[Hevy/Trainer: Lower (C2-W2)] Goblet Squat: 80 lbs, no change, warm-ups 30, 50",
+                "[Hevy/Trainer: Lower (C2-W2)] Walking Lunge (Dumbbell): no weight, Trainer suggests none for a "
+                "short_distance_weight exercise on dumbbell equipment",
+                "[Hevy/Trainer: Lower (C2-W2)] Lying Leg Raise: 12-15 reps, up",
+                "[Hevy/Trainer: Lower (C2-W2)] Side Bend (Dumbbell): 40 lbs, up",
+            ],
         )
+        # The status page keeps its own words for why there is no weight.
+        self.assertEqual(
+            lower.exercises[1].no_weight,
+            "Trainer suggests no weight for a short_distance_weight exercise on dumbbell equipment",
+        )
+
+    def test_an_exercise_in_two_workouts_logs_a_line_for_each_under_its_workouts_name(self) -> None:
+        upper = trainer_template("t-upper", "upper_2x_a", [trainer_exercise("T-SIDE-BEND")])
+        self.private.program = fixtures.trainer_program([fixtures.lower_template(), upper])
+        with self.assertLogs(LOGGER, "INFO") as logs:
+            self.trainer.plans()
+        bends = [line.split(":", 2)[2] for line in logs.output if "Side Bend" in line]
+        self.assertEqual(len(bends), 2)
+        self.assertEqual(bends[0], "[Hevy/Trainer: Lower (C2-W2)] Side Bend (Dumbbell): 40 lbs, up")
+        self.assertTrue(bends[1].startswith("[Hevy/Trainer: Upper (C2-W2)] Side Bend (Dumbbell): "), bends[1])
+
+    def test_a_new_week_logs_every_exercise_again_under_its_new_name(self) -> None:
+        self.trainer.plans()
+        self.now = datetime(2026, 11, 9, 9, 0, tzinfo=fixtures.ZONE)  # the Monday after
+        with self.assertLogs(LOGGER, "INFO") as logs:
+            self.trainer.plans()
+        said = [line.split(":", 2)[2] for line in logs.output if "[Hevy/Trainer: " in line]
+        self.assertEqual(len(said), 4)
+        self.assertTrue(all(line.startswith("[Hevy/Trainer: Lower (C2-W3)] ") for line in said), said)
 
     def test_the_plans_are_trainers_and_are_not_held(self) -> None:
         plans = self.trainer.plans()
@@ -250,7 +278,7 @@ class ReadingTest(TrainerCase):
         )
         self.poll()
         self.assertEqual(self.private.requests[-1][1], {"username": "someone", "limit": 3, "offset": 0})
-        self.assertIn("Side Bend (Dumbbell): 40 lbs (up)", self.said())
+        self.assertIn("Side Bend (Dumbbell): 40 lbs, up", self.said())
 
     def test_the_shape_of_the_unit_overrides_reply_is_logged_once_with_no_values(self) -> None:
         self.private.units = [{"exercise_template_id": "T-SIDE-BEND", "weight_unit": "kg"}]
@@ -274,7 +302,7 @@ class ReadingTest(TrainerCase):
         with self.assertLogs(LOGGER, "INFO") as logs:
             self.trainer.plans()
         self.assertEqual(len(logs.output), 1)
-        self.assertIn("Side Bend (Dumbbell): 45 lbs (up)", logs.output[0])
+        self.assertIn("Side Bend (Dumbbell): 45 lbs, up", logs.output[0])
 
 
 class CalendarTest(TrainerCase):
@@ -334,6 +362,22 @@ class NoNextWorkoutTest(TrainerCase):
                 with self.assertNoLogs(LOGGER, "WARNING"):
                     trainer.plans()
 
+    def test_the_warning_names_the_calendar_only_while_calendar_entries_are_on(self) -> None:
+        assert self.private.program is not None
+        self.private.program["next_workout_index"] = None
+        for scheduled, line in (
+            (
+                True,
+                "[Hevy Trainer] Program names no next workout: next_workout_index None. "
+                "Every workout not logged this week on today's calendar",
+            ),
+            (False, "[Hevy Trainer] Program names no next workout: next_workout_index None"),
+        ):
+            with self.subTest(scheduled=scheduled):
+                with self.assertLogs(LOGGER, "WARNING") as logs:
+                    self.start(scheduled=scheduled).plans()
+                self.assertEqual(logs.output, [f"WARNING:{LOGGER}:{line}"])
+
     def test_a_next_workout_with_no_id_is_no_next_workout(self) -> None:
         templates = [fixtures.lower_template(), {"key": "odd"}]
         self.private.program = fixtures.trainer_program(templates, next_workout_index=1)
@@ -375,7 +419,7 @@ class NoNextWorkoutTest(TrainerCase):
             fixtures.logged_lower(TUESDAY) | {"start_time": None},
         ]
         self.assertEqual(self.off(), frozenset())
-        self.assertIn("no prescription", self.said()[-1])
+        self.assertIn("no weight", self.said()[-1])
 
 
 class WeightTest(TrainerCase):
@@ -389,18 +433,18 @@ class WeightTest(TrainerCase):
         self.log(TUESDAY, {"T-SIDE-BEND": [logged_set(35, 9)] * 3})
         self.log(TUESDAY + timedelta(days=1), {"T-SIDE-BEND": [logged_set(50, 12)] * 3}, "t-lower")
         self.log(TUESDAY + timedelta(days=2), {"T-GOBLET": [logged_set(80, 4)] * 3})
-        self.assertEqual(self.said(), ["Side Bend (Dumbbell): 30 lbs (down)"])
+        self.assertEqual(self.said(), ["Side Bend (Dumbbell): 30 lbs, down"])
         self.assertEqual(self.sets(), (Set(rep_range=(10, 12), weight_kg=30 / LB),) * 3)
 
     def test_an_exercise_logged_twice_in_one_session_counts_the_first_time(self) -> None:
         twice = logged_workout("t-upper", TUESDAY, {"T-SIDE-BEND": [logged_set(35, 12)] * 3})
         twice["exercises"].append({"exercise_template_id": "T-SIDE-BEND", "sets": [logged_set(10, 12)] * 3})
         self.private.workouts.append(twice)
-        self.assertEqual(self.said(), ["Side Bend (Dumbbell): 40 lbs (up)"])
+        self.assertEqual(self.said(), ["Side Bend (Dumbbell): 40 lbs, up"])
 
     def test_a_set_from_the_public_api_names_its_type_type(self) -> None:
         self.log(TUESDAY, {"T-SIDE-BEND": [{"type": "normal", "reps": 12, "weight_kg": 35 / LB}] * 3})
-        self.assertEqual(self.said(), ["Side Bend (Dumbbell): 40 lbs (up)"])
+        self.assertEqual(self.said(), ["Side Bend (Dumbbell): 40 lbs, up"])
 
     def test_a_deload_week_takes_sixty_percent_and_its_sessions_are_not_history(self) -> None:
         self.one(trainer_exercise("T-SIDE-BEND"), trainer_exercise("T-LEG-RAISE"), deloads_enabled=True)
@@ -408,23 +452,23 @@ class WeightTest(TrainerCase):
         self.log(week_6, {"T-SIDE-BEND": [logged_set(35, 12)] * 3, "T-LEG-RAISE": [logged_set(None, 12)] * 3})
         self.now = week_6 + timedelta(days=8)
         self.assertEqual(
-            self.said(), ["Side Bend (Dumbbell): 25 lbs (deload week)", "Lying Leg Raise: 8-12 reps (deload week)"]
+            self.said(), ["Side Bend (Dumbbell): 25 lbs, deload week", "Lying Leg Raise: 8-12 reps, deload week"]
         )
         self.log(self.now, {"T-SIDE-BEND": [logged_set(25, 12)] * 3, "T-LEG-RAISE": [logged_set(None, 12)] * 3})
         self.now = WEEK_8
-        self.assertEqual(self.said(), ["Side Bend (Dumbbell): 40 lbs (up)", "Lying Leg Raise: 12-15 reps (up)"])
+        self.assertEqual(self.said(), ["Side Bend (Dumbbell): 40 lbs, up", "Lying Leg Raise: 12-15 reps, up"])
 
     def test_a_kilogram_account_is_rounded_to_its_kilogram_equipment(self) -> None:
         self.private.user["weight_unit"] = "kg"
         self.private.trainer = {"availableWeights": {"dumbbellsKg": [10, 10.5, 11]}}
         self.log(TUESDAY, {"T-SIDE-BEND": [{"indicator": "normal", "reps": 12, "weight_kg": 20}] * 3})
-        self.assertEqual(self.said(), ["Side Bend (Dumbbell): 21 kg (up)"])
+        self.assertEqual(self.said(), ["Side Bend (Dumbbell): 21 kg, up"])
         self.assertEqual(self.sets()[0].weight_kg, 21)
 
     def test_with_no_equipment_listed_hevys_usual_weights_are_used(self) -> None:
         self.private.trainer = {}
         self.log(TUESDAY, {"T-SIDE-BEND": [logged_set(35, 12)] * 3})
-        self.assertEqual(self.said(), ["Side Bend (Dumbbell): 40 lbs (up)"])
+        self.assertEqual(self.said(), ["Side Bend (Dumbbell): 40 lbs, up"])
 
     def test_an_exercise_the_user_logs_in_the_other_unit_is_rounded_in_that_unit(self) -> None:
         self.log(TUESDAY, {"T-SIDE-BEND": [logged_set(35, 12)] * 3})
@@ -441,11 +485,11 @@ class WeightTest(TrainerCase):
         for reply in understood:
             with self.subTest(reply=reply):
                 self.private.units = reply
-                self.assertEqual(self.said()[-1], "Side Bend (Dumbbell): 20 kg (up)")
+                self.assertEqual(self.said()[-1], "Side Bend (Dumbbell): 20 kg, up")
         for reply in not_understood:
             with self.subTest(reply=reply):
                 self.private.units = reply
-                self.assertEqual(self.said()[-1], "Side Bend (Dumbbell): 40 lbs (up)")
+                self.assertEqual(self.said()[-1], "Side Bend (Dumbbell): 40 lbs, up")
 
     def test_warm_ups_carry_the_rep_range_and_a_weight_and_a_third_one_no_weight(self) -> None:
         self.one(trainer_exercise("T-SIDE-BEND", warmups=3))
@@ -462,9 +506,9 @@ class WeightTest(TrainerCase):
 
     def test_an_exercise_logged_by_reps_alone_moves_its_rep_range_instead(self) -> None:
         self.one(trainer_exercise("T-LEG-RAISE", warmups=1))
-        self.assertEqual(self.said(), ["Lying Leg Raise: 10-12 reps (new exercise)"])
+        self.assertEqual(self.said(), ["Lying Leg Raise: 10-12 reps, new exercise"])
         self.log(TUESDAY, {"T-LEG-RAISE": [logged_set(None, 5)] * 3})
-        self.assertEqual(self.said(), ["Lying Leg Raise: 8-12 reps (down)"])
+        self.assertEqual(self.said(), ["Lying Leg Raise: 8-12 reps, down"])
         self.assertEqual(self.sets(), (Set(kind="warmup", rep_range=(8, 12)), *[Set(rep_range=(8, 12))] * 3))
 
     def test_rest_is_the_programs_and_zero_is_none(self) -> None:
@@ -484,30 +528,46 @@ class NoPrescriptionTest(TrainerCase):
         ]
 
     def test_an_exercise_trainer_gives_no_weight_for_has_none_and_the_log_says_why(self) -> None:
+        # The log's words, then the status page's, which stay as they were (#81).
         cases = [
             (
                 trainer_exercise("T-SWING"),
+                "Trainer suggests none for a weight_reps exercise on kettlebell equipment",
                 "Trainer suggests no weight for a weight_reps exercise on kettlebell equipment",
             ),
-            (trainer_exercise("T-PLANK"), "Trainer suggests no weight for a duration exercise on none equipment"),
-            (trainer_exercise("T-SIDE-BEND", kind="cardio"), "Trainer plans no weight or rep range for it"),
-            (trainer_exercise("T-SIDE-BEND", rep_range=None), "Trainer plans no weight or rep range for it"),
-            (trainer_exercise("T-DIP"), "it has not been logged in this workout yet"),
+            (
+                trainer_exercise("T-PLANK"),
+                "Trainer suggests none for a duration exercise on none equipment",
+                "Trainer suggests no weight for a duration exercise on none equipment",
+            ),
+            (
+                trainer_exercise("T-SIDE-BEND", kind="cardio"),
+                "Trainer plans no weight or rep range",
+                "Trainer plans no weight or rep range for it",
+            ),
+            (
+                trainer_exercise("T-SIDE-BEND", rep_range=None),
+                "Trainer plans no weight or rep range",
+                "Trainer plans no weight or rep range for it",
+            ),
+            (trainer_exercise("T-DIP"), "not logged in this workout yet", "it has not been logged in this workout yet"),
         ]
-        for exercise, reason in cases:
-            with self.subTest(reason=reason, exercise=exercise["exercise_template_id"]):
+        for exercise, said_why, page_why in cases:
+            with self.subTest(reason=said_why, exercise=exercise["exercise_template_id"]):
                 self.one(exercise)
                 self.private.workouts = [
                     logged_workout("t-upper", TUESDAY, {"T-SWING": [logged_set(35, 12)] * 3}),
                 ]
                 (said,) = self.said()
-                self.assertEqual(said.split(": ", 1)[1], f"no prescription ({reason})")
+                self.assertEqual(said.split(": ", 1)[1], f"no weight, {said_why}")
+                (planned,) = self.start().plans().workouts[0].exercises
+                self.assertEqual(planned.no_weight, page_why)
                 self.assertEqual({s.weight_kg for s in self.sets()}, {None})
 
     def test_a_last_session_with_no_working_set_gives_none(self) -> None:
         self.one(trainer_exercise("T-SIDE-BEND"))
         self.log(TUESDAY, {"T-SIDE-BEND": [logged_set(20, 12, "warmup")]})
-        self.assertIn("its last session has no working set", self.said()[0])
+        self.assertIn("no weight, last session has no working set", self.said()[0])
 
     def test_a_weighted_bodyweight_exercise_gets_a_weight_once_it_is_logged(self) -> None:
         self.one(trainer_exercise("T-DIP"))
@@ -515,7 +575,7 @@ class NoPrescriptionTest(TrainerCase):
         for spelling in hevy.WEIGHTED_BODYWEIGHT:
             with self.subTest(spelling):
                 self.public.templates[-2]["type"] = spelling
-                self.assertEqual(self.said(), ["Dip (Weighted): 25 lbs (up)"])
+                self.assertEqual(self.said(), ["Dip (Weighted): 25 lbs, up"])
 
     def test_an_assisted_exercise_is_marked_assisted_and_gets_no_weight(self) -> None:
         self.one(trainer_exercise("T-ASSIST"))
@@ -538,7 +598,7 @@ class NoPrescriptionTest(TrainerCase):
         self.assertEqual(second.title, "Something New")
         said = "\n".join(logs.output)
         self.assertIn("No exercise map row for Hevy exercise 'T-GONE'", said)
-        self.assertIn("Trainer suggests no weight for a unknown exercise on unknown equipment", said)
+        self.assertIn("no weight, Trainer suggests none for a unknown exercise on unknown equipment", said)
 
 
 class NewExerciseTest(TrainerCase):
@@ -556,7 +616,7 @@ class NewExerciseTest(TrainerCase):
     def test_the_weight_is_a_share_of_the_best_one_rep_max_of_the_last_three_months(self) -> None:
         # 100 kg for 5 is a one-rep max of 100 / 0.89 kg; 80% of that is 198.17 lb, and the bar loads 200.
         self.public.history["T-BENCH"] = [self.lifted(100, 5, 30), self.lifted(90, 5, 10), self.lifted(140, 5, 200)]
-        self.assertEqual(self.said(), ["Bench Press (Barbell): 200 lbs (new exercise), warm-ups 120"])
+        self.assertEqual(self.said(), ["Bench Press (Barbell): 200 lbs, new exercise, warm-ups 120"])
         self.assertEqual(
             self.sets(), (
                 Set(kind="warmup", rep_range=(4, 6), weight_kg=120 / LB),
@@ -566,11 +626,11 @@ class NewExerciseTest(TrainerCase):
 
     def test_with_nothing_in_three_months_the_last_twelve_count(self) -> None:
         self.public.history["T-BENCH"] = [self.lifted(140, 5, 200)]
-        self.assertEqual(self.said(), ["Bench Press (Barbell): 275 lbs (new exercise), warm-ups 165"])
+        self.assertEqual(self.said(), ["Bench Press (Barbell): 275 lbs, new exercise, warm-ups 165"])
 
     def test_the_history_is_asked_for_once_for_the_last_twelve_months(self) -> None:
         self.public.history["T-BENCH"] = [self.lifted(100, 5, None)]
-        self.assertEqual(self.said(), ["Bench Press (Barbell): 200 lbs (new exercise), warm-ups 120"])
+        self.assertEqual(self.said(), ["Bench Press (Barbell): 200 lbs, new exercise, warm-ups 120"])
         (asked,) = [params for path, params in self.public.requests if path == "/exercise_history/T-BENCH"]
         self.assertEqual(
             asked, {"start_date": hevy._utc(self.now - timedelta(days=365)), "end_date": hevy._utc(self.now)}
@@ -590,7 +650,7 @@ class NewExerciseTest(TrainerCase):
     def test_warm_up_sets_and_sets_of_no_reps_are_no_one_rep_max(self) -> None:
         self.public.history["T-BENCH"] = [self.lifted(200, 5, 10, "warmup"), self.lifted(100, 0, 10)]
         (said,) = self.said()
-        self.assertTrue(said.endswith("(it is new to this workout and nothing gives it a starting weight)"), said)
+        self.assertTrue(said.endswith("no weight, new to this workout, nothing gives it a starting weight"), said)
         self.assertEqual(self.sets(), (Set(kind="warmup", rep_range=(4, 6)), *[Set(rep_range=(4, 6))] * 3))
 
     def test_a_rep_range_trainer_has_no_share_for_gets_no_weight(self) -> None:
@@ -601,7 +661,7 @@ class NewExerciseTest(TrainerCase):
     def test_once_the_exercise_is_logged_in_this_workout_its_history_is_not_asked_for(self) -> None:
         self.log(TUESDAY, {"T-BENCH": [logged_set(135, 6)] * 3})
         # 5% over 135 lb is 141.75, and the nearest step up from 135 that the bar loads is 140.
-        self.assertEqual(self.said(), ["Bench Press (Barbell): 140 lbs (up), warm-ups 85"])
+        self.assertEqual(self.said(), ["Bench Press (Barbell): 140 lbs, up, warm-ups 85"])
         self.assertNotIn("/exercise_history/T-BENCH", [path for path, _ in self.public.requests])
 
 

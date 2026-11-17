@@ -29,26 +29,31 @@ ASSISTED = ("bodyweight_assisted", "bodyweight_assisted_reps")
 Json = dict[str, Any]
 
 
-def get_json(send: Callable[[], requests.Response]) -> Any:
-    """Run one request and return its JSON, or raise one of the app's own errors.
+def get_json(send: Callable[[], requests.Response], request: str) -> Any:
+    """Run one request and return its JSON, or raise one of the app's own errors, naming `request`.
 
     Shared with the private client (hevy_private.py): both services answer
     the same way.
     """
     try:
-        reply = send()
-    except requests.RequestException as e:
-        # Never the exception's text: it can carry the whole URL.
-        raise Unavailable(type(e).__name__) from e
-    if reply.status_code >= 400:
-        error = by_status(reply.status_code, f"HTTP {reply.status_code}: {reply.text[:200]}")
-        if isinstance(error, RateLimited):
-            error.retry_after = retry_after(reply)  # O-1, #27
-        raise error
-    try:
-        return reply.json()
-    except ValueError as e:
-        raise Unavailable(f"HTTP {reply.status_code} with a body that is not JSON") from e
+        try:
+            reply = send()
+        except requests.RequestException as e:
+            # Never the exception's text: it can carry the whole URL.
+            raise Unavailable(type(e).__name__) from e
+        if reply.status_code >= 400:
+            body = reply.text[:200].strip()
+            error = by_status(reply.status_code, f"HTTP {reply.status_code}" + (f", {body}" if body else ""))
+            if isinstance(error, RateLimited):
+                error.retry_after = retry_after(reply)  # O-1, #27
+            raise error
+        try:
+            return reply.json()
+        except ValueError as e:
+            raise Unavailable(f"HTTP {reply.status_code} with a body that is not JSON") from e
+    except ServiceError as e:
+        e.request = request
+        raise
 
 
 def by_status(status: int, message: str) -> ServiceError:
@@ -73,7 +78,8 @@ class Hevy:
     def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         self.calls += 1
         return get_json(
-            lambda: self._session.get(f"{BASE}{path}", headers=self._headers, params=params, timeout=TIMEOUT_SECONDS)
+            lambda: self._session.get(f"{BASE}{path}", headers=self._headers, params=params, timeout=TIMEOUT_SECONDS),
+            path.lstrip("/"),
         )
 
     def _pages(self, path: str, key: str, size: int = _PAGE, params: dict[str, Any] | None = None) -> Iterator[Json]:

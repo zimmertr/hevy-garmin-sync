@@ -139,6 +139,14 @@ class RequestTest(PrivateCase):
                 with self.assertRaises(expected):
                     self.client().user_preferences()
 
+    def test_an_error_names_its_request_by_its_path_alone_never_its_query(self) -> None:
+        # The query holds the username (#81).
+        self.api.fail(400)
+        with self.assertRaises(errors.Refused) as caught:
+            self.client().workouts_since("someone", NOW)
+        self.assertEqual(caught.exception.request, "user_workouts_paged")
+        self.assertNotIn("someone", f"{caught.exception.request} {caught.exception}")
+
     def test_a_rate_limit_carries_the_wait_hevy_asked_for(self) -> None:
         # The private client shares get_json, so Hevy Trainer honours Retry-After too (O-1, #27).
         self.api.fail(fixtures.rate_limited("120"))
