@@ -96,7 +96,7 @@ class StartupTest(RoutinesCase):
             self.assertRaisesRegex(errors.ConfigError, "INCLUDE_HEVY_FOLDERS names no Hevy folder: Legs, 99"),
         ):
             self.routines("42", "Legs", "99").check()
-        self.assertEqual(len(logs.output), 2)
+        self.assertEqual(len(logs.output), 5)  # the two folders, then the three routines
 
     def test_no_routine_is_logged_or_read_while_nothing_is_chosen(self) -> None:
         with self.assertLogs("hevy_garmin_sync.routines", "INFO") as logs:
