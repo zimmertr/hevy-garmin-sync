@@ -120,7 +120,9 @@ async function sync(force) {
     const body = await reply.json();
     if (body.result === "wait") {
       notice = { html: `The last sync ended ${60 - body.seconds} seconds ago. You can sync again in ${body.seconds} seconds.`, tone: "wait", until: Date.now() + 4000 };
-    } else if (body.result === "joined") {
+    } else if (body.result === "refused") {
+      notice = { html: `No sync can run: ${codeify(body.reason)}`, tone: "bad", until: Date.now() + 4000 };
+    } else if (body.result === "joined" && body.running) {
       notice = { html: "A sync is already running. Your request joined it.", tone: "blue", until: Date.now() + 4000 };
     } else {
       notice = null;
@@ -180,8 +182,10 @@ function renderControl() {
   $("#next-run").textContent = when(status.next_daily_run);
   $("#started").textContent = when(status.started);
   $("#zone").textContent = status.time_zone;
-  const busy = run.state !== "idle";
-  $("#sync").disabled = $("#force").disabled = busy || status.services.find((s) => s.name === "Garmin").state === "rejected";
+  // No sync can run while Hevy's or Garmin's sign-in is rejected (W-3). A sync waiting to start still takes a Force (W-4).
+  const blocked = status.services.some((s) => (s.name === "Hevy" || s.name === "Garmin") && s.state === "rejected");
+  $("#sync").disabled = blocked || run.state !== "idle";
+  $("#force").disabled = blocked || run.state === "running" || (run.state === "waiting" && run.force);
   const box = $("#notice");
   const garmin = status.services.find((s) => s.name === "Garmin");
   const rejected = status.services.filter((s) => s.state === "rejected").length;
@@ -195,7 +199,7 @@ function renderControl() {
   }
   if (run.state === "waiting") {
     const why = /rate limiting/.test(garmin.reason) ? "Garmin asked the app to slow down." : "Garmin can't be reached right now.";
-    box.innerHTML = msg(`Sync requested. ${why} Starts: ${esc(when(run.starts))}`, "wait");
+    box.innerHTML = msg(`${run.force ? "Force sync" : "Sync"} requested. ${why} Starts: ${esc(when(run.starts))}`, "wait");
     return;
   }
   if (notice && Date.now() < notice.until) { box.innerHTML = msg(notice.html, notice.tone); return; }

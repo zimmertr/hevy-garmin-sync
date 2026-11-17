@@ -24,6 +24,15 @@ from tests.fixtures import hevy_exercise, hevy_folder, hevy_routine, hevy_set, l
 
 Step = Callable[[], None] | None
 LOGGER = "hevy_garmin_sync"
+# Why no sync can run, as the page, the API and `sync` say it (W-3, #83).
+HEVY_REFUSED = (
+    "Hevy rejected the app's credentials. Check HEVY_API_KEY against https://hevy.com/settings?developer "
+    "(the key needs Hevy Pro), then restart the app."
+)
+GARMIN_REFUSED = (
+    "Garmin rejected the app's credentials. Run `login` again and set GARMIN_TOKEN to the value it prints, "
+    "then restart the app."
+)
 ERROR = "ERROR:hevy_garmin_sync.app:"
 
 
@@ -808,7 +817,7 @@ class ManualSyncTest(AppCase):
         answers: list[Answer] = []
         with self.assertLogs(LOGGER, "ERROR"):
             self.run_app(self.ask(answers=answers), None)
-        self.assertEqual(answers, [Answer("refused", reason="Garmin rejected the app's credentials. Run `login` again and set GARMIN_TOKEN to the value it prints, then restart the app.")])
+        self.assertEqual(answers, [Answer("refused", reason=GARMIN_REFUSED)])
         self.assertEqual(self.app.status["sync"]["state"], "idle")
         self.assertEqual(self.garmin_api.calls, [])
 
@@ -818,7 +827,7 @@ class ManualSyncTest(AppCase):
         answers: list[Answer] = []
         with self.assertLogs(LOGGER, "ERROR"):
             self.run_app(self.ask(answers=answers), self.ask(answers=answers), None)
-        refused = Answer("refused", reason="Hevy rejected the app's credentials. Check HEVY_API_KEY against https://hevy.com/settings?developer (the key needs Hevy Pro), then restart the app.")
+        refused = Answer("refused", reason=HEVY_REFUSED)
         self.assertEqual(answers, [refused, refused])
         self.assertEqual(self.nudged, [])
         self.assertEqual(self.app.status["sync"]["state"], "idle")
@@ -833,7 +842,7 @@ class ManualSyncTest(AppCase):
 
         with self.assertLogs(LOGGER, "WARNING") as logs:
             self.run_app(ask_then_reject, None)
-        self.assertIn(f"No manual sync can run: Hevy rejected the app's credentials. Check HEVY_API_KEY against https://hevy.com/settings?developer (the key needs Hevy Pro), then restart the app.", "\n".join(logs.output))
+        self.assertIn(f"No manual sync can run: {HEVY_REFUSED}", "\n".join(logs.output))
         self.assertEqual(self.app.status["sync"]["state"], "idle")
         self.assertFalse(self.app.requests.pending())
 
