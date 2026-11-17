@@ -433,6 +433,7 @@ $("#log").addEventListener("toggle", (event) => {
   store.set("log", event.target.open ? "1" : "");
   if (event.target.open) newLines().then(() => { $("#lines").scrollTop = $("#lines").scrollHeight; });
 });
+$("#settings").addEventListener("toggle", (event) => { store.set("settings", event.target.open ? "1" : ""); });
 // Browsers offer navigator.clipboard only over HTTPS and on localhost, and the page is often served over plain
 // HTTP on a home network. There a hidden textarea and execCommand("copy") still copy, inside the click.
 function copyByHand(text) {
@@ -476,5 +477,6 @@ window.addEventListener("hashchange", fromHash);
 setTheme(store.get("theme") || "system");
 if (store.get("only")) { $("#only").checked = true; $("#lines").classList.add("only"); }
 if (store.get("log")) $("#log").open = true;
+if (store.get("settings")) $("#settings").open = true;
 fromHash();
 refresh();

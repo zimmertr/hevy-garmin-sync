@@ -1,7 +1,8 @@
 /* The status page (spec W-2), as approved in the mockup on 2026-11-12. A control panel on top
-   (the sync buttons, the status line and the run facts, with Services beside them), the log folded
-   under it, then Workouts as a list beside a detail pane, then Settings. Long lists scroll inside
-   their own pane, so nothing below them moves. Colours: the bumper plates, blue for Sync. */
+   (the sync buttons, the status line and the run facts, with Services beside them), then Workouts
+   as a list beside a detail pane, then the log and Settings, both folded (TJ, 2026-11-16, #80).
+   Long lists scroll inside their own pane, so nothing below them moves. Colours: the bumper plates,
+   blue for Sync. */
 
 /* Barlow ships with the app (SIL Open Font License, OFL-Barlow.txt), so the page needs no internet. */
 @font-face { font-family: "Barlow"; font-weight: 400; font-style: normal; font-display: swap; src: url("/barlow-400.woff2") format("woff2"); }
@@ -122,12 +123,14 @@ code { font: .86em var(--mono); background: var(--panel-2); border: 1px solid va
 .wait { --c: var(--wait); --s: var(--wait-soft); }
 .bad { --c: var(--bad); --s: var(--bad-soft); }
 
+/* The folded panels, Log and Settings: closed until opened, and the page remembers which you left open. */
+.fold summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 18px; }
+.fold summary::-webkit-details-marker { display: none; }
+.chev { grid-column: 3; width: 18px; height: 18px; color: var(--muted); transition: transform .15s; }
+.fold[open] .chev { transform: rotate(180deg); }
+
 /* Log */
-.log summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 18px; }
-.log summary::-webkit-details-marker { display: none; }
 .log .latest { font: .8rem var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chev { width: 18px; height: 18px; color: var(--muted); transition: transform .15s; }
-.log[open] .chev { transform: rotate(180deg); }
 .log[open] .latest { visibility: hidden; }
 /* contain: a scroll that reaches the log's top or bottom stops there instead of moving the page. */
 .lines { border-top: 1px solid var(--line); height: 20rem; overflow: auto; overscroll-behavior: contain; padding: 6px 0 8px; font: .8rem/1.5 var(--mono); }
@@ -202,6 +205,7 @@ td .src code { font-size: .72rem; }
 .none { color: var(--muted); font-size: .85rem; white-space: normal; font-weight: 400; }
 
 /* Settings */
+.settings .note { border-top: 1px solid var(--line); padding: 10px 18px 0; color: var(--muted); font-size: .88rem; }
 .kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; margin: 0; padding: 4px 18px 14px; }
 .kv div { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
 .kv dt code { font-size: .8rem; }
