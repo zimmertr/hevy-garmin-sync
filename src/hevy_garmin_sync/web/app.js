@@ -314,10 +314,11 @@ function syncLine(w) {
 function notSyncingLine(w) {
   const name = w.kind === "trainer" ? "Hevy Trainer" : "Hevy";
   const source = status.services.find((s) => s.name === name);
-  const why = source && source.state === "rejected" ? `${name}'s sign-in was rejected`
-    : source && source.state === "waiting" ? `${name} is waiting${source.next_try ? ` until ${when(source.next_try)}` : ""}`
-    : `${name} doesn't list this workout now`;
-  return `${why}, so the app can't show this workout's exercises. Garmin has it as last synced${w.synced ? `, ${when(w.synced)}` : ""}.`;
+  const last = `Garmin has it as last synced${w.synced ? `, ${when(w.synced)}` : ""}.`;
+  if (source && source.state === "rejected") return `${name}'s sign-in was rejected, so the app can't show this workout's exercises. ${last}`;
+  if (source && source.state === "waiting") return `${name} is waiting${source.next_try ? ` until ${when(source.next_try)}` : ""}, so the app can't show this workout's exercises. ${last}`;
+  // Hevy works, so the routine's folder is what's missing: renamed or deleted (F-14a).
+  return `A folder in INCLUDE_HEVY_FOLDERS is gone from Hevy, so the app leaves this workout as it was. ${last}`;
 }
 
 // Draws the detail pane only when it changed, so a poll keeps a selection, and an opened refusal stays open.
@@ -348,7 +349,7 @@ function renderDetail() {
   }).join("");
   // No retry: the next daily run, which also comes before a retry that falls after it (status.py).
   const retry = esc(when(w.retry || status.next_daily_run));
-  const slot = !w.syncing ? `<p class="slot quiet whole">${esc(notSyncingLine(w))}</p>`
+  const slot = !w.syncing ? `<p class="slot quiet whole">${codeify(notSyncingLine(w))}</p>`
     : w.refused
     ? `<details class="slot bad"><summary><b>Refused by Garmin:</b> "${esc(w.refused)}" Next try: ${retry}, or press Sync now.</summary>
        <p>Garmin said: "${esc(w.refused)}" The app tries again on ${retry}. Sync now tries it at once.</p></details>`
