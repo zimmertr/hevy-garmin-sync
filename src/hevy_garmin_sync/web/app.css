@@ -182,6 +182,8 @@ code { font: .86em var(--mono); background: var(--panel-2); border: 1px solid va
 p.slot, .slot summary { padding: 9px 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .slot summary { list-style: none; cursor: pointer; }
 .slot summary::-webkit-details-marker { display: none; }
+/* A workout that isn't syncing has no table below, so its line wraps instead of cutting off. */
+p.slot.whole { white-space: normal; }
 .slot.bad { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 40%, transparent); color: var(--ink); }
 .slot.bad b { color: var(--bad); }
 .slot p { padding: 0 14px 10px; font-size: .86rem; }
@@ -229,7 +231,11 @@ td .report { font-size: .76rem; margin-left: 6px; }
 .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--panel); transition: transform .15s; }
 .switch input:checked { background: var(--blue); }
 .switch input:checked::after { transform: translateX(14px); }
-.lines.only .l.INFO { display: none; }
+/* Errors and warnings only: every level below WARNING goes, DEBUG too. */
+.lines.only .l:not(.WARNING, .ERROR, .CRITICAL) { display: none; }
+/* Copy log's textarea for plain HTTP, where the page has no navigator.clipboard: on the page, so it can be
+   selected, but never seen, and fixed so selecting it never scrolls the page. */
+.clipboard { position: fixed; top: 0; left: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; }
 
 
 /* Narrow screens */

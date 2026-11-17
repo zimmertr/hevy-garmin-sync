@@ -35,6 +35,9 @@ _FILES = {
     "/barlow-600.woff2": ("barlow-600.woff2", "font/woff2"),
     "/barlow-semi-condensed-700.woff2": ("barlow-semi-condensed-700.woff2", "font/woff2"),
 }
+# What the page polls every few seconds and the probes ask for: logged only when one fails, or
+# at LOG_LEVEL=DEBUG they would be most of the lines the page keeps (W-6).
+_POLLED = frozenset({"/api/status", "/api/logs", "/healthz", "/readyz"})
 # Everything the page loads comes from this port; nothing else may run or load.
 _HEADERS = {
     "Content-Security-Policy": (
@@ -98,7 +101,7 @@ def route(method: str, target: str, headers: dict[str, str], loop: Loop, logs: L
     url = urlsplit(target)
     query = parse_qs(url.query)
     path = url.path
-    if path in _FILES or path in ("/api/status", "/api/logs", "/healthz", "/readyz"):
+    if path in _FILES or path in _POLLED:
         if method != "GET":
             return _text(405, "Use GET")
         if path in _FILES:
@@ -148,6 +151,11 @@ def handler(loop: Loop, logs: LogBuffer) -> type[BaseHTTPRequestHandler]:
             self.wfile.write(reply.body)
 
         do_GET = do_POST = do_PUT = do_DELETE = _reply  # http.server calls do_<METHOD>
+
+        def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
+            polled = self.command == "GET" and urlsplit(self.path).path in _POLLED
+            if not (polled and isinstance(code, int) and 200 <= code < 300):
+                super().log_request(code, size)
 
         def log_message(self, format: str, *args: Any) -> None:
             log.debug("HTTP %s", format % args)

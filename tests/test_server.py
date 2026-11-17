@@ -115,9 +115,9 @@ class RouteTest(unittest.TestCase):
 class HandlerTest(unittest.TestCase):
     """The http.server wrapper, over an in-memory connection."""
 
-    def serve(self, raw: bytes) -> bytes:
+    def serve(self, raw: bytes, loop: fixtures.FakeLoop | None = None) -> bytes:
         connection = fixtures.FakeSocket(raw)
-        handle = server.handler(fixtures.FakeLoop(), LogBuffer())
+        handle = server.handler(loop or fixtures.FakeLoop(), LogBuffer())
         handle(connection, ("127.0.0.1", 1234), mock.Mock())  # type: ignore[arg-type]
         return connection.reply
 
@@ -142,8 +142,23 @@ class HandlerTest(unittest.TestCase):
 
     def test_requests_are_logged_at_debug_only(self) -> None:
         with self.assertLogs("hevy_garmin_sync.server", "DEBUG") as logs:
-            self.serve(b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
+            self.serve(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
         self.assertTrue(all(line.startswith("DEBUG") for line in logs.output))
+        self.assertIn('"GET / HTTP/1.1" 200', logs.output[0])
+
+    def test_the_pages_polls_and_the_probes_are_not_logged_when_they_succeed(self) -> None:
+        # At DEBUG they were most of the 5,000 lines the page keeps (W-6, #85).
+        for path in ("/api/status", "/api/logs?size=200", "/healthz", "/readyz"):
+            with self.subTest(path=path), self.assertNoLogs("hevy_garmin_sync.server", "DEBUG"):
+                self.serve(f"GET {path} HTTP/1.1\r\nHost: x\r\n\r\n".encode())
+
+    def test_a_poll_or_probe_that_fails_is_still_logged(self) -> None:
+        loop = fixtures.FakeLoop()
+        loop.is_alive = False
+        for path in ("/api/logs?size=0", "/healthz"):
+            with self.subTest(path=path), self.assertLogs("hevy_garmin_sync.server", "DEBUG") as logs:
+                self.serve(f"GET {path} HTTP/1.1\r\nHost: x\r\n\r\n".encode(), loop)
+            self.assertEqual(len(logs.output), 1)
 
 
 class StartTest(unittest.TestCase):

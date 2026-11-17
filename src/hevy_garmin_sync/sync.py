@@ -81,7 +81,7 @@ class _Refused:
 
 @dataclass(frozen=True)
 class Report:
-    """One planned workout as the status page shows it (W-2)."""
+    """One of the app's workouts as the status page shows it (W-2)."""
 
     plan: Workout
     garmin_id: int | None  # None until Garmin has it
@@ -89,6 +89,9 @@ class Report:
     synced: datetime | None
     refused: str | None = None  # Garmin's reason, while it refuses this version
     retry: datetime | None = None  # the next try; None with a refusal means the next full run
+    # False: a held kind's workout in Garmin that its plans don't list, as after a restart with
+    # HEVY_SESSION rejected (W-8). Its plan then holds only its kind, its id and its Garmin name.
+    syncing: bool = True
 
 
 # What Sync.run reports as it goes, for the status page's progress line (W-3):
@@ -117,6 +120,7 @@ class Sync:
     _on_today: set[int] = field(default_factory=set)
     _no_device_reported: set[int] = field(default_factory=set)  # warned about once each, until a send works
     _desired_last: dict[Key, Workout] = field(default_factory=dict)  # what the last run planned, for report()
+    _held_last: set[str] = field(default_factory=set)  # the kinds the last run held (F-14a), for report()
     _calendar_day: date | None = None  # the day today's entries are on
 
     @property
@@ -152,10 +156,11 @@ class Sync:
             self._follow_calendar(desired, off_calendar, today, counts)
         self._calendar_day = today
         self._desired_last = desired
+        self._held_last = held
         return counts
 
     def report(self) -> list[Report]:
-        """Every workout the last run planned, with what Garmin has of it (W-2)."""
+        """Every workout the last run planned, with what Garmin has of it, then the held ones it didn't (W-2)."""
         reports = []
         for key, plan in self._desired_last.items():
             known = self._known.get(key)
@@ -172,6 +177,15 @@ class Sync:
                     refused.due.astimezone(self.now().tzinfo) if refused and refused.due else None,
                 )
             )
+        # Kept in Garmin as they are, so the page lists them, by the name Garmin has (W-8, #85).
+        for key, known in self._known.items():
+            if key[0] in self._held_last and key not in self._desired_last:
+                on_today = known.workout_id in self._on_today
+                stand_in = Workout(key[0], key[1], known.name, ())
+                reports.append(
+                    Report(stand_in, known.workout_id, self._calendar_day if on_today else None, known.synced,
+                           syncing=False)
+                )
         return reports
 
     def _read_garmin(self, counts: Counts) -> None:

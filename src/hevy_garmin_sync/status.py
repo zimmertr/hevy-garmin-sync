@@ -6,13 +6,14 @@ It holds workout names, weights and the Garmin and Hevy workout ids for the
 page's links, never a key, token, cookie, username, email or account id (W-9).
 """
 
+import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
 from .sync import Counts, Report
-from .workout import ROUTINE, STATUTE_US, Exercise, LoggedSet, garmin_name
+from .workout import ROUTINE, STATUTE_US, TRAINER, Exercise, LoggedSet, garmin_name
 
 Json = dict[str, Any]
 
@@ -93,7 +94,7 @@ def build(facts: Facts) -> Json:
             "last_ended": _time(facts.last_manual),
             "last_counts": vars(facts.last_manual_counts) if facts.last_manual_counts else None,
         },
-        "workouts": [_workout(r, unit, facts.system) for r in facts.reports],
+        "workouts": [_workout(r, unit, facts.system, facts.next_daily_run) for r in facts.reports],
         "settings": dict(facts.settings),
     }
 
@@ -106,10 +107,20 @@ def _day(day: date | None) -> str | None:
     return day.isoformat() if day else None
 
 
-def _workout(report: Report, unit: str, system: str | None) -> Json:
+def _key(kind: str, source_id: str) -> str:
+    """A workout's own key for the page's rows and its URL: names repeat, ids don't, and no raw id is shown (W-9)."""
+    return hashlib.sha256(f"{kind}\0{source_id}".encode()).hexdigest()[:12]
+
+
+def _workout(report: Report, unit: str, system: str | None, next_daily_run: datetime) -> Json:
     plan = report.plan
+    # A retry gap can double past midnight, but the daily run tries every refused workout first (F-16).
+    retry = report.retry if report.retry and report.retry <= next_daily_run else None
     return {
-        "title": plan.title or plan.name,
+        "key": _key(plan.kind, plan.source_id),
+        # One its source doesn't list has only its Garmin name. Trainer's names it "Hevy/Trainer: <title>";
+        # a routine's stays whole, as a folder's name can hold ": " too.
+        "title": plan.title or (plan.name.removeprefix("Hevy/Trainer: ") if plan.kind == TRAINER else plan.name),
         "kind": plan.kind,
         "folder": plan.folder,
         # A routine's page on hevy.com takes its public API id (checked 2026-11-12); Trainer's templates have none.
@@ -118,7 +129,8 @@ def _workout(report: Report, unit: str, system: str | None) -> Json:
         "scheduled": _day(report.scheduled),
         "synced": _time(report.synced),
         "refused": report.refused,
-        "retry": _time(report.retry),
+        "retry": _time(retry),  # None: the next daily run
+        "syncing": report.syncing,
         "exercises": [_exercise(e, unit, system) for e in plan.exercises],
     }
 
