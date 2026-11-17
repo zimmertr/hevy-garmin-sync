@@ -46,6 +46,15 @@ class RouteTest(unittest.TestCase):
                 self.assertIn(name, page)
                 self.assertEqual(self.route("GET", name).code, 200)
 
+    def test_the_panels_come_in_order_and_the_log_and_settings_fold(self) -> None:
+        # Controls, Workouts, Log, then Settings (spec W-2, #80). The whole tags are matched, so neither
+        # folded panel carries `open`: both are closed on a first visit, until app.js restores what was left.
+        page = self.route("GET", "/").body.decode()
+        marks = ('aria-label="Sync and services"', "<h2>Workouts", '<details class="panel fold log" id="log">',
+                 '<details class="panel fold settings" id="settings">')
+        places = [page.index(mark) for mark in marks]
+        self.assertEqual(places, sorted(places))
+
     def test_the_status_is_the_one_the_loop_published(self) -> None:
         reply = self.route("GET", "/api/status")
         self.assertEqual((reply.code, reply.content_type), (200, "application/json"))
