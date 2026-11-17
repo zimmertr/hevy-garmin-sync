@@ -13,7 +13,7 @@ from datetime import date, datetime
 from typing import Any
 
 from .sync import Counts, Report
-from .workout import ROUTINE, STATUTE_US, Exercise, LoggedSet, garmin_name
+from .workout import ROUTINE, STATUTE_US, TRAINER, Exercise, LoggedSet, garmin_name
 
 Json = dict[str, Any]
 
@@ -118,7 +118,9 @@ def _workout(report: Report, unit: str, system: str | None, next_daily_run: date
     retry = report.retry if report.retry and report.retry <= next_daily_run else None
     return {
         "key": _key(plan.kind, plan.source_id),
-        "title": plan.title or plan.name,
+        # One its source doesn't list has only its Garmin name. Trainer's names it "Hevy/Trainer: <title>";
+        # a routine's stays whole, as a folder's name can hold ": " too.
+        "title": plan.title or (plan.name.removeprefix("Hevy/Trainer: ") if plan.kind == TRAINER else plan.name),
         "kind": plan.kind,
         "folder": plan.folder,
         # A routine's page on hevy.com takes its public API id (checked 2026-11-12); Trainer's templates have none.
@@ -128,6 +130,7 @@ def _workout(report: Report, unit: str, system: str | None, next_daily_run: date
         "synced": _time(report.synced),
         "refused": report.refused,
         "retry": _time(retry),  # None: the next daily run
+        "syncing": report.syncing,
         "exercises": [_exercise(e, unit, system) for e in plan.exercises],
     }
 

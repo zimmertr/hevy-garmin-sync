@@ -287,6 +287,7 @@ function renderWorkouts() {
 }
 
 function state(workout) {
+  if (!workout.syncing) return ["wait", "Not syncing"];
   if (workout.refused) return ["bad", "Refused"];
   return workout.garmin_id ? ["ok", "On Garmin"] : ["wait", "Not on Garmin yet"];
 }
@@ -306,6 +307,17 @@ function syncLine(w) {
   if (!down) return "Garmin Connect is in sync with Hevy.";
   const what = down.state === "rejected" ? `${down.name}'s sign-in was rejected.` : `${down.name} is waiting${down.next_try ? ` until ${when(down.next_try)}` : ""}.`;
   return `${what} This is the workout as last synced${w.synced ? `, ${when(w.synced)}` : ""}.`;
+}
+
+// A workout its source doesn't list, kept in Garmin as it was (W-8): the app knows its name and its Garmin
+// link, not its exercises. The source is down, or, with Hevy working, a folder in INCLUDE_HEVY_FOLDERS is gone.
+function notSyncingLine(w) {
+  const name = w.kind === "trainer" ? "Hevy Trainer" : "Hevy";
+  const source = status.services.find((s) => s.name === name);
+  const why = source && source.state === "rejected" ? `${name}'s sign-in was rejected`
+    : source && source.state === "waiting" ? `${name} is waiting${source.next_try ? ` until ${when(source.next_try)}` : ""}`
+    : `${name} doesn't list this workout now`;
+  return `${why}, so the app can't show this workout's exercises. Garmin has it as last synced${w.synced ? `, ${when(w.synced)}` : ""}.`;
 }
 
 // Draws the detail pane only when it changed, so a poll keeps a selection, and an opened refusal stays open.
@@ -336,7 +348,8 @@ function renderDetail() {
   }).join("");
   // No retry: the next daily run, which also comes before a retry that falls after it (status.py).
   const retry = esc(when(w.retry || status.next_daily_run));
-  const slot = w.refused
+  const slot = !w.syncing ? `<p class="slot quiet whole">${esc(notSyncingLine(w))}</p>`
+    : w.refused
     ? `<details class="slot bad"><summary><b>Refused by Garmin:</b> "${esc(w.refused)}" Next try: ${retry}, or press Sync now.</summary>
        <p>Garmin said: "${esc(w.refused)}" The app tries again on ${retry}. Sync now tries it at once.</p></details>`
     : w.garmin_id ? `<p class="slot quiet">${esc(syncLine(w))}</p>` : '<p class="slot quiet">Not on Garmin yet. It goes there at the next sync.</p>';
@@ -357,9 +370,9 @@ function renderDetail() {
       ${link("Garmin Connect", w.garmin_id && `https://connect.garmin.com/app/workout/${encodeURIComponent(w.garmin_id)}?workoutType=strength_training`, "Garmin doesn't have this workout yet")}
     </div>
     ${slot}
-    <div class="ex"><table>
+    ${w.syncing ? `<div class="ex"><table>
       <thead><tr><th>Hevy exercise</th><th>Garmin exercise</th><th>Sets</th><th>Weight</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>`);
+      <tbody>${rows}</tbody></table></div>` : ""}`);
 }
 
 function reportLink(exercise) {
