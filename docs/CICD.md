@@ -45,7 +45,7 @@ Every merge to main is a release (`release.yml`), one at a time. After the test,
 
 ## Before a merge
 
-Each of your PRs gets a preview once Argo CD syncs: the PR's code at `http://pr-<N>.atlas.sol.milkyway`, linked from a comment on the PR. A red banner names the PR and the commit. Its Hevy, Hevy Trainer and Garmin are made up and live in the pod, so its buttons are safe to press and nothing reaches your watch: five routines in two folders, a Trainer program, and one routine, Everything Day, that its Garmin refuses. It goes when the PR closes. A Renovate PR gets no preview until you add the `create pr container` label.
+Each of your PRs gets a preview once Argo CD syncs: the PR's code at its own `pr-<N>` address, linked from a comment on the PR. A red banner names the PR and the commit. Its Hevy, Hevy Trainer and Garmin are made up and live in the pod, so its buttons are safe to press and nothing reaches your watch: five routines in two folders, a Trainer program, and one routine, Everything Day, that its Garmin refuses. It goes when the PR closes. A Renovate PR gets no preview until you add the `create pr container` label.
 
 | You see | Do |
 |---|---|

@@ -1,4 +1,4 @@
-"""Last time's working sets of each exercise, for the note on the watch (spec F-30b, #3).
+"""Last time's working sets of each exercise, for the status page's "Last" line (spec F-30b, #3, #65).
 
 Last time is the newest logged workout, any workout, that holds the exercise
 and a working set of it. That is Hevy's default for its PREVIOUS column, and
@@ -46,8 +46,11 @@ class Previous:
         """Drop every exercise's sets, so each is read from Hevy again when next asked for (a forced sync, W-4)."""
         self._kept = {}
 
-    def sets(self, template_id: str) -> tuple[LoggedSet, ...]:
-        """The working sets of the exercise's last session, or none. One history read per exercise, ever."""
+    def sets(self, template_id: str, title: str = "") -> tuple[LoggedSet, ...]:
+        """The working sets of the exercise's last session, or none. One history read per exercise, ever.
+
+        `title` is Hevy's name for the exercise, for the log.
+        """
         if not template_id:
             return ()
         if template_id not in self._kept:
@@ -56,9 +59,9 @@ class Previous:
                 rows = self._hevy.exercise_history(template_id, now - timedelta(days=_HISTORY_DAYS), now)
             except Refused as e:
                 # Hevy won't give this one exercise's history, and asking again won't change that. The workout
-                # still syncs, without the lines, rather than every routine waiting on a note (O-1).
+                # still syncs, and only the status page goes without its last time (O-1).
                 log.warning(
-                    "Hevy gave no history for exercise %s (%s). Its notes won't list last time.", template_id, e
+                    "[Hevy] %s history refused: %s. No last time for it on the status page", title or template_id, e
                 )
                 rows = []
             self._kept[template_id] = _newest(rows)

@@ -116,7 +116,7 @@ class Routines:
             rest_seconds=_whole(exercise.get("rest_seconds")),
             superset=_whole(exercise.get("superset_id"), zero=True),
             assisted=template.get("type") in ASSISTED,
-            previous=self._previous.sets(template_id) if self._previous else (),
+            previous=self._previous.sets(template_id, title) if self._previous else (),
             chosen_by=garmin.chosen_by,
         )
 
