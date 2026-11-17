@@ -90,9 +90,28 @@ class SyncTest(unittest.TestCase):
         self.assertIn("A forced sync has started", out)
 
     def test_a_sync_already_running_is_joined(self) -> None:
-        code, out = self.run_sync(reply={"result": "joined", "force": False})
+        code, out = self.run_sync(reply={"result": "joined", "force": False, "running": True})
         self.assertEqual(code, 0)
-        self.assertIn("already running", out)
+        self.assertEqual(out, "A sync is already running. Your request joined it.\n")
+
+    def test_a_force_that_joins_a_running_sync_says_it_wasnt_applied(self) -> None:
+        # Once a sync runs, it has chosen what to write (W-4, #83).
+        _, out = self.run_sync("--force", reply={"result": "joined", "force": False, "running": True})
+        self.assertEqual(
+            out, "A sync is already running, so --force wasn't applied. Run `sync --force` again once it ends.\n"
+        )
+
+    def test_a_request_that_joins_a_waiting_sync_says_so_and_a_force_makes_it_forced(self) -> None:
+        _, plain = self.run_sync(reply={"result": "joined", "force": False, "running": False})
+        _, forced = self.run_sync("--force", reply={"result": "joined", "force": True, "running": False})
+        self.assertEqual(plain, "A sync is waiting to start. Your request joined it.\n")
+        self.assertEqual(forced, "A sync is waiting to start. Your request joined it, and it is now forced.\n")
+
+    def test_a_sync_that_cant_run_says_why_and_exits_one(self) -> None:
+        body = json.dumps({"result": "refused", "reason": "Garmin rejected the app's credentials."}).encode()
+        refused = urllib.error.HTTPError("http://x", 409, "Conflict", Message(), io.BytesIO(body))
+        code, out = self.run_sync(reply=refused)
+        self.assertEqual((code, out), (1, "No sync can run: Garmin rejected the app's credentials.\n"))
 
     def test_within_a_minute_of_the_last_it_says_how_long_to_wait_and_exits_one(self) -> None:
         refused = urllib.error.HTTPError(

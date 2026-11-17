@@ -17,6 +17,7 @@ import requests
 from hevy_garmin_sync import app, config, errors, garmin, hevy
 from hevy_garmin_sync.exercises import GarminExercise
 from hevy_garmin_sync.hevy_private import SESSION, HevyPrivate
+from hevy_garmin_sync.server import Answer
 from hevy_garmin_sync.store import Store
 from tests import fixtures
 from tests.fixtures import hevy_exercise, hevy_folder, hevy_routine, hevy_set, logged_set, logged_workout
@@ -724,7 +725,7 @@ class PreviousTest(AppCase):
 class ManualSyncTest(AppCase):
     """Sync now, Force sync and the `sync` command, through the one door the server uses (W-3, W-4)."""
 
-    def ask(self, force: bool = False, answers: list[tuple[str, int]] | None = None) -> Callable[[], None]:
+    def ask(self, force: bool = False, answers: list[Answer] | None = None) -> Callable[[], None]:
         def step() -> None:
             answer = self.app.requests.ask(force)
             if answers is not None:
@@ -764,13 +765,13 @@ class ManualSyncTest(AppCase):
         self.assertEqual(self.app.status["sync"]["last_counts"]["updated"], 2)
 
     def test_a_request_within_a_minute_of_the_last_is_refused_with_the_seconds_left(self) -> None:
-        answers: list[tuple[str, int]] = []
+        answers: list[Answer] = []
         self.run_app(self.ask(answers=answers), self.ask(answers=answers), HEVY_POLL_INTERVAL_SECONDS="20")
         # Asked at 20 s and run at once; asked again at 40 s, 20 s after it ended.
-        self.assertEqual(answers, [("started", 0), ("wait", 40)])
+        self.assertEqual(answers, [Answer("started"), Answer("wait", 40)])
 
     def test_a_request_while_one_waits_joins_it_and_a_force_still_counts(self) -> None:
-        answers: list[tuple[str, int]] = []
+        answers: list[Answer] = []
 
         def twice() -> None:
             answers.append(self.app.requests.ask(False))
@@ -778,7 +779,7 @@ class ManualSyncTest(AppCase):
             self.garmin_api.calls.clear()
 
         self.run_app(twice)
-        self.assertEqual(answers, [("started", 0), ("joined", 0)])
+        self.assertEqual(answers, [Answer("started"), Answer("joined", force=True)])
         self.assertEqual(self.garmin_api.calls.count("update_workout"), 2)
 
     def test_a_sync_asked_for_during_garmins_wait_runs_only_when_the_wait_ends(self) -> None:
@@ -802,13 +803,68 @@ class ManualSyncTest(AppCase):
         self.assertIn("push_workout_to_device", self.garmin_api.calls)
         self.assertEqual(self.app.status["sync"]["state"], "idle")
 
-    def test_a_sync_asked_for_while_garmins_sign_in_is_rejected_ends_at_once(self) -> None:
+    def test_a_sync_asked_for_while_garmins_sign_in_is_rejected_is_refused_with_the_fix(self) -> None:
         self.garmin_api.fail("get_user_profile", garminconnect.GarminConnectAuthenticationError("401"))
-        answers: list[tuple[str, int]] = []
+        answers: list[Answer] = []
         with self.assertLogs(LOGGER, "ERROR"):
             self.run_app(self.ask(answers=answers), None)
+        self.assertEqual(answers, [Answer("refused", reason="Garmin rejected the app's credentials. Run `login` again and set GARMIN_TOKEN to the value it prints, then restart the app.")])
         self.assertEqual(self.app.status["sync"]["state"], "idle")
         self.assertEqual(self.garmin_api.calls, [])
+
+    def test_a_sync_asked_for_while_hevys_key_is_rejected_is_refused_every_time(self) -> None:
+        # Before #83 the first request never ended, and every later one was told it had joined a sync.
+        self.hevy_api.fail(401)
+        answers: list[Answer] = []
+        with self.assertLogs(LOGGER, "ERROR"):
+            self.run_app(self.ask(answers=answers), self.ask(answers=answers), None)
+        refused = Answer("refused", reason="Hevy rejected the app's credentials. Check HEVY_API_KEY against https://hevy.com/settings?developer (the key needs Hevy Pro), then restart the app.")
+        self.assertEqual(answers, [refused, refused])
+        self.assertEqual(self.nudged, [])
+        self.assertEqual(self.app.status["sync"]["state"], "idle")
+
+    def test_a_sync_asked_for_before_hevys_key_is_rejected_ends_and_says_why(self) -> None:
+        # The startup check answers and the first read fails, so no plan exists when the key is rejected.
+        self.hevy_api.fail(None, 503)
+
+        def ask_then_reject() -> None:
+            self.app.requests.ask(False)
+            self.hevy_api.fail(401)
+
+        with self.assertLogs(LOGGER, "WARNING") as logs:
+            self.run_app(ask_then_reject, None)
+        self.assertIn(f"No manual sync can run: Hevy rejected the app's credentials. Check HEVY_API_KEY against https://hevy.com/settings?developer (the key needs Hevy Pro), then restart the app.", "\n".join(logs.output))
+        self.assertEqual(self.app.status["sync"]["state"], "idle")
+        self.assertFalse(self.app.requests.pending())
+
+    def test_a_force_that_joins_a_waiting_sync_makes_it_forced_from_the_start(self) -> None:
+        # W-4: it is logged as forced and reads last time's sets again, as a Force asked for at once would (#83).
+        def down() -> None:
+            self.garmin_api.fail("upload_workout", fixtures.garmin_error(503))
+            self.hevy_api.routines.append(hevy_routine("r-legs", "Legs", 42))
+
+        answers: list[Answer] = []
+        forced: list[bool] = []
+
+        def force() -> None:
+            answers.append(self.app.requests.ask(True))
+            self.hevy_api.requests.clear()
+            self.garmin_api.calls.clear()
+
+        def look() -> None:
+            forced.append(self.app.status["sync"]["force"])
+
+        with self.assertLogs(LOGGER, "INFO") as logs:
+            # Garmin fails at the first poll and is left alone for a minute. The sync asked for at 15 s waits,
+            # the Force at 30 s joins it, and the run starts once the wait ends.
+            self.run_app(down, self.ask(), force, look, None, None, None, HEVY_POLL_INTERVAL_SECONDS="15")
+        self.assertEqual(answers, [Answer("joined", force=True)])
+        self.assertEqual(forced, [True])
+        self.assertEqual(len(self.nudged), 2)  # the Force woke the loop, so the page shows it at once
+        asked = [line.partition("app:")[2] for line in logs.output if "Manual sync asked for" in line]
+        self.assertEqual(asked, ["Manual sync asked for (forced: every workout is rewritten)"])
+        self.assertEqual(self.garmin_api.calls.count("update_workout"), 2)
+        self.assertTrue(any(path.startswith("/exercise_history/") for path, _ in self.hevy_api.requests))
 
     def test_a_manual_sync_has_trainer_read_its_inputs_again_and_force_reads_last_times_sets_again(self) -> None:
         trainer = TrainerTest()
@@ -851,8 +907,24 @@ class RequestsTest(unittest.TestCase):
         requests = app.Requests(lambda: 0.0, lambda: None)
         requests.ask(False)
         requests.begin()
-        self.assertEqual(requests.ask(True), ("joined", 0))
+        self.assertEqual(requests.ask(True), Answer("joined", running=True))
         self.assertFalse(requests.force)  # the run already chose what to write
+
+    def test_a_request_while_no_sync_can_run_is_refused_with_why_and_wakes_nothing(self) -> None:
+        nudged: list[None] = []
+        requests = app.Requests(lambda: 0.0, lambda: nudged.append(None), blocked=lambda: "Garmin rejected it.")
+        self.assertEqual(requests.ask(True), Answer("refused", reason="Garmin rejected it."))
+        self.assertFalse(requests.pending())
+        self.assertEqual(nudged, [])
+
+    def test_only_a_force_that_changes_a_waiting_sync_wakes_the_loop(self) -> None:
+        nudged: list[None] = []
+        requests = app.Requests(lambda: 0.0, lambda: nudged.append(None))
+        answers = [requests.ask(False), requests.ask(False), requests.ask(True), requests.ask(True)]
+        self.assertEqual(
+            answers, [Answer("started"), Answer("joined"), Answer("joined", force=True), Answer("joined", force=True)]
+        )
+        self.assertEqual(len(nudged), 2)  # the start, and the Force that made it forced
 
 
 class BackoffTest(unittest.TestCase):
