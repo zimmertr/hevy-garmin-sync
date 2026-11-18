@@ -193,6 +193,46 @@ class WeightTest(unittest.TestCase):
         self.assertEqual(tr.Prescription("none", 20, "kg", (10,)).warmups_kg, (10,))
 
 
+class MissedTargetsTest(unittest.TestCase):
+    """The 13 Nov Upper missed targets, and the Hevy app agreed with these on 2026-11-17 (#64, D-10).
+
+    Rep range 4-6: Seal Row showed it, and Pullover going up at 6 reps puts its top at 6.
+    """
+
+    def test_a_mixed_session_holds_at_the_lightest_normal_set(self) -> None:
+        # Seal Row: dumbbells mixed up mid-exercise, so 50x6, 90x4, 70x6 after two warm-ups.
+        log = sets(6, weight=35, kind="warmup") + sets(6, weight=50, kind="warmup")
+        log += sets(6, weight=50) + sets(4, weight=90) + sets(6, weight=70)
+        found = tr.next_weight([log], 3, (4, 6), 2, DUMBBELLS, False)
+        assert found is not None
+        self.assertEqual((found.direction, found.weight, found.warmups), ("none", 50, (20, 30)))
+
+    def test_one_light_set_at_the_top_is_the_base_of_the_increase(self) -> None:
+        # Pullover: 17.5x6, 30x6, 30x6, and the app showed 20 lb.
+        found = tr.next_weight([sets(6, weight=17.5) + sets(6, 6, weight=30)], 3, (4, 6), 0, DUMBBELLS, False)
+        assert found is not None
+        self.assertEqual((found.direction, found.weight), ("increase", 20))
+
+
+class RepeatTest(unittest.TestCase):
+    def test_the_last_sessions_working_sets_come_back_as_they_were(self) -> None:
+        log: list[dict[str, Any]] = [
+            {"type": "warmup", "weight_kg": kg(10), "distance_meters": 9.144},
+            {"type": "normal", "weight_kg": kg(25), "distance_meters": 22.86, "duration_seconds": None},
+            {"type": "normal", "weight_kg": None, "distance_meters": None, "duration_seconds": 45},
+        ]
+        found = tr.repeat(log, "lbs")
+        assert found is not None
+        self.assertEqual((found.direction, found.weight, found.unit), ("repeat", 25, "lbs"))
+        self.assertEqual(found.repeated, (tr.Repeated(kg(25), 22.86, None), tr.Repeated(None, None, 45)))
+
+    def test_no_working_set_gives_nothing_and_no_weight_logs_none(self) -> None:
+        self.assertIsNone(tr.repeat([{"type": "warmup", "weight_kg": kg(10)}], "lbs"))
+        found = tr.repeat([{"type": "normal", "distance_meters": 20}], "kg")
+        assert found is not None
+        self.assertIsNone(found.weight)
+
+
 class WarmupTest(unittest.TestCase):
     def test_one_warm_up_is_sixty_percent_and_two_are_forty_and_sixty(self) -> None:
         # Goblet Squat, checked against the app: 80 lb working sets gave warm-ups of 30 and 50 lb.

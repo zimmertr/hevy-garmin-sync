@@ -37,8 +37,9 @@ nothing made anywhere, and not held back by an earlier run that wasn't cleaned u
 
 `notes` checks each set's note as the app writes it (spec F-30): one Garmin sign-in and no Hevy
 read. It creates `HGS check notes`, built by the app's own `workout.build`: a warm-up and a Normal Set
-whose Garmin name differs from Hevy's, a Failure Set with a decimal weight, a Drop Set, a timed set,
-and one set whose note ends with a line of symbols, to see which ones the watch's font draws. It reads
+of an exercise Garmin names differently, a Failure Set with a decimal weight, a Drop Set, a timed set,
+a set with a distance and a weight, and one set whose note ends with a line of symbols, to see which
+ones the watch's font draws. Every note starts with Hevy's name. It reads
 the workout back and says whether Garmin stored every note whole, then puts it on today and sends it
 to the watch. `cleanup` removes it like the others.
 
@@ -106,9 +107,10 @@ SET_EXERCISES = (
     Exercise("Check", "CRUNCH", "CRUNCH", (_TEN,) * 2, superset=1),
     Exercise("Check", "SQUAT", "SQUAT", (_TEN,) * 2, rest_seconds=60, superset=1),
 )
-# `HGS check notes`: the notes the app writes, one of each shape (F-30; TJ, 2026-11-13). The weights
-# are pounds as Hevy stores them, in kilograms.
+# `HGS check notes`: the notes the app writes, one of each shape (F-30; TJ, 2026-11-13 and 2026-11-17).
+# The weights are pounds and the distance yards, as Hevy stores them, in kilograms and meters.
 _LB = 2.2046226218
+_YARD = 0.9144
 CHECK_NOTES = (
     Exercise(
         "Seal Row (Dumbbell)",
@@ -124,6 +126,7 @@ CHECK_NOTES = (
     ),
     Exercise("Hammer Curl (Dumbbell)", "CURL", "DUMBBELL_HAMMER_CURL", (Set(kind="dropset", rep_range=(8, 12)),)),
     Exercise("Plank", "PLANK", "PLANK", (Set(seconds=30),)),
+    Exercise("Walking Lunge (Dumbbell)", "LUNGE", "DUMBBELL_LUNGE", (Set(meters=25 * _YARD, weight_kg=25 / _LB),)),
     Exercise("Crunch", "CRUNCH", "CRUNCH", (Set(reps=10),)),
 )
 # Appended to the last note: which of these the watch draws decides whether a note can use them.
@@ -772,9 +775,9 @@ def check_notes(
         print(line, file=out)
     print(
         "\nSync the watch and start it. During each set, open the note's own screen and photograph it. Does "
-        "each line stay whole? Does the Hevy name wrap cleanly? Does the warm-up wait for the Lap press? "
-        "Which symbols in the last note does the watch draw? Then discard the activity and run "
-        "`make live-cleanup`.",
+        "the first line show Hevy's name, and does it wrap cleanly? Does each other line stay whole? "
+        "Does the warm-up wait for the Lap press? Which symbols in the last note does the watch draw? Then "
+        "discard the activity and run `make live-cleanup`.",
         file=out,
     )
     return 0

@@ -516,25 +516,28 @@ class NotesTest(LiveCheckCase):
         self.assertEqual(self.tokens, [TOKEN])
         self.assertIsNone(workout.owner(stored["description"]))
         self.assertIn(f"{lc.NOTES_WORKOUT} is on today's calendar and on its way to the watch", out)
-        row = "Chest Supported Dumbbell Row"
-        self.assertIn(f"1. {row}: Warm Up Set / 4-6 Reps / 35 lbs / Hevy: Seal Row (Dumbbell)\n", out)
-        self.assertIn(f"2. {row}: Normal Set / 4-6 Reps / 90 lbs / Hevy: Seal Row (Dumbbell)\n", out)
-        self.assertIn("6. Crunch: Normal Set / 10 Reps / x \u00d7", out)
+        row, seal = "Chest Supported Dumbbell Row", "Seal Row (Dumbbell)"
+        self.assertIn(f"1. {row}: {seal} / Warm Up Set / 4-6 Reps / 35 lbs\n", out)
+        self.assertIn(f"2. {row}: {seal} / Normal Set / 4-6 Reps / 90 lbs\n", out)
+        lunge = "Walking Lunge (Dumbbell)"
+        self.assertIn(f"6. Dumbbell Lunge: {lunge} / Normal Set / 25 yd / 25 lbs\n", out)
+        self.assertIn("7. Crunch: Crunch / Normal Set / 10 Reps / x \u00d7", out)
         self.assertIn("\U0001f3cb\nGarmin stored every note whole.\n", out)
-        self.assertIn("Which symbols in the last note does the watch draw?", out)
+        self.assertIn("Does the first line show Hevy's name, and does it wrap cleanly?", out)
 
     def test_each_note_is_the_apps_own_and_the_last_ends_with_the_symbols(self) -> None:
         body = lc.notes_body("statute_us")
         found = list(lc.sets(body))
         self.assertEqual(
-            [s["description"] for s in found],
+            [s["description"].split("\n", 1) for s in found],
             [
-                "Warm Up Set\n4-6 Reps\n35 lbs\nHevy: Seal Row (Dumbbell)",
-                "Normal Set\n4-6 Reps\n90 lbs\nHevy: Seal Row (Dumbbell)",
-                "Failure Set\n8 Reps\n17.5 lbs\nHevy: Pullover (Dumbbell)",
-                "Drop Set\n8-12 Reps",
-                "Normal Set\n0:30",
-                f"Normal Set\n10 Reps\n{lc.SYMBOLS}",
+                ["Seal Row (Dumbbell)", "Warm Up Set\n4-6 Reps\n35 lbs"],
+                ["Seal Row (Dumbbell)", "Normal Set\n4-6 Reps\n90 lbs"],
+                ["Pullover (Dumbbell)", "Failure Set\n8 Reps\n17.5 lbs"],
+                ["Hammer Curl (Dumbbell)", "Drop Set\n8-12 Reps"],
+                ["Plank", "Normal Set\n0:30"],
+                ["Walking Lunge (Dumbbell)", "Normal Set\n25 yd\n25 lbs"],
+                ["Crunch", f"Normal Set\n10 Reps\n{lc.SYMBOLS}"],
             ],
         )
         self.assertEqual(found[0]["endCondition"]["conditionTypeKey"], "reps")
@@ -548,8 +551,8 @@ class NotesTest(LiveCheckCase):
         self.assertEqual(
             lc.notes_kept(sent, stored),
             [
-                "Garmin stored 20 of the 52 characters of exercise 2's note.",
-                "Garmin stored 0 of the 53 characters of exercise 3's note.",
+                "Garmin stored 20 of the 46 characters of exercise 2's note.",
+                "Garmin stored 0 of the 47 characters of exercise 3's note.",
             ],
         )
 

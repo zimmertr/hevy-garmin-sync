@@ -1,6 +1,6 @@
 # 0017. Each set's note shows the set as the watch's set-info screen does, with Hevy's name when Garmin's differs
 
-- Status: Accepted. Supersedes 0015 in part
+- Status: Accepted. Supersedes 0015 in part. Superseded in part by 0019
 - Date: 2026-11-13
 - Decider: TJ, after an arm day with the notes of 0015, in the session that opened #64
 - Issues and PRs: #64, #65

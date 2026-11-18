@@ -75,7 +75,7 @@ class LoggedSet:
 
 @dataclass(frozen=True)
 class Exercise:
-    title: str  # Hevy's title, for the notes when it differs from Garmin's name
+    title: str  # Hevy's title, the first line of every set's note
     category: str  # Garmin's exercise category key
     name: str  # Garmin's exercise key
     sets: tuple[Set, ...]
@@ -317,15 +317,17 @@ def _distance(meters: float, system: str | None) -> str:
 
 
 def _note(current: Set, exercise: Exercise, system: str | None) -> str:
-    """The set as Garmin's own set-info screen shows it, under Hevy's name for the set type (F-30).
+    """Hevy's name for the exercise, then the set as Garmin's own set-info screen shows it (F-30).
 
     The set-info screen is buried in the step list, while the note is one
-    page down during the set (TJ, 2026-11-13). Each part has a line of its
-    own, so the watch breaks none of them in two, and Hevy's exercise name goes
-    last, where a long one can wrap. Matching sets get matching notes, so they
-    still share a repeat group (F-20a).
+    page down during the set (TJ, 2026-11-13). The name goes first because
+    the watch shows Garmin's name elsewhere, and Garmin keeps no name of the
+    app's (TJ, 2026-11-17). It is in plain letters: the Fenix 8 draws
+    Unicode's bold ones as unknown characters. Each part has a line of its
+    own, so the watch breaks none of them in two. Matching sets get matching
+    notes, so they still share a repeat group (F-20a).
     """
-    lines = [_SET_LABELS.get(current.kind, "Normal Set")]
+    lines = [exercise.title, _SET_LABELS.get(current.kind, "Normal Set")]
     if current.rep_range or current.reps:
         low, high = current.rep_range or (current.reps or 0, current.reps or 0)
         count = f"{low}-{high}" if low != high else str(high)
@@ -339,9 +341,6 @@ def _note(current: Set, exercise: Exercise, system: str | None) -> str:
         lines.append(f"Assisted {weight}" if exercise.assisted else weight)
     elif exercise.assisted:
         lines.append("Assisted")
-    # Only when Garmin's name says something Hevy's doesn't: `Arnold Press` for `Arnold Press (Dumbbell)` is no news.
-    if not _words(garmin_name(exercise.category, exercise.name)) <= _words(exercise.title):
-        lines.append(f"Hevy: {exercise.title}")
     return "\n".join(lines)
 
 
@@ -361,12 +360,3 @@ def _weight(kg: float, system: str | None) -> str:
 def garmin_name(category: str, name: str) -> str:
     """Garmin's key as words: BARBELL_BACK_SQUAT is Barbell Back Squat."""
     return (name or category).replace("_", " ").title()
-
-
-def _words(title: str) -> set[str]:
-    """A name's words, any order and singular, so `Bicep Curl (Dumbbell)` holds Garmin's `Dumbbell Biceps Curl`.
-
-    Garmin spells dumbbell `DUMBELL` in some keys, and joins words with `WITH`.
-    """
-    words = {w.replace("dumbell", "dumbbell") for w in re.findall(r"[a-z0-9]+", title.lower())}
-    return {w[:-1] if len(w) > 3 and w.endswith("s") else w for w in words} - {"with"}
