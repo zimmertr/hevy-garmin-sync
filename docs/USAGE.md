@@ -10,16 +10,17 @@ What you see when it runs, and what to do when it breaks.
 - Every routine is on today's calendar, so the watch offers them when you start a strength activity. Of the Trainer workouts, only the one Hevy says is next is on the calendar. When that changes in Hevy, because you logged one or reordered them, the calendar follows within a minute. The others stay in the watch's saved workouts.
 - With many workouts on today, the watch's prompt lists them all under "Dismiss" (eight, on 2026-11-10). Dismiss it and it comes back the next time you start a strength activity. Once you've done one of today's workouts, the prompt stops offering that one and keeps the others; it is still in the saved list. One evening the next Trainer workout was missing from the prompt as well, after another workout had been recorded that day (spec U-10); it was still in the saved list.
 - A change in Hevy reaches Garmin Connect within a minute, and the watch at its next sync with your phone.
-- Every set has a note, one page down from the main screen during the set. It shows what the watch's set-info screen shows, which is otherwise buried in the step list, under Hevy's name for the set type:
+- Every set has a note, one page down from the main screen during the set. It starts with Hevy's name for the exercise in bold, then shows what the watch's set-info screen shows, which is otherwise buried in the step list:
 
-  ```
+  ```text
+  𝗦𝗲𝗮𝗹 𝗥𝗼𝘄 (𝗗𝘂𝗺𝗯𝗯𝗲𝗹𝗹)
   Warm Up Set
   4-6 Reps
   35 lbs
-  Hevy: Seal Row (Dumbbell)
   ```
 
-  The type is `Warm Up Set`, `Normal Set`, `Failure Set` or `Drop Set`. The target is the reps, a time such as `0:30`, or a distance such as `22 yd`. A weight is whole unless Hevy has a fraction (`17.5 lbs`), and an assisted exercise's weight reads `Assisted 20 lbs`. The last line is Hevy's name for the exercise, only when Garmin's name has a word Hevy's doesn't: `Arnold Press` for Hevy's `Arnold Press (Dumbbell)` gets none.
+  The watch's own screens always show Garmin's name for the exercise, because Garmin drops any other name the app sends, so the note is where Hevy's shows. The bold is Unicode's bold letters, since a note is plain text. The type is `Warm Up Set`, `Normal Set`, `Failure Set` or `Drop Set`. The target is the reps, a time such as `0:30`, or a distance such as `22 yd`. A weight is whole unless Hevy has a fraction (`17.5 lbs`), and an assisted exercise's weight reads `Assisted 20 lbs`.
+- A Hevy Trainer exercise logged by weight and distance, such as Walking Lunge (Dumbbell), gets last session's weight and distance, as the Hevy app fills them in. Its set ends when you press Lap.
 - A warm-up gets the same rep range as the sets after it, as the Hevy app shows it. Like every set with reps, it waits for the Lap press.
 - An exercise swapped in a Trainer workout reaches Garmin only when you answer "Replace permanently?" with Yes. A swap for that workout only (No) stays on your phone, and the watch keeps the old exercise ([issue 44](https://github.com/zimmertr/hevy-garmin-sync/issues/44)). To do the new exercise from the watch, answer Yes, and swap back after the session. Routines work the same way: only an edit to the routine itself reaches Garmin, not an exercise replaced in a workout you've started from it.
 - A unit set for one exercise in Hevy reaches Garmin at midnight, or after you save, edit or delete a workout, not within a minute. Press Sync now to send it at once.

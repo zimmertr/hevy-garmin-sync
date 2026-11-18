@@ -34,7 +34,8 @@ An exercise swapped in the Hevy app and answered "Replace permanently? Yes" is a
 - An exercise the program marks as resistance work, with a rep range, is the only kind that gets anything.
 - Logged by weight and reps (`weight_reps`), or weighted bodyweight (`bodyweight_weighted`, also spelled `bodyweight_reps`), on a machine, dumbbell or barbell: a weight.
 - Logged by reps alone (`reps_only`): a rep range.
-- Anything else (time, distance, kettlebells, bands, plates, other equipment): nothing. The workout carries the program's rep range and no weight, and the log says why.
+- Logged by weight and distance (`short_distance_weight`) or weight and time (`weight_duration`): the last session again (below).
+- Anything else (time or distance alone, kettlebells, bands, plates, other equipment): nothing. The workout carries the program's rep range and no weight, and the log says why.
 
 ## History
 
@@ -55,6 +56,15 @@ Only sets of type `normal` count as working sets. A missing rep count or weight 
 Weights change only after a logged session, never just because the week turned. The deload multiplier is the exception: it follows the week.
 
 The unit is the account's `weight_unit`, unless the user logs that exercise in the other unit. One kilogram is 2.20462 lb, and a weight in its unit is rounded to two decimals before it is matched to equipment.
+
+## Weight and distance, or weight and time
+
+The Hevy app fills in the last session's numbers for an exercise logged by weight and distance, such as Walking Lunge (Dumbbell), and moves none of them.
+
+- Each working set gets the weight and the distance or time of the same set last session. A set past last session's count gets its last set's.
+- No rep range, the warm-ups included: the Hevy app shows yards or a time in that column, not the program's rep range.
+- Never logged in this workout, or no working set last time: nothing.
+- Nothing is rounded to equipment, and a deload week changes nothing.
 
 ## Rounding to equipment
 
@@ -146,10 +156,13 @@ An exercise with no previous session in its template (after a rotation, say) sta
 | 2026-11-11 | One exercise logged in the other unit, kilograms | 20 kg | 20 kg |
 | 2026-11-11 | One exercise swapped in permanently, weighted bodyweight (`bodyweight_weighted`) with no equipment, never logged in its template | No suggested weight, only the last session's numbers as placeholders | No prescription |
 | 2026-11-13 | Goblet Squat, two warm-ups, rep range 4-6 | 4-6 on both warm-ups and on the three working sets | 4-6 on all five |
+| 2026-11-17 | Seal Row (Dumbbell), rep range 4-6, two warm-ups. Last session mixed: 50x6, 90x4, 70x6, after the dumbbells were mixed up mid-exercise | 50 lb, the lightest Normal Set | 50 lb, warm-ups 20 and 30 lb (#64) |
+| 2026-11-17 | Pullover (Dumbbell), last session 17.5x6, 30x6, 30x6, every set at the top of its range | 20 lb, up from the lightest set | 20 lb (#64) |
+| 2026-11-17 | Walking Lunge (Dumbbell), logged by weight and distance, last session 25 lbs for 25 yd on every set | 25 lbs and 25 yd on every set, filled in like a prescribed weight | 25 lbs and 25 yd |
 
 On 2026-11-10 the first run against a real account gave the same weight and warm-ups as hevy-trainer-sync, the tool these rules were first written for, on all 12 weighted exercises of a two-workout program, and the same rep range on the one logged by reps.
 
-Not yet checked against the app: a new exercise's starting weight, a deload week, an account in kilograms, and a barbell exercise.
+Not yet checked against the app: a new exercise's starting weight, a deload week, an account in kilograms, a barbell exercise, and an exercise logged by weight and time.
 
 ## Open points
 

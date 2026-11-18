@@ -551,8 +551,8 @@ class NotesTest(LiveCheckCase):
         self.assertEqual(
             lc.notes_kept(sent, stored),
             [
-                "Garmin stored 20 of the 52 characters of exercise 2's note.",
-                "Garmin stored 0 of the 53 characters of exercise 3's note.",
+                "Garmin stored 20 of the 46 characters of exercise 2's note.",
+                "Garmin stored 0 of the 47 characters of exercise 3's note.",
             ],
         )
 
