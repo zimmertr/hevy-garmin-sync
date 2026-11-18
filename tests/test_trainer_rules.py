@@ -216,7 +216,7 @@ class MissedTargetsTest(unittest.TestCase):
 
 class RepeatTest(unittest.TestCase):
     def test_the_last_sessions_working_sets_come_back_as_they_were(self) -> None:
-        log = [
+        log: list[dict[str, Any]] = [
             {"type": "warmup", "weight_kg": kg(10), "distance_meters": 9.144},
             {"type": "normal", "weight_kg": kg(25), "distance_meters": 22.86, "duration_seconds": None},
             {"type": "normal", "weight_kg": None, "distance_meters": None, "duration_seconds": 45},
