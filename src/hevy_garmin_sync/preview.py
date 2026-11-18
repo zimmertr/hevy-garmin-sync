@@ -661,6 +661,7 @@ HEVY_SESSION_TOKENS = {
 # The hevy.com `auth2.0-token` cookie as a browser shows it: the tokens as URL-encoded JSON.
 HEVY_SESSION_COOKIE = quote(json.dumps(HEVY_SESSION_TOKENS))
 LBS_PER_KG = 2.20462
+YARDS_TO_METERS = 0.9144
 
 
 def trainer_exercise(
@@ -721,7 +722,9 @@ def hevy_unit_row(template_id: str, unit: str) -> dict[str, Any]:
     return {"id": 1, "exercise_template_id": template_id, "weight_unit": unit}
 
 
-def logged_set(pounds: float | None, reps: int | None, indicator: str = "normal") -> dict[str, Any]:
+def logged_set(
+    pounds: float | None, reps: int | None, indicator: str = "normal", yards: float | None = None
+) -> dict[str, Any]:
     """One set of a logged workout as the private API returns it: its type is its `indicator`."""
     return {
         "id": "set-1",
@@ -731,7 +734,7 @@ def logged_set(pounds: float | None, reps: int | None, indicator: str = "normal"
         "weight_kg": None if pounds is None else pounds / LBS_PER_KG,
         "rpe": 8,
         "completed_at": "2026-01-15T18:00:00Z",
-        "distance_meters": None,
+        "distance_meters": None if yards is None else yards * YARDS_TO_METERS,
         "duration_seconds": None,
         "custom_metric": None,
         "geospatial_data": None,
@@ -857,13 +860,14 @@ def lower_template() -> dict[str, Any]:
 def logged_lower(start: datetime) -> dict[str, Any]:
     """A session of that Lower, shaped like the one checked against the Hevy app: afterwards the app
     showed Side Bend up from 35 to 40 lb, Lying Leg Raise up a rep range, and Goblet Squat still at
-    80 lb with warm-ups of 30 and 50."""
+    80 lb with warm-ups of 30 and 50. Walking Lunge is shaped like the session of 2026-11-17, after
+    which the app filled in the same 25 lb and 25 yd."""
     return logged_workout(
         "t-lower",
         start,
         {
             "T-GOBLET": [logged_set(30, 6, "warmup"), logged_set(50, 4, "warmup"), *[logged_set(80, 4)] * 3],
-            "T-LUNGE": [logged_set(25, None)] * 3,
+            "T-LUNGE": [logged_set(25, None, yards=25)] * 3,
             "T-LEG-RAISE": [logged_set(None, 15)] * 3,
             "T-SIDE-BEND": [logged_set(35, 15), logged_set(35, 12), logged_set(35, 12)],
         },

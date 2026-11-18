@@ -29,6 +29,8 @@ log = logging.getLogger(__name__)
 Json = dict[str, Any]
 _FREQUENCY = re.compile(r"^\d+x$")
 _WEIGHT_TYPES = ("weight_reps", *WEIGHTED_BODYWEIGHT)
+# Logged by weight and distance, or weight and time: the Hevy app repeats the last session (F-46a).
+_REPEATED_TYPES = ("short_distance_weight", "weight_duration")
 _ONE_REP_MAX_WINDOWS_DAYS = (91, 365)  # the last 3 months, else the last 12 (F-46)
 # How a prescription compares with the last session, in the words the log uses.
 _DIRECTIONS = {
@@ -37,6 +39,7 @@ _DIRECTIONS = {
     "none": "no change",
     "deload": "deload week",
     "new": "new exercise",
+    "repeat": "as last time",
 }
 # Why an exercise gets no weight: the status page's words, then the log's fragment (O-3, #81).
 Why = tuple[str, str]
@@ -252,23 +255,34 @@ class Trainer:
             exercise_id, details, planned, rep_range, history, deload, now
         )
         self._say(template_id, exercise_id, f"[{workout}] {title}", prescription, said_why)
-        if prescription and prescription.rep_range:
+        if details.get("type") in _REPEATED_TYPES:
+            rep_range = None  # the Hevy app shows the distance or time, not the program's rep range (TJ, 2026-11-17)
+        elif prescription and prescription.rep_range:
             rep_range = prescription.rep_range
         weight_kg = prescription.weight_kg if prescription else None
         warmups_kg = prescription.warmups_kg if prescription else ()
+        repeated = prescription.repeated if prescription else ()
+        set_count = int(planned.get("set_count") or 0)
 
         warmup_sets = [
             # The Hevy app gives a warm-up the working sets' rep range too (TJ, 2026-11-13).
             Set(kind="warmup", rep_range=rep_range, weight_kg=warmups_kg[i] if i < len(warmups_kg) else None)
             for i in range(int(planned.get("warmup_set_count") or 0))
         ]
-        working = Set(rep_range=rep_range, weight_kg=weight_kg)
+        if repeated:
+            # Set by set as last time; a set more than last time repeats its last.
+            working = [
+                Set(weight_kg=r.weight_kg, meters=r.meters, seconds=r.seconds)
+                for r in (repeated[min(i, len(repeated) - 1)] for i in range(set_count))
+            ]
+        else:
+            working = [Set(rep_range=rep_range, weight_kg=weight_kg)] * set_count
         rest = planned.get("rest_seconds")
         return Exercise(
             title=title,
             category=garmin.category,
             name=garmin.name,
-            sets=(*warmup_sets, *[working] * int(planned.get("set_count") or 0)),
+            sets=(*warmup_sets, *working),
             rest_seconds=int(rest) if rest else None,
             assisted=details.get("type") in ASSISTED,
             previous=self._previous.sets(exercise_id, title) if self._previous else (),
@@ -305,6 +319,8 @@ class Trainer:
                             "type": s.get("indicator") or s.get("type"),
                             "reps": s.get("reps"),
                             "weight_kg": s.get("weight_kg"),
+                            "distance_meters": s.get("distance_meters"),
+                            "duration_seconds": s.get("duration_seconds"),
                         }
                         for s in done.get("sets") or []
                     ]
@@ -312,6 +328,11 @@ class Trainer:
         if kind == "reps_only":
             return rules.next_rep_range(logs, set_count, rep_range, deload), _NO_REASON
         unit = self._overrides.get(exercise_id) or ("lbs" if self._user.get("weight_unit") == "lbs" else "kg")
+        if kind in _REPEATED_TYPES:
+            if not logs:
+                return None, _NOT_LOGGED
+            repeated = rules.repeat(logs[-1], unit)
+            return repeated, _NO_REASON if repeated else _NO_WORKING_SET
         gear = rules.equipment(details.get("equipment"), unit, self._available)
         if kind not in _WEIGHT_TYPES or gear is None:
             what = f"a {kind or 'unknown'} exercise on {details.get('equipment') or 'unknown'} equipment"
@@ -358,6 +379,8 @@ class Trainer:
             text = f"{said}: no weight, {why_not}"
         elif found.rep_range:
             text = f"{said}: {found.rep_range[0]}-{found.rep_range[1]} reps, {_DIRECTIONS[found.direction]}"
+        elif found.weight is None:
+            text = f"{said}: {_DIRECTIONS[found.direction]}"
         else:
             text = f"{said}: {found.weight:g} {found.unit}, {_DIRECTIONS[found.direction]}"
             if found.warmups:

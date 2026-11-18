@@ -240,14 +240,24 @@ def loadable(
 
 
 @dataclass(frozen=True)
+class Repeated:
+    """One working set of the last session, for an exercise Trainer repeats as it was (F-46a)."""
+
+    weight_kg: float | None = None
+    meters: float | None = None
+    seconds: int | None = None
+
+
+@dataclass(frozen=True)
 class Prescription:
     """What Trainer prescribes for one exercise. `weight` None means it suggests none."""
 
-    direction: str  # increase, decrease, none, deload, or new
+    direction: str  # increase, decrease, none, deload, new, or repeat
     weight: float | None = None  # in `unit`
     unit: str = "kg"
     warmups: tuple[float, ...] = ()
     rep_range: RepRange | None = None
+    repeated: tuple[Repeated, ...] = ()  # the last session's working sets, for `repeat`
 
     @property
     def weight_kg(self) -> float | None:
@@ -316,6 +326,28 @@ def next_weight(
         weight = loadable(to_kg(weight, gear.unit) * DELOAD_SHARE, gear) or weight
         verdict = "deload"
     return Prescription(verdict, weight, gear.unit, warmups(weight, warmup_sets, gear))
+
+
+def repeat(last: Log, unit: str) -> Prescription | None:
+    """The last session's working sets as they were, for an exercise logged by weight and distance or time.
+
+    The Hevy app fills in the last session's numbers for such an exercise,
+    and moves none of them (TJ, 2026-11-17: Walking Lunge (Dumbbell) at 25 lbs
+    and 25 yd, as the session before). `weight` is the first set's, for the log.
+    """
+    sets = _working(last)
+    if not sets:
+        return None
+    repeated = tuple(
+        Repeated(
+            float(s.get("weight_kg") or 0) or None,
+            float(s.get("distance_meters") or 0) or None,
+            int(s.get("duration_seconds") or 0) or None,
+        )
+        for s in sets
+    )
+    first = repeated[0].weight_kg
+    return Prescription("repeat", in_unit(first, unit) if first else None, unit, repeated=repeated)
 
 
 # A new exercise (F-46)

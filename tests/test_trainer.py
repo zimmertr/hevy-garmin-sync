@@ -123,7 +123,14 @@ class ProgramTest(TrainerCase):
                     ),
                     rest_seconds=90,
                 ),
-                Exercise("Walking Lunge (Dumbbell)", "LUNGE", "DUMBBELL_LUNGE", (Set(rep_range=(10, 12)),) * 3, 90),
+                # Repeated as last time, with no rep range (F-46a, TJ, 2026-11-17).
+                Exercise(
+                    "Walking Lunge (Dumbbell)",
+                    "LUNGE",
+                    "DUMBBELL_LUNGE",
+                    (Set(weight_kg=25 / LB, meters=25 * fixtures.YARDS_TO_METERS),) * 3,
+                    90,
+                ),
                 Exercise(
                     "Lying Leg Raise", "LEG_RAISE", "LYING_STRAIGHT_LEG_RAISE", (Set(rep_range=(12, 15)),) * 3, 90
                 ),
@@ -137,17 +144,12 @@ class ProgramTest(TrainerCase):
             [line.split(":", 2)[2] for line in logs.output if "[Hevy/Trainer: " in line],
             [
                 "[Hevy/Trainer: Lower (C2-W2)] Goblet Squat: 80 lbs, no change, warm-ups 30, 50",
-                "[Hevy/Trainer: Lower (C2-W2)] Walking Lunge (Dumbbell): no weight, Trainer suggests none for a "
-                "short_distance_weight exercise on dumbbell equipment",
+                "[Hevy/Trainer: Lower (C2-W2)] Walking Lunge (Dumbbell): 25 lbs, as last time",
                 "[Hevy/Trainer: Lower (C2-W2)] Lying Leg Raise: 12-15 reps, up",
                 "[Hevy/Trainer: Lower (C2-W2)] Side Bend (Dumbbell): 40 lbs, up",
             ],
         )
-        # The status page keeps its own words for why there is no weight.
-        self.assertEqual(
-            lower.exercises[1].no_weight,
-            "Trainer suggests no weight for a short_distance_weight exercise on dumbbell equipment",
-        )
+        self.assertEqual((lower.exercises[1].direction, lower.exercises[1].no_weight), ("as last time", None))
 
     def test_an_exercise_in_two_workouts_logs_a_line_for_each_under_its_workouts_name(self) -> None:
         upper = trainer_template("t-upper", "upper_2x_a", [trainer_exercise("T-SIDE-BEND")])
@@ -599,6 +601,71 @@ class NoPrescriptionTest(TrainerCase):
         said = "\n".join(logs.output)
         self.assertIn("No exercise map row for Hevy exercise 'T-GONE'", said)
         self.assertIn("no weight, Trainer suggests none for a unknown exercise on unknown equipment", said)
+
+
+class RepeatTest(TrainerCase):
+    """An exercise logged by weight and distance or time repeats its last session (F-46a, TJ, 2026-11-17)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.private.workouts = []
+        self.public.templates.append(hevy_template("T-HOLD", "Plate Hold", type="weight_duration", equipment="plate"))
+
+    def test_weight_and_distance_repeat_set_by_set_and_a_set_more_repeats_the_last(self) -> None:
+        self.one(trainer_exercise("T-LUNGE", sets=3, warmups=1))
+        self.log(TUESDAY - timedelta(days=7), {"T-LUNGE": [logged_set(20, None, yards=20)] * 3})
+        self.log(
+            TUESDAY,
+            {
+                "T-LUNGE": [
+                    logged_set(10, None, "warmup", 10),
+                    logged_set(25, None, yards=25),
+                    logged_set(30, None, yards=20),
+                ]
+            },
+        )
+        self.assertEqual(self.said(), ["Walking Lunge (Dumbbell): 25 lbs, as last time"])
+        yard = fixtures.YARDS_TO_METERS
+        self.assertEqual(
+            self.sets(),
+            (
+                Set(kind="warmup"),  # no rep range: the Hevy app shows yards, not the program's 10-12
+                Set(weight_kg=25 / LB, meters=25 * yard),
+                Set(weight_kg=30 / LB, meters=20 * yard),
+                Set(weight_kg=30 / LB, meters=20 * yard),
+            ),
+        )
+
+    def test_weight_and_time_repeat_too(self) -> None:
+        self.one(trainer_exercise("T-HOLD", sets=2))
+        self.log(TUESDAY, {"T-HOLD": [logged_set(20, None) | {"duration_seconds": 45}] * 2})
+        self.assertEqual(self.said(), ["Plate Hold: 20 lbs, as last time"])
+        self.assertEqual(self.sets(), (Set(weight_kg=20 / LB, seconds=45),) * 2)
+
+    def test_a_kilogram_account_logs_kilograms(self) -> None:
+        self.private.user["weight_unit"] = "kg"
+        self.one(trainer_exercise("T-LUNGE", sets=1))
+        self.log(TUESDAY, {"T-LUNGE": [{"indicator": "normal", "weight_kg": 12.5, "distance_meters": 20}]})
+        self.assertEqual(self.said(), ["Walking Lunge (Dumbbell): 12.5 kg, as last time"])
+        self.assertEqual(self.sets(), (Set(weight_kg=12.5, meters=20),))
+
+    def test_a_last_session_with_no_weight_repeats_the_distance_alone(self) -> None:
+        self.one(trainer_exercise("T-LUNGE", sets=1))
+        self.log(TUESDAY, {"T-LUNGE": [logged_set(None, None, yards=25)]})
+        self.assertEqual(self.said(), ["Walking Lunge (Dumbbell): as last time"])
+        self.assertEqual(self.sets(), (Set(meters=25 * fixtures.YARDS_TO_METERS),))
+
+    def test_never_logged_in_this_workout_it_gets_nothing_and_no_rep_range(self) -> None:
+        self.one(trainer_exercise("T-LUNGE", sets=2))
+        self.log(TUESDAY, {"T-LUNGE": [logged_set(25, None, yards=25)]}, "t-lower")
+        self.assertEqual(self.said(), ["Walking Lunge (Dumbbell): no weight, not logged in this workout yet"])
+        self.assertEqual(self.sets(), (Set(), Set()))
+
+    def test_a_last_session_of_warm_ups_only_gives_nothing(self) -> None:
+        self.one(trainer_exercise("T-LUNGE", sets=1))
+        self.log(TUESDAY, {"T-LUNGE": [logged_set(25, None, "warmup", 25)]})
+        self.assertIn("no weight, last session has no working set", self.said()[0])
+        self.assertEqual(self.sets(), (Set(),))
 
 
 class NewExerciseTest(TrainerCase):
