@@ -39,7 +39,7 @@ nothing made anywhere, and not held back by an earlier run that wasn't cleaned u
 read. It creates `HGS check notes`, built by the app's own `workout.build`: a warm-up and a Normal Set
 of an exercise Garmin names differently, a Failure Set with a decimal weight, a Drop Set, a timed set,
 a set with a distance and a weight, and one set whose note ends with a line of symbols, to see which
-ones the watch's font draws. Every note starts with Hevy's name in Unicode's bold letters. It reads
+ones the watch's font draws. Every note starts with Hevy's name. It reads
 the workout back and says whether Garmin stored every note whole, then puts it on today and sends it
 to the watch. `cleanup` removes it like the others.
 
@@ -775,7 +775,7 @@ def check_notes(
         print(line, file=out)
     print(
         "\nSync the watch and start it. During each set, open the note's own screen and photograph it. Does "
-        "the first line show Hevy's name in bold, and does it wrap cleanly? Does each other line stay whole? "
+        "the first line show Hevy's name, and does it wrap cleanly? Does each other line stay whole? "
         "Does the warm-up wait for the Lap press? Which symbols in the last note does the watch draw? Then "
         "discard the activity and run `make live-cleanup`.",
         file=out,

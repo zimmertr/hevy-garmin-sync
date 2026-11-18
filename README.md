@@ -54,7 +54,7 @@ If you use Hevy Trainer and [set it up](#hevy-trainer-optional), every workout i
 
 ### The Notes Screen
 
-Each workout also includes a note for each set that starts with the name that Hevy uses for the exercise in bold, then includes the type of set, target reps, and weight.
+Each workout also includes a note for each set that starts with the name that Hevy uses for the exercise, then includes the type of set, target reps, and weight.
 
 <hr>
 

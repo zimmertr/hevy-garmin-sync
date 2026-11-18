@@ -9,7 +9,6 @@ image and tie the Version hash (F-12) to that library's defaults.
 import hashlib
 import json
 import re
-import string
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -51,12 +50,6 @@ _REPS = {"conditionTypeId": 10, "conditionTypeKey": "reps", "displayOrder": 10, 
 _NO_TARGET = {"workoutTargetTypeId": 1, "workoutTargetTypeKey": "no.target", "displayOrder": 1}
 # Hevy's own names for its set types (TJ, 2026-11-13).
 _SET_LABELS = {"normal": "Normal Set", "warmup": "Warm Up Set", "dropset": "Drop Set", "failure": "Failure Set"}
-# A note is plain text, so the exercise's name is bold the only way it can be: in Unicode's
-# sans-serif bold letters and digits. Anything else, such as a bracket, stays as it is (TJ, 2026-11-17).
-_BOLD = str.maketrans(
-    string.ascii_uppercase + string.ascii_lowercase + string.digits,
-    "".join(chr(c) for c in (*range(0x1D5D4, 0x1D608), *range(0x1D7EC, 0x1D7F6))),
-)
 
 
 @dataclass(frozen=True)
@@ -324,16 +317,17 @@ def _distance(meters: float, system: str | None) -> str:
 
 
 def _note(current: Set, exercise: Exercise, system: str | None) -> str:
-    """Hevy's name for the exercise in bold, then the set as Garmin's own set-info screen shows it (F-30).
+    """Hevy's name for the exercise, then the set as Garmin's own set-info screen shows it (F-30).
 
     The set-info screen is buried in the step list, while the note is one
     page down during the set (TJ, 2026-11-13). The name goes first because
     the watch shows Garmin's name elsewhere, and Garmin keeps no name of the
-    app's (TJ, 2026-11-17). Each part has a line of its own, so the watch
-    breaks none of them in two. Matching sets get matching notes, so they
-    still share a repeat group (F-20a).
+    app's (TJ, 2026-11-17). It is in plain letters: the Fenix 8 draws
+    Unicode's bold ones as unknown characters. Each part has a line of its
+    own, so the watch breaks none of them in two. Matching sets get matching
+    notes, so they still share a repeat group (F-20a).
     """
-    lines = [bold(exercise.title), _SET_LABELS.get(current.kind, "Normal Set")]
+    lines = [exercise.title, _SET_LABELS.get(current.kind, "Normal Set")]
     if current.rep_range or current.reps:
         low, high = current.rep_range or (current.reps or 0, current.reps or 0)
         count = f"{low}-{high}" if low != high else str(high)
@@ -348,11 +342,6 @@ def _note(current: Set, exercise: Exercise, system: str | None) -> str:
     elif exercise.assisted:
         lines.append("Assisted")
     return "\n".join(lines)
-
-
-def bold(text: str) -> str:
-    """The text with its letters and digits in sans-serif bold, from U+1D5D4 on."""
-    return text.translate(_BOLD)
 
 
 def _clock(total: int) -> str:

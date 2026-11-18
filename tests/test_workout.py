@@ -17,9 +17,9 @@ KG_40_LB = 18.1437
 LB = 2.2046226218  # pounds in a kilogram
 # What `owner` reads back from a description stamped at fixtures.NOW: the wall clock, to the minute.
 STAMPED_AT = fixtures.NOW.replace(tzinfo=None, second=0, microsecond=0)
-# Every note's first line: Hevy's name for the exercise, in bold (F-30).
-SIDE = workout.bold("Side Bend") + "\n"
-WALK = workout.bold("Farmer's Walk") + "\n"
+# Every note's first line: Hevy's name for the exercise (F-30).
+SIDE = "Side Bend\n"
+WALK = "Farmer's Walk\n"
 
 
 def side_bend(*sets: Set, **kwargs: Any) -> Exercise:
@@ -168,7 +168,7 @@ class SetStepTest(unittest.TestCase):
                 (step, _) = steps(side_bend(Set(reps=5, weight_kg=kg)), system="metric")
                 self.assertEqual(step["description"], f"{SIDE}Normal Set\n5 Reps\n{shown}")
 
-    def test_hevys_name_goes_first_in_bold_whatever_garmin_calls_the_exercise(self) -> None:
+    def test_hevys_name_goes_first_whatever_garmin_calls_the_exercise(self) -> None:
         # TJ, 2026-11-17: the first line names the exercise as Hevy does, even when Garmin's name says the same.
         cases = [
             ("Seal Row (Dumbbell)", "ROW", "CHEST_SUPPORTED_DUMBBELL_ROW"),
@@ -178,14 +178,7 @@ class SetStepTest(unittest.TestCase):
         for title, category, name in cases:
             with self.subTest(title=title):
                 (step, _) = steps(Exercise(title, category, name, (Set(reps=6),), 30))
-                self.assertEqual(step["description"], f"{workout.bold(title)}\nNormal Set\n6 Reps")
-
-    def test_bold_is_unicodes_sans_serif_bold_letters_and_digits_and_leaves_the_rest(self) -> None:
-        self.assertEqual(
-            workout.bold("AZaz09"), "".join(map(chr, (0x1D5D4, 0x1D5ED, 0x1D5EE, 0x1D607, 0x1D7EC, 0x1D7F5)))
-        )
-        self.assertEqual(workout.bold("(Dumbbell)")[0] + workout.bold("(Dumbbell)")[-1], "()")
-        self.assertEqual(workout.bold("Farmer's Walk")[6], "'")
+                self.assertEqual(step["description"], f"{title}\nNormal Set\n6 Reps")
 
     def test_a_drop_set_and_a_set_to_failure_are_normal_steps(self) -> None:
         for kind in ("dropset", "failure"):
