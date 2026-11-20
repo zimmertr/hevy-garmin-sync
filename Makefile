@@ -6,7 +6,7 @@ PYTHON_IMAGE := python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2
 TRIVY_IMAGE  := aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
 HADOLINT     := hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
 # The Helm version yggdrasil's chart and release modules install.
-HELM_IMAGE   := alpine/helm:4.3.1@sha256:e3f8d5c462d75470fbb1fce79ad5c20063657096d1f98c0fcea869e2600e2e5e
+HELM_IMAGE   := alpine/helm:4.3.2@sha256:a3b9d617c0c30a6c488cebb429c4ba83995a26dc2184599af5fd408a361b2e67
 # The helm-unittest image yggdrasil's chart module runs (record 0060 there).
 HELM_UNITTEST := helmunittest/helm-unittest:4.3.0-1.2.1@sha256:28ea86c3e0b07f501f0c2e9c08b9f41e240f4a4b571cb5106b36cf0f0607e989
 IMAGE        := hevy-garmin-sync:dev
