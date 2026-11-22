@@ -101,7 +101,7 @@ jobs:
           fi
           echo "number=$number" >> "$GITHUB_OUTPUT"
 
-  # create-pull-request keeps one PR on one fixed branch: it opens the PR, or
+  # open-pr keeps one PR on one fixed branch: it opens the PR, or
   # force-pushes the new copies to the one already open. A failure here fails
   # the run and leaves the issue open.
   pr:
