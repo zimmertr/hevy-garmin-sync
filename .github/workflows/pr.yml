@@ -42,7 +42,7 @@ jobs:
   # and 0060).
   chart:
     name: Chart
-    uses: zimmertr/yggdrasil/.github/workflows/chart.yml@571dc1db86efcdaf2d5289b5e8d34f98b8816a18 # v3.0.1
+    uses: zimmertr/yggdrasil/.github/workflows/chart.yml@344aeee434f02583c1989fccce54b896aa07e148 # v3.0.2
     permissions:
       contents: read
     with:
@@ -53,7 +53,7 @@ jobs:
   # failure on any fixable Critical or High, as the release would refuse.
   docker-build:
     name: Docker Build
-    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@571dc1db86efcdaf2d5289b5e8d34f98b8816a18 # v3.0.1
+    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@344aeee434f02583c1989fccce54b896aa07e148 # v3.0.2
     permissions:
       contents: read
       pull-requests: write # the sticky scan comment
@@ -68,6 +68,6 @@ jobs:
   # version with a known High or Critical vulnerability.
   dependency-review:
     name: Dependency Review
-    uses: zimmertr/yggdrasil/.github/workflows/dependency-review.yml@571dc1db86efcdaf2d5289b5e8d34f98b8816a18 # v3.0.1
+    uses: zimmertr/yggdrasil/.github/workflows/dependency-review.yml@344aeee434f02583c1989fccce54b896aa07e148 # v3.0.2
     permissions:
       contents: read

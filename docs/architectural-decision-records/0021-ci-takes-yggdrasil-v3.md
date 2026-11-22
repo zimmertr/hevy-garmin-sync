@@ -13,7 +13,7 @@ zimmertr/yggdrasil v3.0.0 changed two modules this repo calls. `docker-build` no
 
 ## Decision
 
-- Every module call pins v3.0.1.
+- Every module call pins v3.0.2.
 - `pr.yml` gives `docker-build` the release's image, with `tests/structure-test.yaml` in its entry. Its check is `Docker Build / Docker Build (zimmertr/hevy-garmin-sync)`.
 - `release.yml` grants `attestations: write` and `id-token: write`, so the image and the chart carry GitHub's signed build provenance.
 - `pr.yml` runs `Dependency Review`, `cache-cleanup.yml` deletes a closed PR's caches, and `scorecard.yml` runs OpenSSF Scorecard weekly and on push to main.
