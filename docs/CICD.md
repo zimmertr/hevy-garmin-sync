@@ -19,9 +19,12 @@ flowchart LR
 | `test.yml` | `test` | The suite under coverage, with the line and branch table in the run summary |
 | `pr.yml` | `Python Lint` | ruff and mypy, from the hashed dev lock |
 | `pr.yml` | `Chart / Chart` | yggdrasil's chart module: `helm lint`, the chart rendered with the defaults, then the helm-unittest suites in `charts/hevy-garmin-sync-helm/tests/`: the digest, the read-only root filesystem, `HTTP_PORT`, an existing Secret, the namespace on every resource, the Gateway and VirtualService only when asked, and no claim without persistence |
-| `pr.yml` | `Docker Build / Docker Build` | yggdrasil's docker-build module: hadolint, the amd64 image built, a Trivy table in a sticky comment, the container-structure-test checks in `tests/structure-test.yaml` (the entry point, user 1000, the license, the imports, the page's files, and a preview run to its first sync), and a failure on any fixable Critical or High |
-| `lint.yml` | `Lint / actionlint`, `Lint / zizmor`, `Lint / semgrep` | yggdrasil's lint module over the workflows and the Dockerfile |
+| `pr.yml` | `Docker Build / Docker Build (zimmertr/hevy-garmin-sync)` | yggdrasil's docker-build module, given the release's image: hadolint, the amd64 image built, a Trivy table in a sticky comment, the container-structure-test checks in `tests/structure-test.yaml` (the entry point, user 1000, the license, the imports, the page's files, and a preview run to its first sync), and a failure on any fixable Critical or High |
+| `pr.yml` | `Dependency Review / Dependency Review` | yggdrasil's dependency-review module: a PR that adds a package version with a known High or Critical vulnerability fails |
+| `lint.yml` | `Lint / actionlint`, `/ zizmor`, `/ semgrep`, `/ shellcheck`, `/ docs` | yggdrasil's lint module over the workflows, the Dockerfile, any script file and the Markdown |
 | `pr-title.yml` | `PR Title / PR Title` | yggdrasil's pr-title module: the title must be `type(scope): summary` |
+
+`cache-cleanup.yml` runs yggdrasil's cache-cleanup module when a PR closes, deleting its Actions caches. `scorecard.yml` runs OpenSSF Scorecard on every push to main and every Monday, with its findings in the Security tab. Neither is a required check.
 
 `pr-preview.yml` runs yggdrasil's pr-preview module on every PR from this repo's branches, as `PR Preview / Preview Image`. It pushes the PR's head as `ghcr.io/zimmertr/hevy-garmin-sync-pr:pr-<N>-<head sha>`, and on TJ's own PRs adds the `create pr container` label and a comment with the preview's address. It runs on `pull_request`, so a fork's PR gets no write token, and it isn't a required check (spec D-12, yggdrasil record 0059). Renovate's PRs get the image but no label, so no preview starts; add the label by hand to start one.
 
@@ -32,8 +35,8 @@ The default-branch ruleset requires every check above. Renaming or adding a chec
 Every merge to main is a release (`release.yml`), one at a time. After the test, every step is a job of yggdrasil's release module (record [0012](architectural-decision-records/0012-the-chart-goes-through-yggdrasils-modules.md)):
 
 1. `test` runs again on the squash commit.
-2. The module reads the version from the squash commit's title with GitVersion (`feat` a minor, `!` a major, anything else a patch; the first release is 0.1.0), builds and pushes `ghcr.io/zimmertr/hevy-garmin-sync:<version>` for amd64 and arm64 with an SBOM and provenance, scans each platform with Trivy, then tags `v<version>` and publishes the GitHub release. A fixable Critical or High stops the tag and release.
-3. `Release / Push Chart (charts/hevy-garmin-sync-helm)` writes the image's digest into `values.yaml`, packages the chart with that version as both `version` and `appVersion`, and pushes it to `oci://ghcr.io/zimmertr`. A version already there is skipped. Record: [0006](architectural-decision-records/0006-ghcr-and-a-digest-pinned-chart.md)
+2. The module reads the version from the squash commit's title with GitVersion (`feat` a minor, `!` a major, anything else a patch; the first release is 0.1.0), builds and pushes `ghcr.io/zimmertr/hevy-garmin-sync:<version>` for amd64 and arm64 with an SBOM and provenance, attests it with GitHub's signed build provenance, scans each platform with Trivy, then tags `v<version>` and publishes the GitHub release. A fixable Critical or High stops the tag and release.
+3. `Release / Push Chart (charts/hevy-garmin-sync-helm)` writes the image's digest into `values.yaml`, packages the chart with that version as both `version` and `appVersion`, and pushes it to `oci://ghcr.io/zimmertr` with its own signed provenance. A version already there is skipped. Record: [0006](architectural-decision-records/0006-ghcr-and-a-digest-pinned-chart.md)
 4. `Release / Deploy Bump (zimmertr/Kubernetes-Manifests)` sets the chart version in `misc/hevy-garmin-sync/kustomization.yml` through a PR on the fixed branch `chore/hevy-garmin-sync-chart`, and arms auto-merge. When that PR merges, Argo CD rolls the pod to the new release. A second PR, on `chore/hevy-garmin-sync-preview-chart`, sets the same version as the `targetRevision` in `misc/hevy-garmin-sync-pr/applicationset.yml`, so the previews run the current chart (spec D-12).
 
 `image-scan.yml` re-scans the latest release every Monday and sends the findings to the Security tab. Its first run fails until a release exists.
@@ -98,7 +101,7 @@ After a failure, re-run the failed jobs only. Never re-run an old release after 
 
 | Secret | Store | Used by |
 |---|---|---|
-| `GITHUB_TOKEN` | Given to each run | The image push and the chart push, to GHCR (`packages: write`); the upstream check's issue (`issues: write`) |
+| `GITHUB_TOKEN` | Given to each run | The image push and the chart push, to GHCR (`packages: write`), and their signed provenance (`attestations: write`, `id-token: write`); the upstream check's issue (`issues: write`) |
 | `GH_PAT` | Actions | The Kubernetes-Manifests bump, as the release module's `deploy-token`, and the upstream check's push and PR here (contents and pull-requests write on both repos) |
 
 ## Repo settings

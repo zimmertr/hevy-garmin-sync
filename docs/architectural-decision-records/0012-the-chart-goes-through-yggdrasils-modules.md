@@ -1,6 +1,6 @@
 # 0012. The chart is checked, pushed and deployed by yggdrasil's modules
 
-- Status: Accepted. Supersedes 0002 in part
+- Status: Accepted. Supersedes 0002 in part. Superseded in part by 0021: the `Makefile` takes Helm from the helm-unittest image
 - Date: 2026-11-11
 - Decider: TJ, 2026-11-11, on zimmertr/yggdrasil#74: "C", the release module pushing the chart itself, then "LGTM" to zimmertr/yggdrasil#82.
 - Issues and PRs: zimmertr/yggdrasil#74, #41

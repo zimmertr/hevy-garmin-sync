@@ -4,9 +4,9 @@ name: PR Checks
 # ruff and mypy, the chart linted and rendered, and the image it would ship,
 # built, linted, scanned and run. Decision record 0002.
 #
-# Required checks are these jobs' names (`Docker Build / Docker Build` is this
-# job's name, then the module's); renaming one strands PRs on a check that
-# never reports.
+# Required checks are these jobs' names (`Docker Build / Docker Build
+# (zimmertr/hevy-garmin-sync)` is this job's name, then the module's, with the
+# image); renaming one strands PRs on a check that never reports.
 on:
   pull_request:
     branches:
@@ -42,7 +42,7 @@ jobs:
   # and 0060).
   chart:
     name: Chart
-    uses: zimmertr/yggdrasil/.github/workflows/chart.yml@c71af5523eef7252d901774a217fe532fdb3209c # v2.7.0
+    uses: zimmertr/yggdrasil/.github/workflows/chart.yml@344aeee434f02583c1989fccce54b896aa07e148 # v3.0.2
     permissions:
       contents: read
     with:
@@ -53,12 +53,21 @@ jobs:
   # failure on any fixable Critical or High, as the release would refuse.
   docker-build:
     name: Docker Build
-    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@c71af5523eef7252d901774a217fe532fdb3209c # v2.7.0
+    uses: zimmertr/yggdrasil/.github/workflows/docker-build.yml@344aeee434f02583c1989fccce54b896aa07e148 # v3.0.2
     permissions:
       contents: read
       pull-requests: write # the sticky scan comment
     with:
+      # The release's image, with what only the built image shows, as
+      # container-structure-test checks.
+      images: '[{"image": "zimmertr/hevy-garmin-sync", "structure-test": "tests/structure-test.yaml"}]'
       # As the release passes it: the apt upgrade layer reruns per push.
       build-args: APP_COMMIT=${{ github.event.pull_request.head.sha }}
-      # What only the built image shows, as container-structure-test checks.
-      structure-test: tests/structure-test.yaml
+
+  # yggdrasil's dependency-review module: fails a PR that adds a package
+  # version with a known High or Critical vulnerability.
+  dependency-review:
+    name: Dependency Review
+    uses: zimmertr/yggdrasil/.github/workflows/dependency-review.yml@344aeee434f02583c1989fccce54b896aa07e148 # v3.0.2
+    permissions:
+      contents: read

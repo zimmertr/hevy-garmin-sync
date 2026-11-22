@@ -1,0 +1,17 @@
+name: Cache Cleanup
+
+# yggdrasil's cache-cleanup module: deletes a closed PR's Actions caches, such
+# as the docker-build layer cache, so they don't crowd main's out of the
+# repo's 10 GB budget.
+on:
+  pull_request:
+    types: [closed]
+
+permissions: {}
+
+jobs:
+  cache-cleanup:
+    name: Cache Cleanup
+    uses: zimmertr/yggdrasil/.github/workflows/cache-cleanup.yml@344aeee434f02583c1989fccce54b896aa07e148 # v3.0.2
+    permissions:
+      actions: write # gh cache delete
