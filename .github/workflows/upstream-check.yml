@@ -101,7 +101,7 @@ jobs:
           fi
           echo "number=$number" >> "$GITHUB_OUTPUT"
 
-  # create-pull-request keeps one PR on one fixed branch: it opens the PR, or
+  # open-pr keeps one PR on one fixed branch: it opens the PR, or
   # force-pushes the new copies to the one already open. A failure here fails
   # the run and leaves the issue open.
   pr:
@@ -126,18 +126,14 @@ jobs:
       # time exits 2 and fails the job.
       - run: python scripts/check_upstream.py --write
       # GH_PAT, not GITHUB_TOKEN: a PR that GITHUB_TOKEN opens starts no
-      # workflows, so its required checks would never report. zizmor would
-      # have `gh pr create` instead, which does only the last of the branch,
-      # commit, push and PR (yggdrasil record 0033).
-      - id: pr  # zizmor: ignore[superfluous-actions]
-        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
+      # workflows, so its required checks would never report.
+      - uses: zimmertr/yggdrasil/actions/open-pr@c8d95dfce582c36045b95a5c0b38eb62c4d4fae0 # v3.1.0
         with:
           token: ${{ secrets.GH_PAT }}
           branch: chore/upstream-copies
-          add-paths: |
+          paths: |
             src/hevy_garmin_sync/data/garmin_exercises.json
             tests/data/hevy_api.json
-          commit-message: ${{ env.TITLE }}
           title: ${{ env.TITLE }}
           body: |
             The weekly upstream check rewrote the copies that no longer match their source (Garmin's in `src/hevy_garmin_sync/data`, Hevy's in `tests/data`): ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
