@@ -1,8 +1,8 @@
 name: release
 
 # Every merge to main is a release. In order: the squash commit is tested as
-# merged; yggdrasil's release module reads the version from its title
-# (GitVersion), builds and pushes the image for amd64 and arm64, scans each
+# merged; yggdrasil's release module reads the version from its title,
+# builds and pushes the image for amd64 and arm64, scans each
 # platform, then tags and releases; pushes the chart under the same version;
 # and only then points Kubernetes-Manifests at it. Decision records 0002,
 # 0005, 0006 and 0012.
