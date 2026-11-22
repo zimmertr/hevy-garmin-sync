@@ -35,7 +35,7 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0009](0009-only-the-next-trainer-workout-on-today.md) | Only the Hevy Trainer workout Hevy says is next is on today, and the calendar follows it within a poll | 2026-11-10 | Accepted |
 | [0010](0010-a-weekly-check-of-the-upstream-copies.md) | A weekly check compares Garmin's exercise list and Hevy's API spec with their copies, and on a difference opens one issue and one PR | 2026-11-10 | Accepted |
 | [0011](0011-retry-refused-workouts-and-honour-retry-after.md) | A refused workout is retried at growing gaps until midnight, then daily, and a rate limit's own wait beats the app's | 2026-11-10 | Accepted |
-| [0012](0012-the-chart-goes-through-yggdrasils-modules.md) | The chart is checked, pushed and deployed by yggdrasil's modules | 2026-11-11 | Accepted. Supersedes 0002 in part |
+| [0012](0012-the-chart-goes-through-yggdrasils-modules.md) | The chart is checked, pushed and deployed by yggdrasil's modules | 2026-11-11 | Accepted. Supersedes 0002 in part. Superseded in part by 0021 |
 | [0013](0013-custom-exercises-set-by-one-variable.md) | A custom exercise's Garmin exercise is logged, and one variable, CUSTOM_EXERCISE_MAP, can set it | 2026-11-10 | Accepted |
 | [0014](0014-renovate-under-yggdrasils-preset.md) | Renovate keeps dependencies current, under yggdrasil's shared preset | 2026-11-11 | Accepted. Supersedes 0002 in part |
 | [0015](0015-last-times-sets-in-each-sets-note.md) | Every set but a warm-up lists last time's working sets in its note, from the last workout of any kind that logged the exercise | 2026-11-11 | Accepted. Superseded in part by 0017 |
@@ -44,3 +44,4 @@ A new record that reverses an old one says `Supersedes NNNN` in its status line.
 | [0018](0018-every-hevy-app-release-is-checked.md) | Every Hevy app release is checked for changes to the Trainer rules, outside this repo | 2026-11-13 | Accepted |
 | [0019](0019-each-note-starts-with-hevys-name.md) | Each set's note starts with Hevy's name for the exercise | 2026-11-17 | Accepted. Supersedes 0017 in part |
 | [0020](0020-a-weighted-carry-repeats-its-last-session.md) | A Hevy Trainer exercise logged by weight and distance or time repeats its last session | 2026-11-17 | Accepted |
+| [0021](0021-ci-takes-yggdrasil-v3.md) | CI takes yggdrasil v3: one images list, signed provenance, and the new checks | 2026-11-21 | Accepted. Supersedes 0012 in part |

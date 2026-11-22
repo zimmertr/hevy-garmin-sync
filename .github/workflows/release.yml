@@ -29,10 +29,12 @@ jobs:
   release:
     name: Release
     needs: test
-    uses: zimmertr/yggdrasil/.github/workflows/release.yml@5898c8d74d3229b53f96084d2d438c52cadff392 # v2.1.6
+    uses: zimmertr/yggdrasil/.github/workflows/release.yml@e229a6868b9d1bf4a596e0a8844452770a543a6c # v3.0.0
     permissions:
       contents: write # the tag and release
       packages: write # the image and the chart, pushed to ghcr.io/zimmertr
+      attestations: write # their signed build provenance
+      id-token: write # the token Sigstore signs it with
     with:
       # Both platforms: users run it on amd64 and arm64 machines (spec D-3).
       images: '[{"image": "zimmertr/hevy-garmin-sync", "platforms": "linux/amd64,linux/arm64"}]'
