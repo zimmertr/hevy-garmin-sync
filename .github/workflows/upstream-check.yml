@@ -127,7 +127,7 @@ jobs:
       - run: python scripts/check_upstream.py --write
       # GH_PAT, not GITHUB_TOKEN: a PR that GITHUB_TOKEN opens starts no
       # workflows, so its required checks would never report.
-      - uses: zimmertr/yggdrasil/actions/open-pr@100f98842aa28262e9e73ebd153af00712bad535 # v3.1.1
+      - uses: zimmertr/yggdrasil/actions/open-pr@2581d736b8cbff87c94c055f985062a73cffdccb # v3.1.3
         with:
           token: ${{ secrets.GH_PAT }}
           branch: chore/upstream-copies
