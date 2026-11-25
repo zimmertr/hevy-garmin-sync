@@ -8,12 +8,14 @@ HADOLINT     := hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383
 # The helm-unittest image yggdrasil's chart module runs (record 0060 there).
 # It carries Helm too, so the lint and render below use it as well.
 HELM_UNITTEST := helmunittest/helm-unittest:4.3.0-1.2.1@sha256:28ea86c3e0b07f501f0c2e9c08b9f41e240f4a4b571cb5106b36cf0f0607e989
+# Headless Chrome, for drawing docs/social-preview.png.
+CHROME_IMAGE := zenika/alpine-chrome:124@sha256:eb3378c1ed0079f94db054a5fe1aaa790a254ec0d6bbc67eda052420d86a179d
 IMAGE        := hevy-garmin-sync:dev
 RUN          := docker run --rm -v "$(CURDIR)":/repo -w /repo
 DEV          := pip install -q --root-user-action=ignore --require-hashes -r requirements-dev.txt
 
 .PHONY: test test-one lint typecheck lint-docker chart build scan lock upstream-check upstream-update \
-  live-check live-cleanup live-check-hevy live-check-notes
+  social-preview live-check live-cleanup live-check-hevy live-check-notes
 
 # The suite under coverage, with its line and branch report, as the test job
 # runs it.
@@ -77,6 +79,15 @@ upstream-check:
 
 upstream-update:
 	$(RUN) $(PYTHON_IMAGE) python scripts/check_upstream.py --write
+
+# Not a check: draws docs/social-preview.png again from docs/social-preview.html,
+# with the icon and the fonts the status page ships. Run it whenever either
+# changes, or the repo's description does, then upload the PNG under the repo's
+# Settings, Social preview: GitHub has no API for that.
+social-preview:
+	$(RUN) -u 0 $(CHROME_IMAGE) --no-sandbox --hide-scrollbars --allow-file-access-from-files \
+	  --default-background-color=0f1419ff --window-size=1280,640 \
+	  --screenshot=/repo/docs/social-preview.png file:///repo/docs/social-preview.html
 
 # Not checks: one run by hand against TJ's own Hevy and Garmin accounts
 # (scripts/live_check.py). Interactive, for the Garmin sign-in and for the

@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- The source of docs/social-preview.png: `make social-preview` draws it again.
+     The subtitle is the repo's description in zimmertr/yggdrasil's
+     repos/zimmertr/hevy-garmin-sync.yml, word for word, so change both together.
+     The colours and fonts are the status page's (src/hevy_garmin_sync/web/app.css),
+     and the stripe is its four bumper plates. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>hevy-garmin-sync social preview</title>
+<style>
+@font-face { font-family: "Barlow"; font-weight: 400; src: url("../src/hevy_garmin_sync/web/barlow-400.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Semi Condensed"; font-weight: 700; src: url("../src/hevy_garmin_sync/web/barlow-semi-condensed-700.woff2") format("woff2"); }
+html, body { margin: 0; width: 1280px; height: 640px; overflow: hidden; background: #0f1419; }
+.tile { position: absolute; left: 120px; top: 210px; width: 220px; height: 220px; border-radius: 55px; box-shadow: 0 0 60px 6px rgba(28, 92, 199, .28); }
+.tile img { display: block; width: 220px; height: 220px; }
+h1 { position: absolute; left: 404px; top: 219px; margin: 0; font: 700 92px/1 "Barlow Semi Condensed"; color: #e6ebf0; letter-spacing: -.005em; }
+p { position: absolute; left: 405px; top: 334px; margin: 0; font: 400 34.2px/44px "Barlow"; color: #9ba6b1; width: 630px; }
+.plates { position: absolute; left: 0; bottom: 0; width: 1280px; height: 14px; display: flex; }
+.plates i { flex: 1; }
+</style>
+</head>
+<body>
+<div class="tile"><img src="../src/hevy_garmin_sync/web/icon.svg" alt=""></div>
+<h1>hevy-garmin-sync</h1>
+<p>Sync Hevy routines to a Garmin watch<br>as custom strength workouts.</p>
+<div class="plates"><i style="background: #b42a22"></i><i style="background: #1c5cc7"></i><i style="background: #e0a020"></i><i style="background: #1d7a46"></i></div>
+</body>
+</html>
