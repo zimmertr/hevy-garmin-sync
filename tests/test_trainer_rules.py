@@ -164,8 +164,8 @@ class WeightTest(unittest.TestCase):
         self.assertEqual(self.result(sets(1, 1, 1), latest), ("increase", 40, ()))
 
     def test_the_lightest_working_set_is_the_base(self) -> None:
-        log = sets(12, weight=50) + sets(12, 12, weight=30)
-        self.assertEqual(self.result(log), ("increase", 35, ()))
+        log = sets(12, weight=50) + sets(12, 11, weight=30)
+        self.assertEqual(self.result(log), ("none", 30, ()))
 
     def test_a_set_logged_without_reps_or_weight_counts_as_zero(self) -> None:
         log = [{"type": "normal", "reps": None, "weight_kg": kg(35)}] * 3

@@ -99,6 +99,19 @@ Garmin's unofficial web API, through [python-garminconnect](https://github.com/c
 - **A workout deleted in Garmin Connect stays in the watch's saved list** until it is removed on the watch (2026-11-10, spec F-14).
 - **Garmin's exercise list** is published at https://connect.garmin.com/web-data/exercises/Exercises.json: 47 categories and 1,536 exercises on 2026-11-10. `src/hevy_garmin_sync/data/garmin_exercises.json` holds its keys (in `tests/data` until #24 moved it into the package). The first weekly comparison, on 2026-11-10, found it the same as the copy (#26).
 
+## Apple's App Store
+
+With Hevy Trainer on, the app reads Apple's public lookup for Hevy once a local day, starting at startup, to tell when Hevy is newer than the version Trainer's rules match (spec F-48a). It is the only call the app makes outside Hevy and Garmin. It needs no account or token, sends the app's `User-Agent` and nothing about you, and has a 30 second timeout.
+
+| Call | When |
+|---|---|
+| `GET https://itunes.apple.com/lookup?id=1458862350` | Once a local day, with Trainer on. Never in a preview |
+
+### Findings
+
+- **The lookup's `results[0].version`** is the newest Hevy for iOS. It read 3.2.8 on 2026-11-25, released 2026-11-20, the same number as Hevy's Android release. The two platforms share version numbers, so the iOS one stands in for both.
+- **Apple publishes no rate limit** for the lookup. Once a day is far below anything it could object to (2026-11-25).
+
 ## Strava
 
 The app never calls Strava (spec S-1). Garmin's own Strava connection forwards the watch's recording, so the planned workout on the watch decides what Strava shows (spec G-2). These findings are why.

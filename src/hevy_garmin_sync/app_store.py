@@ -26,7 +26,8 @@ def newest_hevy(session: requests.Session | None = None) -> str | None:
     http = session or requests.Session()
 
     def send() -> requests.Response:
-        return http.get(LOOKUP, headers={"User-Agent": USER_AGENT, "Accept": "application/json"}, timeout=TIMEOUT_SECONDS)
+        headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+        return http.get(LOOKUP, headers=headers, timeout=TIMEOUT_SECONDS)
 
     try:
         reply = get_json(send, "App Store lookup")

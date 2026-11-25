@@ -37,6 +37,7 @@ Open `http://localhost:8080` under Compose, or the Service's address under Kuber
 - No sync can run while Hevy's or Garmin's sign-in is rejected. The page turns both buttons off, and the API and `sync` answer `No sync can run:` with the fix. A rejected Hevy Trainer session doesn't stop routines from syncing.
 - A sync costs about 3 Garmin calls per workout, and Garmin is known to block accounts that call too often. Use it when something looks wrong, not on a timer.
 - Services: Hevy, Hevy Trainer and Garmin, each working, waiting with the reason and the next try, or sign-in rejected with the fix. The tab's title and icon turn yellow while one waits, and red while one is rejected or Garmin refuses a workout.
+- The header shows the app's version and its Hevy Compatibility: the Hevy app version Trainer's rules match, linked to them. When Hevy has a newer version out, Hevy Trainer reads "Hevy updated" in yellow. Trainer still syncs, but a weight, rep range or warm-up may not match the Hevy app, so check them against the app before you lift until a release of this app catches up.
 - A sync's result and the last daily run say how many workouts were written and deleted, and how many Garmin refused once any were. A manual sync that Garmin refused any of shows in red.
 - Workouts: each one's schedule, when it last synced, links to Hevy and Garmin Connect, and Garmin's reason if it refused it, with the next try. Its exercises show the Garmin exercise each got, the sets, the rest and the weight, and with Hevy Trainer the direction, also beside "No weight". One matched by muscle group and equipment has "Report this match", which opens an issue with both exercises filled in.
 - Under a workout's links, "Garmin Connect is in sync with Hevy." while Garmin and the workout's source work. While one of them has its sign-in rejected or waits, the line says so and that you see the workout as it was last synced.
@@ -51,6 +52,8 @@ A line about one workout starts with its name in brackets, as Garmin and the wat
 | Line | Means |
 |---|---|
 | `Sync: created 2, updated 0, deleted 0, scheduled 2, unscheduled 0, failed 0` | One per full run, and one per poll that changed something |
+| `hevy-garmin-sync 0.17.0 (Hevy compatibility 3.2.8)` | The first line: the app's version, and the Hevy app version Trainer's rules match |
+| `[Hevy Trainer] Hevy 3.2.9 is out, and the app follows Hevy 3.2.8's rules. ...` | At WARNING, once per new Hevy version: Trainer's numbers may not match the Hevy app until this app catches up, so check them against it |
 | `Nothing changed in the last hour (60 polls)` | The app is alive and Hevy didn't change |
 | `Hevy routine folder: id 42, title 'Push Pull Legs'` | At startup, every folder, for `INCLUDE_HEVY_FOLDERS` |
 | `Hevy routine: id 1a2b3c4d, title 'Mobility'` | At startup, every routine, for `INCLUDE_HEVY_ROUTINES`. Logged only once it or `INCLUDE_HEVY_FOLDERS` is set |
