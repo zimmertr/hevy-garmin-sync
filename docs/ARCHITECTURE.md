@@ -34,7 +34,7 @@ One long-running process (spec F-1). One thread runs the loop below and makes ev
 1. **Start.** Read the environment. Anything wrong exits with a message naming the variable. Load the Garmin token, and the Hevy session if `HEVY_SESSION` is set, from `DATA_DIR`, seeding each from its variable when the variable is new (A-4).
 2. **Check.** One call to each service. A rejected key, token or session stops that service, with the fix on the page and in the log (W-8). An outage is waited out.
 3. **Full run.** Read every routine (and the Trainer program), read Garmin's workout list and the calendar, then create, update and delete until Garmin matches. Put each workout on today.
-4. **Poll.** Every `HEVY_POLL_INTERVAL_SECONDS`, read Hevy again. Garmin is called only for what changed (F-4a). When Hevy Trainer's next workout changes, its calendar entry moves to it in the same poll (F-31). The workout events are read once, first, for Trainer and for last time's sets alike, and not at all when neither is on (F-4).
+4. **Poll.** Every `HEVY_POLL_INTERVAL_SECONDS`, read Hevy again. Garmin is called only for what changed (F-4a). When Hevy Trainer's next workout changes, its calendar entry moves to it in the same poll (F-31). The workout events are read once, first, for Trainer and for last time's sets alike, and not at all when neither is on (F-4). With Trainer on, the first pass of each local day also looks Hevy up on Apple's App Store, and warns when it is newer than the rules (F-48a).
 5. **Midnight.** At local midnight, a full run again: yesterday's calendar entries go and today's are added.
 6. **Manual sync.** Sync now, Force sync or `sync` ends the wait for the next poll, and the next pass is a full run that also sends every workout to the watch again; a forced one rewrites every workout too (W-3, W-4). A wait after a failure is not cut short.
 7. **Stop.** SIGTERM or SIGINT lets the write in progress finish and starts no new one.
@@ -55,10 +55,11 @@ A failing service gets its own wait, one minute doubling to thirty (O-1). A rate
 | `store.py` | The data folder: whole-file writes that survive a kill, and which variable a stored token came from |
 | `hevy.py` | Hevy's public API: folders, routines, exercise templates, workout events, exercise history |
 | `hevy_private.py` | Hevy's private API, for Trainer only: the session and its refresh, the program, the preferences, the logged workouts |
+| `app_store.py` | The newest Hevy on Apple's App Store, read once a day with Trainer on, to warn when Hevy is newer than the rules (F-48a) |
 | `routines.py` | Which routines sync, what each is called, and each routine as a planned workout |
 | `trainer.py` | Trainer's program as planned workouts, and what is read when |
 | `previous.py` | Last time's working sets of each exercise, for the status page: the newest logged workout that holds it, from its public history once, then kept current by the workout events. In memory only |
-| `trainer_rules.py` | Trainer's arithmetic: the week, the next weight, warm-ups, rep ranges ([HEVY_TRAINER_RULES.md](HEVY_TRAINER_RULES.md)). No I/O |
+| `trainer_rules.py` | Trainer's arithmetic: the week, the next weight, warm-ups, rep ranges ([HEVY_TRAINER_RULES.md](HEVY_TRAINER_RULES.md)), and `HEVY_COMPATIBILITY`, the Hevy version they match. No I/O |
 | `exercises.py` | The Garmin exercise for each Hevy exercise, and the log line that names it for a custom one |
 | `workout.py` | A planned workout as Garmin's workout JSON, each set's note, its version hash, and the description that marks it as the app's. No I/O |
 | `garmin.py` | Garmin Connect through python-garminconnect: workouts, the calendar, Send to Device, saving the rotated token |

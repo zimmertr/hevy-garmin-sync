@@ -14,7 +14,7 @@ from unittest import mock
 import garminconnect
 import requests
 
-from hevy_garmin_sync import app, config, errors, garmin, hevy
+from hevy_garmin_sync import app, app_store, config, errors, garmin, hevy
 from hevy_garmin_sync.exercises import GarminExercise
 from hevy_garmin_sync.hevy_private import SESSION, HevyPrivate
 from hevy_garmin_sync.server import Answer
@@ -68,6 +68,12 @@ class AppCase(unittest.TestCase):
         self.waits: list[float] = []
         self.steps: list[Step] = []
         self.nudged: list[None] = []  # each time the app was woken for a manual sync
+        self.app_store: list[str | None] = []  # each App Store lookup's answer in turn, then None (F-48a)
+        self.lookups = 0
+
+    def newest_hevy(self) -> str | None:
+        self.lookups += 1
+        return self.app_store.pop(0) if self.app_store else None
 
     def wait(self, seconds: float) -> bool:
         self.waits.append(seconds)
@@ -90,6 +96,7 @@ class AppCase(unittest.TestCase):
             hevy_private=self.hevy_private,
             wait=self.wait,
             nudge=lambda: self.nudged.append(None),
+            newest_hevy=self.newest_hevy,
             clock=lambda: self.clock,
             utcnow=lambda: self.utc,
         )
@@ -218,6 +225,14 @@ class StartupTest(AppCase):
                 with self.assertLogs(LOGGER, "WARNING") as logs:
                     self.run_app()
                 self.assertIn("Time zone: UTC", logs.output[0])
+
+
+    def test_without_trainer_hevy_is_never_looked_up_and_the_rules_version_is_still_shown(self) -> None:
+        self.app_store = ["3.2.9"]
+        self.run_app()
+        self.assertEqual(self.lookups, 0)
+        self.assertEqual(self.service("Hevy")["state"], "working")
+        self.assertEqual(self.app.status["hevy_compatibility"], "3.2.8")
 
 
 class PollTest(AppCase):
@@ -490,6 +505,54 @@ class TrainerTest(AppCase):
             self.private_api,  # type: ignore[arg-type]
             utcnow=lambda: self.utc,
         )
+
+    BEHIND = (
+        "[Hevy Trainer] Hevy 3.2.9 is out, and the app follows Hevy 3.2.8's rules. Trainer's weights, reps "
+        "and warm-ups may not match the Hevy app until the app catches up, so check them against the Hevy app"
+    )
+
+    def test_a_newer_hevy_on_the_app_store_warns_once_and_marks_trainer(self) -> None:
+        self.app_store = ["3.2.9"]
+        with self.assertLogs(LOGGER, "WARNING") as logs:
+            self.run_app(None, None)
+        self.assertEqual(logs.output, [f"WARNING:hevy_garmin_sync.app:{self.BEHIND}"])
+        self.assertEqual(self.lookups, 1)  # three passes on one day
+        trainer = self.service("Hevy Trainer")
+        reason = self.BEHIND.removeprefix("[Hevy Trainer] ")
+        self.assertEqual((trainer["state"], trainer["reason"]), ("outdated", reason))
+        self.assertEqual(self.service("Hevy")["state"], "working")
+
+    def test_the_hevy_the_rules_match_or_an_older_one_says_nothing(self) -> None:
+        for newest in ("3.2.8", "3.2.7.1"):
+            with self.subTest(newest=newest):
+                self.app_store = [newest]
+                with self.assertNoLogs(LOGGER, "WARNING"):
+                    self.run_app()
+                self.assertEqual(self.service("Hevy Trainer")["state"], "working")
+
+    def test_it_looks_again_each_day_and_a_failed_look_keeps_what_it_knew(self) -> None:
+        self.utc = datetime(2026, 11, 9, 7, 59, 30, tzinfo=UTC)  # 23:59:30 on Sunday in Los Angeles
+        self.app_store = ["3.2.9", None]
+        with self.assertLogs(LOGGER, "WARNING") as logs:
+            self.run_app(None)
+        self.assertEqual(self.lookups, 2)
+        self.assertEqual(len(logs.output), 1)
+        self.assertEqual(self.service("Hevy Trainer")["state"], "outdated")
+
+    def test_a_later_release_warns_again(self) -> None:
+        self.utc = datetime(2026, 11, 9, 7, 59, 30, tzinfo=UTC)
+        self.app_store = ["3.2.9", "3.2.10"]
+        with self.assertLogs(LOGGER, "WARNING") as logs:
+            self.run_app(None)
+        self.assertEqual(len(logs.output), 2)
+        self.assertIn("Hevy 3.2.10 is out", logs.output[1])
+
+    def test_a_rejected_session_shows_as_rejected_even_with_a_newer_hevy(self) -> None:
+        self.end_the_session()
+        self.app_store = ["3.2.9"]
+        with self.assertLogs(LOGGER, "WARNING"):
+            self.run_app()
+        self.assertEqual(self.service("Hevy Trainer")["state"], "rejected")
 
     def end_the_session(self) -> None:
         """Hevy no longer knows the access token or the refresh token."""
@@ -1029,7 +1092,8 @@ class MainTest(unittest.TestCase):
         ):
             self.assertEqual(app.main(env, self.err), 0)
         run.assert_called_once_with()
-        self.assertIn("hevy-garmin-sync ", logs.output[0])
+        self.assertRegex(logs.output[0], r"hevy-garmin-sync \S+ \(Hevy compatibility 3\.2\.8\)$")
+        self.assertIs(self.server.call_args.args[1]._newest_hevy, app_store.newest_hevy)
         self.assertIn("HEVY_API_KEY: set", logs.output[1])
         self.assertNotIn("made-up-key", "\n".join(logs.output))
 

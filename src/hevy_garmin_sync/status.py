@@ -13,6 +13,7 @@ from datetime import date, datetime
 from typing import Any
 
 from .sync import Counts, Report
+from .trainer_rules import HEVY_COMPATIBILITY
 from .workout import ROUTINE, STATUTE_US, TRAINER, Exercise, LoggedSet, garmin_name
 
 Json = dict[str, Any]
@@ -25,8 +26,8 @@ class Service:
     """One of Hevy, Hevy Trainer and Garmin, as the page's Services panel shows it."""
 
     name: str
-    state: str  # working, waiting, rejected or off
-    reason: str = ""  # why it waits, or the fix for a rejected sign-in
+    state: str  # working, waiting, rejected, off, or outdated (Hevy Trainer only, F-48a)
+    reason: str = ""  # why it waits, the fix for a rejected sign-in, or why it is outdated
     next_try: datetime | None = None
 
 
@@ -69,6 +70,7 @@ def build(facts: Facts) -> Json:
     unit = "lb" if facts.system == STATUTE_US else "kg"
     return {
         "version": facts.version,
+        "hevy_compatibility": HEVY_COMPATIBILITY,  # the Hevy app version Trainer's rules match (F-48a)
         # The banner a preview shows (W-10): its pull request, and the commit it runs, short as GitHub shows it.
         "preview": (
             {"pr": facts.preview_pr, "commit": (facts.preview_commit or "")[:7]} if facts.preview_pr else None

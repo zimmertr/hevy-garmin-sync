@@ -2,7 +2,7 @@
 
 Hevy's servers send a Trainer program without weights, warm-up weights or a week number. The Hevy app works those out on the phone. This page writes down the rules this app follows to get the same answers, so the watch shows what the Hevy app shows. `src/hevy_garmin_sync/trainer_rules.py` is the code, and spec section 6 (F-40 to F-48) is the requirement.
 
-The rules match Hevy app 3.2.5, and no release through 3.2.7 changed them. Every new release is checked outside this repo, and a changed rule comes back as an issue (F-48, record 0018). A difference between the watch and the app is still worth an issue.
+The rules match Hevy app 3.2.8, the version the status page and the startup log call Hevy Compatibility (`HEVY_COMPATIBILITY` in the code). Every new release is checked outside this repo, and a changed rule comes back as an issue (F-48, record 0018). Until a newer release's rules are in, the app warns about it (F-48a, below). A difference between the watch and the app is still worth an issue.
 
 ## What is read
 
@@ -37,6 +37,8 @@ An exercise swapped in the Hevy app and answered "Replace permanently? Yes" is a
 - Logged by weight and distance (`short_distance_weight`) or weight and time (`weight_duration`): the last session again (below).
 - Anything else (time or distance alone, kettlebells, bands, plates, other equipment): nothing. The workout carries the program's rep range and no weight, and the log says why.
 
+The rep range is the program's own `rep_range` for the exercise. The Hevy app sets it when it builds the program, or when an exercise is swapped in, from the program's goal and the exercise's category. Since 3.2.8 it gives 12 exercises 12-20 whatever those are: Lateral Raise (Cable, Dumbbell and Machine), Seated Lateral Raise (Dumbbell), Single Arm Lateral Raise (Cable), Overhead Plate Raise, Chest Supported Reverse Fly (Dumbbell), Chest Supported Y Raise (Dumbbell), Rear Delt Reverse Fly (Cable and Dumbbell), Reverse Fly Single Arm (Cable) and Standing Y Raise (Cable). The range is stored in the program, so this app reads it like any other, and a program built before 3.2.8 keeps the ranges it had.
+
 ## History
 
 An exercise's history is the logged workouts that came from the same Trainer template and hold the exercise, oldest first. Workouts logged in a deload week are left out. A workout with no start time is left out. The newest one is the previous session.
@@ -47,7 +49,7 @@ Only sets of type `normal` count as working sets. A missing rep count or weight 
 
 1. The base is the lightest working set of the previous session.
 2. Fewer working sets than the program's set count: no change.
-3. Every working set at or above the top of the rep range: base × 1.05.
+3. Every working set at or above the top of the rep range: base × 1.05. Since 3.2.8, when those sets were not all at one weight, the heaviest working set instead, unchanged.
 4. Every working set below the bottom of the rep range: base × 0.95.
 5. Anything else: no change.
 6. The result is rounded to a weight the user can load (below), in the exercise's unit.
@@ -140,9 +142,14 @@ An exercise with no previous session in its template (after a rotation, say) sta
 | 10 to 12 | 0.64 |
 | 8 to 12 | 0.67 |
 | 12 to 15 | 0.63 |
+| 12 to 20 | 0.60 |
 | anything else | no weight |
 
 - The result is rounded to the nearest loadable weight, and warm-ups follow from it.
+
+## A newer Hevy app
+
+Nothing tells the app which Hevy version your phone runs. So with Hevy Trainer on, once a day (at startup, then each local day) it looks Hevy up on Apple's App Store, whose version numbers match Android's, and compares the newest version with Hevy Compatibility. When the App Store's is newer, the log says so once at WARNING, a warning sign appears beside Hevy Compatibility in the status page's header, and Hevy Trainer's pill reads "Warning" with the same words: the weights, reps and warm-ups may not match the Hevy app until this app catches up, so check them against it. A lookup that fails changes nothing and is tried again the next day. A preview never looks (F-48a, W-10).
 
 ## Checked against the Hevy app
 
@@ -157,12 +164,12 @@ An exercise with no previous session in its template (after a rotation, say) sta
 | 2026-11-11 | One exercise swapped in permanently, weighted bodyweight (`bodyweight_weighted`) with no equipment, never logged in its template | No suggested weight, only the last session's numbers as placeholders | No prescription |
 | 2026-11-13 | Goblet Squat, two warm-ups, rep range 4-6 | 4-6 on both warm-ups and on the three working sets | 4-6 on all five |
 | 2026-11-17 | Seal Row (Dumbbell), rep range 4-6, two warm-ups. Last session mixed: 50x6, 90x4, 70x6, after the dumbbells were mixed up mid-exercise | 50 lb, the lightest Normal Set | 50 lb, warm-ups 20 and 30 lb (#64) |
-| 2026-11-17 | Pullover (Dumbbell), last session 17.5x6, 30x6, 30x6, every set at the top of its range | 20 lb, up from the lightest set | 20 lb (#64) |
+| 2026-11-17 | Pullover (Dumbbell), last session 17.5x6, 30x6, 30x6, every set at the top of its range | 20 lb, up from the lightest set | 20 lb (#64). Hevy 3.2.8 changed this: it now keeps 30 lb, the heaviest set, and so does this app |
 | 2026-11-17 | Walking Lunge (Dumbbell), logged by weight and distance, last session 25 lbs for 25 yd on every set | 25 lbs and 25 yd on every set, filled in like a prescribed weight | 25 lbs and 25 yd |
 
 On 2026-11-10 the first run against a real account gave the same weight and warm-ups as hevy-trainer-sync, the tool these rules were first written for, on all 12 weighted exercises of a two-workout program, and the same rep range on the one logged by reps.
 
-Not yet checked against the app: a new exercise's starting weight, a deload week, an account in kilograms, a barbell exercise, and an exercise logged by weight and time.
+Not yet checked against the app: a new exercise's starting weight, a deload week, an account in kilograms, a barbell exercise, an exercise logged by weight and time, and the three 3.2.8 changes (the 12-20 range, its 0.60 share, and keeping the heaviest set).
 
 ## Open points
 

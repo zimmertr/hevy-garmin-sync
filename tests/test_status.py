@@ -44,6 +44,7 @@ class BuildTest(unittest.TestCase):
     def test_the_app_its_services_and_its_run_are_shown_with_times_in_iso_form(self) -> None:
         built = status.build(facts(run=status.Run("running", True, "Writing workouts", 2, 8)))
         self.assertEqual(built["version"], "1.2.3")
+        self.assertEqual(built["hevy_compatibility"], "3.2.8")  # the Hevy app the rules match (F-48a)
         self.assertEqual(built["time_zone"], "America/Los_Angeles")
         self.assertEqual(built["next_daily_run"], (fixtures.NOW + timedelta(hours=6)).isoformat())
         self.assertEqual(built["last_counts"]["created"], 1)

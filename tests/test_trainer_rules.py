@@ -164,8 +164,8 @@ class WeightTest(unittest.TestCase):
         self.assertEqual(self.result(sets(1, 1, 1), latest), ("increase", 40, ()))
 
     def test_the_lightest_working_set_is_the_base(self) -> None:
-        log = sets(12, weight=50) + sets(12, 12, weight=30)
-        self.assertEqual(self.result(log), ("increase", 35, ()))
+        log = sets(12, weight=50) + sets(12, 11, weight=30)
+        self.assertEqual(self.result(log), ("none", 30, ()))
 
     def test_a_set_logged_without_reps_or_weight_counts_as_zero(self) -> None:
         log = [{"type": "normal", "reps": None, "weight_kg": kg(35)}] * 3
@@ -207,11 +207,21 @@ class MissedTargetsTest(unittest.TestCase):
         assert found is not None
         self.assertEqual((found.direction, found.weight, found.warmups), ("none", 50, (20, 30)))
 
-    def test_one_light_set_at_the_top_is_the_base_of_the_increase(self) -> None:
-        # Pullover: 17.5x6, 30x6, 30x6, and the app showed 20 lb.
+    def test_every_set_at_the_top_at_different_weights_keeps_the_heaviest(self) -> None:
+        # Pullover: 17.5x6, 30x6, 30x6. The app showed 20 lb before Hevy 3.2.8; since, it keeps 30 lb.
         found = tr.next_weight([sets(6, weight=17.5) + sets(6, 6, weight=30)], 3, (4, 6), 0, DUMBBELLS, False)
         assert found is not None
-        self.assertEqual((found.direction, found.weight), ("increase", 20))
+        self.assertEqual((found.direction, found.weight), ("none", 30))
+
+    def test_every_set_at_the_top_at_one_weight_still_goes_up(self) -> None:
+        found = tr.next_weight([sets(6, 6, 6, weight=30)], 3, (4, 6), 0, DUMBBELLS, False)
+        assert found is not None
+        self.assertEqual((found.direction, found.weight), ("increase", 35))
+
+    def test_different_weights_short_of_the_top_still_start_from_the_lightest(self) -> None:
+        found = tr.next_weight([sets(3, weight=17.5) + sets(3, 3, weight=30)], 3, (4, 6), 0, DUMBBELLS, False)
+        assert found is not None
+        self.assertEqual((found.direction, found.weight), ("decrease", 15))
 
 
 class RepeatTest(unittest.TestCase):
@@ -262,15 +272,24 @@ class StartingWeightTest(unittest.TestCase):
         self.assertEqual(len(tr.ONE_REP_MAX_FACTORS), 30)
 
     def test_a_new_exercise_starts_at_a_share_of_the_one_rep_max_for_its_rep_range(self) -> None:
-        cases = (((4, 6), 80), ((5, 6), 80), ((10, 12), 65), ((8, 12), 65), ((8, 10), 65), ((12, 15), 65))
+        cases = (
+            ((4, 6), 80),
+            ((5, 6), 80),
+            ((10, 12), 65),
+            ((8, 12), 65),
+            ((8, 10), 65),
+            ((12, 15), 65),
+            ((12, 20), 60),
+            ((15, 20), 60),
+        )
         for rep_range, weight in cases:
             with self.subTest(rep_range=rep_range):
                 found = tr.starting_weight(kg(100), rep_range, 0, MACHINE)
                 self.assertEqual((found.direction, found.weight) if found else None, ("new", weight))
 
-    def test_the_shares_are_80_64_67_and_63_percent(self) -> None:
+    def test_the_shares_are_80_64_67_63_and_60_percent(self) -> None:
         precise = tr.Equipment("barbell", "kg", bars=(0.01,), plates=(0.005,))
-        cases = (((4, 6), 0.8), ((10, 12), 0.64), ((8, 12), 0.67), ((12, 15), 0.63))
+        cases = (((4, 6), 0.8), ((10, 12), 0.64), ((8, 12), 0.67), ((12, 15), 0.63), ((12, 20), 0.6))
         for rep_range, share in cases:
             with self.subTest(rep_range=rep_range):
                 found = tr.starting_weight(1, rep_range, 0, precise)
@@ -283,7 +302,7 @@ class StartingWeightTest(unittest.TestCase):
     def test_no_one_rep_max_or_a_rep_range_outside_the_table_gives_nothing(self) -> None:
         self.assertIsNone(tr.starting_weight(None, (8, 12), 0, MACHINE))
         self.assertIsNone(tr.starting_weight(0, (8, 12), 0, MACHINE))
-        for rep_range in ((15, 20), (6, 8), (3, 5), (20, 25)):
+        for rep_range in ((6, 8), (3, 5), (20, 25), (10, 20)):
             with self.subTest(rep_range=rep_range):
                 self.assertIsNone(tr.starting_weight(kg(100), rep_range, 0, MACHINE))
         self.assertIsNone(tr.starting_weight(kg(100), (8, 12), 0, tr.Equipment("dumbbell", "lbs")))

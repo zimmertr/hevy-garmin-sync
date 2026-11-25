@@ -15,7 +15,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from datetime import time as clock_time
 from typing import Any, TextIO, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import garminconnect
 import requests
 
-from . import __version__, logs, preview, server, status
+from . import __version__, app_store, logs, preview, server, status
 from . import config as configuration
 from .config import Config
 from .errors import ConfigError, RateLimited, Refused, Rejected, ServiceError, Stopped
@@ -37,6 +37,7 @@ from .routines import Routines
 from .store import Store
 from .sync import Counts, Plans, Sync
 from .trainer import Trainer
+from .trainer_rules import HEVY_COMPATIBILITY
 from .workout import TRAINER
 
 log = logging.getLogger(__name__)
@@ -182,6 +183,15 @@ def _problem(service: str, error: ServiceError) -> str:
     return f"{service} can't be reached or is failing ({error}); it will recover by itself when {service} does"
 
 
+def _behind(newest: str) -> str:
+    """Why Hevy Trainer's numbers may be off, for the log and the status page (F-48a)."""
+    return (
+        f"Hevy {newest} is out, and the app follows Hevy {HEVY_COMPATIBILITY}'s rules. "
+        "Trainer's weights, reps and warm-ups may not match the Hevy app until the app catches up, "
+        "so check them against the Hevy app"
+    )
+
+
 def _said(service: str, fix: str, error: ServiceError) -> str:
     """The same for the log: the service in brackets, then the facts, naming the request when Hevy's (O-3, #81)."""
     if isinstance(error, Rejected):
@@ -207,6 +217,7 @@ class App:
         hevy_private: HevyPrivate | None = None,  # None: HEVY_SESSION is unset, so Hevy Trainer is off
         wait: Callable[[float], bool],
         nudge: Callable[[], None] = lambda: None,  # ends the current wait early, for a manual sync
+        newest_hevy: Callable[[], str | None] = lambda: None,  # the newest Hevy app version (F-48a)
         clock: Callable[[], float] = time.monotonic,
         utcnow: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
@@ -243,6 +254,9 @@ class App:
         self._last_manual: tuple[datetime, Counts | None] | None = None  # None counts: it failed
         self._next_auto: datetime | None = None
         self._deadline = clock() + _PASS_SECONDS
+        self._newest_hevy = newest_hevy
+        self._hevy_checked: date | None = None
+        self._newer_hevy: str | None = None  # a Hevy release past HEVY_COMPATIBILITY, once one is out
         self.status: dict[str, Any] = {}
         self._publish()
 
@@ -343,6 +357,8 @@ class App:
             now = self._now()
             if now.date() != day:
                 full = True  # the first run, and every local midnight (F-31)
+            if self._trainer and now.date() != self._hevy_checked:
+                self._check_hevy_release(now.date())
             manual = self.requests.pending()
             garmin_free = GARMIN not in self._rejected and self._garmin_backoff.ready()
             if manual:
@@ -412,6 +428,20 @@ class App:
             self._publish()
             if self._sleep(pause):
                 raise Stopped
+
+    def _check_hevy_release(self, today: date) -> None:
+        """Once a day, with Trainer on: has Hevy released a version past the one its rules match? (F-48a)
+
+        A failed lookup keeps the last answer, and says nothing: it is tried again the next day.
+        """
+        self._hevy_checked = today
+        newest = self._newest_hevy()
+        if newest is None:
+            return
+        newer = newest if app_store.newer(newest, HEVY_COMPATIBILITY) else None
+        if newer and newer != self._newer_hevy:
+            log.warning("[%s] %s", TRAINER_SERVICE, _behind(newer))
+        self._newer_hevy = newer
 
     def _take_request(self) -> None:
         """A new manual sync: Trainer reads its inputs again, and Force reads last time's sets again (W-3, W-4)."""
@@ -523,6 +553,8 @@ class App:
             return status.Service(name, "rejected", self._rejected[name])
         if not backoff.ready():
             return status.Service(name, "waiting", backoff.reason, self._later(backoff))
+        if name == TRAINER_SERVICE and self._newer_hevy:
+            return status.Service(name, "outdated", _behind(self._newer_hevy))
         return status.Service(name, "working")
 
     def _publish(self) -> None:
@@ -567,7 +599,7 @@ def main(env: Mapping[str, str] = os.environ, err: TextIO = sys.stderr) -> int:
         return 1
     buffer = LogBuffer()
     logs.setup(config.log_level, config.log_format, err, buffer)
-    log.info("hevy-garmin-sync %s", __version__)
+    log.info("hevy-garmin-sync %s (Hevy compatibility %s)", __version__, HEVY_COMPATIBILITY)
     for name, value in config.summary().items():
         log.info("%s: %s", name, value)
 
@@ -611,7 +643,11 @@ def main(env: Mapping[str, str] = os.environ, err: TextIO = sys.stderr) -> int:
             store.remove(f"{SESSION}.seed")
         hevy = Hevy(config.hevy_api_key)
     exercises = ExerciseMap.load(overrides=config.custom_exercises)
-    app = App(config, hevy, garmin, exercises, hevy_private=hevy_private, wait=wait, nudge=wake.set)
+    # A preview never leaves the pod (W-10), so it never looks Hevy up on the App Store.
+    newest_hevy = (lambda: None) if config.preview_pr else app_store.newest_hevy
+    app = App(
+        config, hevy, garmin, exercises, hevy_private=hevy_private, wait=wait, nudge=wake.set, newest_hevy=newest_hevy
+    )
     httpd = server.start(config.http_port, app, buffer)
     try:
         return app.run()
