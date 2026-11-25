@@ -518,7 +518,8 @@ class TrainerTest(AppCase):
         self.assertEqual(logs.output, [f"WARNING:hevy_garmin_sync.app:{self.BEHIND}"])
         self.assertEqual(self.lookups, 1)  # three passes on one day
         trainer = self.service("Hevy Trainer")
-        self.assertEqual((trainer["state"], trainer["reason"]), ("outdated", self.BEHIND.removeprefix("[Hevy Trainer] ")))
+        reason = self.BEHIND.removeprefix("[Hevy Trainer] ")
+        self.assertEqual((trainer["state"], trainer["reason"]), ("outdated", reason))
         self.assertEqual(self.service("Hevy")["state"], "working")
 
     def test_the_hevy_the_rules_match_or_an_older_one_says_nothing(self) -> None:

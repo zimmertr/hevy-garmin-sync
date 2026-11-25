@@ -337,7 +337,9 @@ def app_store_lookup(version: Any = "3.2.9") -> dict[str, Any]:
     """Apple's lookup reply, cut to the fields app_store.py reads and two that name the app (2026-11-25)."""
     return {
         "resultCount": 1,
-        "results": [{"trackName": "Hevy - Workout Tracker Gym Log", "bundleId": "com.hevyapp.hevy", "version": version}],
+        "results": [
+            {"trackName": "Hevy - Workout Tracker Gym Log", "bundleId": "com.hevyapp.hevy", "version": version}
+        ],
     }
 
 
