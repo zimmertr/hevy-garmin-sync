@@ -140,10 +140,13 @@ function render() {
   document.title = ({ bad: "Failing: ", wait: "Waiting: " }[tone] || "") + "hevy-garmin-sync";
   favicon(tone);
   const version = $("#version");
-  version.textContent = `Version ${status.version}`;
+  version.textContent = status.version;
   if (/^\d+\.\d+\.\d+$/.test(status.version)) version.href = `${REPO}/releases/tag/v${status.version}`;
-  // The Hevy app version Trainer's rules match (F-48a); it links to the rules.
-  $("#compat").textContent = `Hevy Compatibility ${status.hevy_compatibility}`;
+  // The Hevy app version Trainer's rules match, linked to them, with a sign while Hevy is newer (F-48a).
+  $("#compat").textContent = status.hevy_compatibility;
+  const behind = status.services.find((s) => s.state === "outdated");
+  $("#compat-warn").toggleAttribute("hidden", !behind);
+  $("#compat-fact").title = behind ? `${behind.reason}.` : "";
   renderPreview();
   renderControl();
   renderServices();
@@ -230,7 +233,7 @@ function msg(html, tone) {
 
 function renderServices() {
   $("#services").innerHTML = status.services.map((s) => {
-    const [tone, label] = { working: ["ok", "Working"], waiting: ["wait", "Waiting"], rejected: ["bad", "Sign-in rejected"], off: ["off", "Off"], outdated: ["wait", "Hevy updated"] }[s.state];
+    const [tone, label] = { working: ["ok", "Working"], waiting: ["wait", "Waiting"], rejected: ["bad", "Sign-in rejected"], off: ["off", "Off"], outdated: ["wait", "Warning"] }[s.state];
     let why = "";
     if (s.state === "waiting") why = `${codeify(s.reason)}. Next try: ${esc(when(s.next_try))}`;
     if (s.state === "rejected") why = `${codeify(s.reason[0].toUpperCase() + s.reason.slice(1))}, and restart the app. ${EXTRA[s.name]}`;

@@ -149,7 +149,7 @@ An exercise with no previous session in its template (after a rotation, say) sta
 
 ## A newer Hevy app
 
-Nothing tells the app which Hevy version your phone runs. So with Hevy Trainer on, once a day (at startup, then each local day) it looks Hevy up on Apple's App Store, whose version numbers match Android's, and compares the newest version with Hevy Compatibility. When the App Store's is newer, the log says so once at WARNING, and Hevy Trainer's pill on the status page reads "Hevy updated" with the same words: the weights, reps and warm-ups may not match the Hevy app until this app catches up, so check them against it. A lookup that fails changes nothing and is tried again the next day. A preview never looks (F-48a, W-10).
+Nothing tells the app which Hevy version your phone runs. So with Hevy Trainer on, once a day (at startup, then each local day) it looks Hevy up on Apple's App Store, whose version numbers match Android's, and compares the newest version with Hevy Compatibility. When the App Store's is newer, the log says so once at WARNING, a warning sign appears beside Hevy Compatibility in the status page's header, and Hevy Trainer's pill reads "Warning" with the same words: the weights, reps and warm-ups may not match the Hevy app until this app catches up, so check them against it. A lookup that fails changes nothing and is tried again the next day. A preview never looks (F-48a, W-10).
 
 ## Checked against the Hevy app
 
