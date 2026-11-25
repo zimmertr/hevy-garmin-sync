@@ -74,6 +74,7 @@ code { font: .86em var(--mono); background: var(--panel-2); border: 1px solid va
 .brand h1 { font-size: 1.45rem; line-height: 1; }
 .brand .ver { font-size: .85rem; color: var(--muted); text-decoration: none; }
 .brand .ver:hover { color: var(--blue); }
+.brand .ver-sep { font-size: .85rem; color: var(--muted); }
 .toplinks { display: flex; gap: 6px; flex-wrap: wrap; }
 .ghost { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); text-decoration: none; font-size: .9rem; font-weight: 500; }
 .ghost:hover { border-color: var(--faint); }

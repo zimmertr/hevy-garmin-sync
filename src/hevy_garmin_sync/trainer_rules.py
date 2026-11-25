@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, tzinfo
 from typing import Any
 
+# The Hevy app version these rules match (F-48a). Raise it when a newer release's rules are in.
+HEVY_COMPATIBILITY = "3.2.8"
 LBS_PER_KG = 2.20462
 CYCLE_WEEKS = 6
 REP_LADDER = ((4, 6), (6, 8), (8, 12), (12, 15), (15, 20), (20, 25), (25, 30))
@@ -68,7 +70,7 @@ ONE_REP_MAX_FACTORS = {
 ONE_REP_MAX_FACTOR_PAST_30 = 0.5
 # The share of a one-rep max a new exercise starts at, by the rep range it
 # must fit inside; the first row that fits wins, and no row means no weight.
-STARTING_SHARES = (((4, 6), 0.8), ((10, 12), 0.64), ((8, 12), 0.67), ((12, 15), 0.63))
+STARTING_SHARES = (((4, 6), 0.8), ((10, 12), 0.64), ((8, 12), 0.67), ((12, 15), 0.63), ((12, 20), 0.6))
 
 RepRange = tuple[int, int]
 Log = Sequence[dict[str, Any]]  # one session's sets of one exercise: `type`, `reps`, `weight_kg`
@@ -310,14 +312,18 @@ def next_weight(
     first, deload weeks left out. The base is the lightest working set: 5% more
     when every set reached the top of the range, 5% less when every set fell
     short of the bottom, the same otherwise, then rounded to the equipment. In
-    a deload week, 60% of that.
+    a deload week, 60% of that. Since Hevy 3.2.8, sets that all reached the top
+    at different weights keep the heaviest instead of going up.
     """
     if not logs:
         return None
     verdict = _verdict(logs[-1], set_count, rep_range)
     if verdict is None:
         return None
-    base_kg = min(float(s.get("weight_kg") or 0) for s in _working(logs[-1]))
+    weights = [float(s.get("weight_kg") or 0) for s in _working(logs[-1])]
+    base_kg = min(weights)
+    if verdict == "increase" and max(weights) > base_kg:
+        verdict, base_kg = "none", max(weights)
     target_kg = base_kg * {"increase": STEP_UP, "decrease": STEP_DOWN, "none": 1.0}[verdict]
     weight = loadable(target_kg, gear, verdict, in_unit(base_kg, gear.unit))
     if weight is None:

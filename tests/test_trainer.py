@@ -721,7 +721,7 @@ class NewExerciseTest(TrainerCase):
         self.assertEqual(self.sets(), (Set(kind="warmup", rep_range=(4, 6)), *[Set(rep_range=(4, 6))] * 3))
 
     def test_a_rep_range_trainer_has_no_share_for_gets_no_weight(self) -> None:
-        self.one(trainer_exercise("T-BENCH", rep_range=(15, 20)))
+        self.one(trainer_exercise("T-BENCH", rep_range=(20, 25)))
         self.public.history["T-BENCH"] = [self.lifted(100, 5, 30)]
         self.assertIn("nothing gives it a starting weight", self.said()[0])
 

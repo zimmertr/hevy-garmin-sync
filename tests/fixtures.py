@@ -319,6 +319,28 @@ class FakeUpstream:
         return io.BytesIO(self.bodies[url.full_url])
 
 
+class FakeAppStore:
+    """The HTTP session app_store.py looks Hevy up on Apple's App Store with: one reply, or an error to raise."""
+
+    def __init__(self, reply: FakeResponse | BaseException) -> None:
+        self.reply = reply
+        self.requests: list[tuple[str, dict[str, str], float]] = []
+
+    def get(self, url: str, *, headers: dict[str, str], timeout: float) -> FakeResponse:
+        self.requests.append((url, headers, timeout))
+        if isinstance(self.reply, BaseException):
+            raise self.reply
+        return self.reply
+
+
+def app_store_lookup(version: Any = "3.2.9") -> dict[str, Any]:
+    """Apple's lookup reply, cut to the fields app_store.py reads and two that name the app (2026-11-25)."""
+    return {
+        "resultCount": 1,
+        "results": [{"trackName": "Hevy - Workout Tracker Gym Log", "bundleId": "com.hevyapp.hevy", "version": version}],
+    }
+
+
 class FakeRequests:
     """The app's door for a manual sync, answering what it is told to (W-3)."""
 

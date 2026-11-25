@@ -122,6 +122,7 @@ class PreviewMainTest(unittest.TestCase):
         self.assertNotIn("made-up-key", "\n".join(logs.output))
         self.assertIsInstance(built[0]._garmin._api, preview.FakeGarminApi)
         self.assertIsNotNone(built[0]._trainer)
+        self.assertIsNone(built[0]._newest_hevy())  # no App Store lookup either (F-48a)
 
     def test_the_session_in_the_data_folder_is_left_alone(self) -> None:
         store = Store(Path(self.env["DATA_DIR"]))
